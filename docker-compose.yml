@@ -6,7 +6,7 @@ services:
     container_name: solid-dataspace-manager
     restart: unless-stopped
     expose:
-      - "3000"
+      - "5000"
 
   heat-monitoring-app:
     build:
