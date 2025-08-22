@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  solid-dataspace-manager:
+    build: ./solid-dataspace-manager
+    container_name: solid-dataspace-manager
+    restart: unless-stopped
+    expose:
+      - "3000"
+
+  heat-monitoring-app:
+    build: ./heat-monitoring-app
+    container_name: heat-monitoring-app
+    restart: unless-stopped
+    expose:
+      - "3001"
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - solid-dataspace-manager
+      - heat-monitoring-app
