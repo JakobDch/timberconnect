@@ -13,6 +13,7 @@ services:
       context: ./heat-monitoring-app
       dockerfile: Dockerfile.angular
     container_name: heat-monitoring-app
+    command: ng serve --host 0.0.0.0 --port 4200 --base-href /heat/ --serve-path /heat
     restart: unless-stopped
     expose:
       - "4200"
