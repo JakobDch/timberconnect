@@ -9,11 +9,13 @@ services:
       - "3000"
 
   heat-monitoring-app:
-    build: ./heat-monitoring-app
+    build:
+      context: ./heat-monitoring-app
+      dockerfile: Dockerfile.angular
     container_name: heat-monitoring-app
     restart: unless-stopped
     expose:
-      - "3001"
+      - "4200"
 
   caddy:
     image: caddy:2
