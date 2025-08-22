@@ -1,7 +1,7 @@
 :80 {
-    handle_path /heat* {
-        reverse_proxy heat-monitoring-app:4200
-    }
+    handle /heat* {
+    	reverse_proxy heat-monitoring-app:4200
+	}
 
     reverse_proxy solid-dataspace-manager:5000
 }
