@@ -1,6 +1,0 @@
-[submodule "solid-dataspace-manager"]
-	path = solid-dataspace-manager
-	url = https://github.com/hoelk-f/solid-dataspace-manager.git
-[submodule "heat-monitoring-app"]
-	path = heat-monitoring-app
-	url = https://github.com/hoelk-f/smart-city-urban-heat-monitoring.git
