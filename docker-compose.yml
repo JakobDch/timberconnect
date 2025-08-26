@@ -15,6 +15,58 @@ services:
     expose:
       - "4200"
 
+  semantic-data-catalog-backend:
+    image: son1i/semantic-data-catalog-backend:latest
+    container_name: semantic-data-catalog-backend
+    restart: unless-stopped
+    environment:
+      BASE_URI: http://localhost/semantic-data-catalog
+      CATALOG_NAME: "Semantic Data Catalog"
+      CATALOG_DESCRIPTION: "Demonstrator Instance"
+      DATABASE_URL: mysql+mysqlconnector://semantic_data_catalog:mNXZqSq4oK53Q7@semantic-data-catalog-db:3306/semantic_data_catalog
+      RESET_DB: "true"
+      RUN_POPULATE: "true"
+    expose:
+      - "8000"
+    depends_on:
+      - semantic-data-catalog-db
+      - semantic-data-catalog-fuseki
+
+  semantic-data-catalog-frontend:
+    image: son1i/semantic-data-catalog-frontend:latest
+    container_name: semantic-data-catalog-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_OIDC_ISSUER: https://solidcommunity.net
+      REACT_APP_REDIRECT_URL: http://localhost/semantic-data-catalog
+      REACT_APP_FOOTER_LOGOS: /assets/images/Logo_GesundesTal.png,/assets/images/Icon_GesundesTal.png
+      REACT_APP_VERSION: "0.5.0"
+    expose:
+      - "5000"
+    depends_on:
+      - semantic-data-catalog-backend
+
+  semantic-data-catalog-db:
+    image: mariadb:10.5
+    container_name: semantic-data-catalog-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 8ED4iwZwPcwKPc
+      MYSQL_DATABASE: semantic_data_catalog
+      MYSQL_USER: semantic_data_catalog
+      MYSQL_PASSWORD: mNXZqSq4oK53Q7
+    volumes:
+      - semantic_data_catalog_db_data:/var/lib/mysql
+
+  semantic-data-catalog-fuseki:
+    image: stain/jena-fuseki
+    container_name: semantic-data-catalog-fuseki
+    restart: unless-stopped
+    environment:
+      ADMIN_PASSWORD: admin
+    volumes:
+      - semantic_data_catalog_fuseki_data:/fuseki
+
   caddy:
     image: caddy:2
     container_name: reverse-proxy
@@ -26,3 +78,8 @@ services:
     depends_on:
       - solid-dataspace-manager
       - smart-city-urban-heat-monitoring
+      - semantic-data-catalog-frontend
+
+volumes:
+  semantic_data_catalog_db_data:
+  semantic_data_catalog_fuseki_data:
