@@ -13,7 +13,7 @@ services:
     container_name: smart-city-urban-heat-monitoring
     restart: unless-stopped
     expose:
-      - "4200"
+      - "80"
 
   caddy:
     image: caddy:2
