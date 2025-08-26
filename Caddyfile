@@ -1,5 +1,5 @@
 :80 {
-    handle_path /heat* {
+    handle_path /smart-city-urban-heat-monitoring {
         reverse_proxy smart-city-urban-heat-monitoring:4200
     }
 
