@@ -1,7 +1,7 @@
 :80 {
     handle /heat* {
-    	reverse_proxy heat-monitoring-app:4200
+        reverse_proxy smart-city-urban-heat-monitoring:4200
 	}
 
-    reverse_proxy solid-dataspace-manager:5000
+    reverse_proxy solid-dataspace-manager:3001
 }

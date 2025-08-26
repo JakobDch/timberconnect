@@ -2,18 +2,15 @@ version: '3.8'
 
 services:
   solid-dataspace-manager:
-    build: ./solid-dataspace-manager
+    image: son1i/solid-dataspace-manager:latest
     container_name: solid-dataspace-manager
     restart: unless-stopped
     expose:
-      - "5000"
+      - "3001"
 
-  heat-monitoring-app:
-    build:
-      context: ./heat-monitoring-app
-      dockerfile: Dockerfile.angular
-    container_name: heat-monitoring-app
-    command: ng serve --host 0.0.0.0 --port 4200 --serve-path /heat
+  smart-city-urban-heat-monitoring:
+    image: son1i/smart-city-urban-heat-monitoring:latest
+    container_name: smart-city-urban-heat-monitoring
     restart: unless-stopped
     expose:
       - "4200"
@@ -28,4 +25,4 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       - solid-dataspace-manager
-      - heat-monitoring-app
+      - smart-city-urban-heat-monitoring
