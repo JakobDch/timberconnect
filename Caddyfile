@@ -1,6 +1,7 @@
 :80 {
     handle_path /smart-city-urban-heat-monitoring/* {
-        reverse_proxy smart-city-urban-heat-monitoring:81
+        reverse_proxy smart-city-urban-heat-monitoring:4200
     }
     reverse_proxy solid-dataspace-manager:3001
+	
 }
