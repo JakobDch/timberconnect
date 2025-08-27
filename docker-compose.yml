@@ -71,6 +71,12 @@ services:
     image: nodered/node-red:latest
     container_name: node-red
     restart: unless-stopped
+    environment:
+      - NR_UI_HOST=0.0.0.0
+      - NR_ADMIN_ROOT=/node-red
+      - NR_NODE_ROOT=/node-red
+    volumes:
+      - ./settings.js:/data/settings.js
     expose:
       - "1880"
 
