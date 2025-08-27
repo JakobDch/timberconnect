@@ -77,6 +77,7 @@ services:
       - NR_NODE_ROOT=/node-red
     volumes:
       - ./settings.js:/data/settings.js
+      - nodered-data:/data    
     expose:
       - "1880"
 
@@ -97,3 +98,4 @@ services:
 volumes:
   semantic_data_catalog_db_data:
   semantic_data_catalog_fuseki_data:
+  nodered-data: 
