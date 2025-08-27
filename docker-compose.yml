@@ -67,6 +67,13 @@ services:
     volumes:
       - semantic_data_catalog_fuseki_data:/fuseki
 
+  node-red:
+    image: nodered/node-red:latest
+    container_name: node-red
+    restart: unless-stopped
+    expose:
+      - "1880"
+
   caddy:
     image: caddy:2
     container_name: reverse-proxy
@@ -79,6 +86,7 @@ services:
       - solid-dataspace-manager
       - smart-city-urban-heat-monitoring
       - semantic-data-catalog-frontend
+      - node-red
 
 volumes:
   semantic_data_catalog_db_data:
