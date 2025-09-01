@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     expose:
       - "3001"
+    networks:
+      - solid-dataspace
 
   smart-city-urban-heat-monitoring:
     image: son1i/smart-city-urban-heat-monitoring:latest
@@ -14,6 +16,8 @@ services:
     restart: unless-stopped
     expose:
       - "4200"
+    networks:
+      - solid-dataspace
 
   semantic-data-catalog-backend:
     image: son1i/semantic-data-catalog-backend:latest
@@ -22,12 +26,20 @@ services:
     environment:
       BASE_URI: http://localhost/semantic-data-catalog
       CATALOG_NAME: "Semantic Data Catalog"
-      CATALOG_DESCRIPTION: "Demonstrator Instance"
-      DATABASE_URL: mysql+mysqlconnector://semantic_data_catalog:mNXZqSq4oK53Q7@semantic-data-catalog-db:3306/semantic_data_catalog
+      CATALOG_DESCRIPTION: "Demonstrator"
+      DATABASE_URL: mysql+pymysql://semantic_data_catalog:mNXZqSq4oK53Q7@localhost:3306/semantic_data_catalog
       RESET_DB: "true"
       RUN_POPULATE: "true"
+    command: >
+      bash -c "
+      alembic upgrade head &&
+      python populate.py &&
+      uvicorn main:app --host 0.0.0.0 --port 8000
+      "
     expose:
       - "8000"
+    networks:
+      - solid-dataspace
     depends_on:
       - semantic-data-catalog-db
       - semantic-data-catalog-fuseki
@@ -43,6 +55,8 @@ services:
       REACT_APP_VERSION: "0.5.0"
     expose:
       - "5000"
+    networks:
+      - solid-dataspace
     depends_on:
       - semantic-data-catalog-backend
 
@@ -55,6 +69,10 @@ services:
       MYSQL_DATABASE: semantic_data_catalog
       MYSQL_USER: semantic_data_catalog
       MYSQL_PASSWORD: mNXZqSq4oK53Q7
+    ports:
+      - "3306:3306"
+    networks:
+      - solid-dataspace
     volumes:
       - semantic_data_catalog_db_data:/var/lib/mysql
 
@@ -64,6 +82,10 @@ services:
     restart: unless-stopped
     environment:
       ADMIN_PASSWORD: admin
+    ports:
+      - "3030:3030"
+    networks:
+      - solid-dataspace
     volumes:
       - semantic_data_catalog_fuseki_data:/fuseki
 
@@ -77,7 +99,9 @@ services:
       - NR_NODE_ROOT=/node-red
     volumes:
       - ./settings.js:/data/settings.js
-      - nodered-data:/data    
+      - nodered-data:/data
+    networks:
+      - solid-dataspace  
     expose:
       - "1880"
 
@@ -87,6 +111,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    networks:
+      - solid-dataspace
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
@@ -99,3 +125,6 @@ volumes:
   semantic_data_catalog_db_data:
   semantic_data_catalog_fuseki_data:
   nodered-data: 
+
+networks:
+  solid-dataspace:
