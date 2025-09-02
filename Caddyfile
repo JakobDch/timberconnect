@@ -1,9 +1,7 @@
 :80 {
     reverse_proxy /smart-city-urban-heat-monitoring/* smart-city-urban-heat-monitoring:4200
     reverse_proxy /semantic-data-catalog/* semantic-data-catalog-frontend:5000
-    handle_path /api/* {
-        reverse_proxy semantic-data-catalog-backend:8000
-    }
+    reverse_proxy /api/* semantic-data-catalog-backend:8000
     reverse_proxy /node-red/* node-red:1880
     reverse_proxy solid-dataspace-manager:3001
 }
