@@ -5,6 +5,8 @@ services:
     image: son1i/solid-dataspace-manager:latest
     container_name: solid-dataspace-manager
     restart: unless-stopped
+    ports:
+      - "3001:3001"
     expose:
       - "3001"
     networks:
@@ -58,6 +60,8 @@ services:
       REACT_APP_REDIRECT_URL: http://localhost/semantic-data-catalog/
       REACT_APP_FOOTER_LOGOS: /assets/images/Logo_GesundesTal.png,/assets/images/Icon_GesundesTal.png
       REACT_APP_VERSION: "0.5.0"
+    ports:
+      - "5000:5000"
     expose:
       - "5000"
     networks:
