@@ -3,27 +3,24 @@ version: '3.8'
 services:
   solid-dataspace-manager:
     image: son1i/solid-dataspace-manager:latest
-    container_name: solid-dataspace-manager
     restart: unless-stopped
-    ports:
-      - "3001:3001"
-    expose:
-      - "3001"
+    expose: ["3001"]
     networks:
-      - solid-dataspace
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-solid-dataspace-manager
 
   smart-city-urban-heat-monitoring:
     image: son1i/smart-city-urban-heat-monitoring:latest
-    container_name: smart-city-urban-heat-monitoring
     restart: unless-stopped
-    expose:
-      - "4200"
+    expose: ["4200"]
     networks:
-      - solid-dataspace
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-smart-city-urban-heat-monitoring
 
   semantic-data-catalog-backend:
     image: son1i/semantic-data-catalog-backend:latest
-    container_name: semantic-data-catalog-backend
     restart: unless-stopped
     environment:
       BASE_URI: http://localhost
@@ -43,35 +40,33 @@ services:
       python populate.py &&
       uvicorn main:app --host 0.0.0.0 --port 8000
       "
-    expose:
-      - "8000"
+    expose: ["8000"]
     networks:
-      - solid-dataspace
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-semantic-data-catalog-backend
     depends_on:
       - db
       - semantic-data-catalog-fuseki
 
   semantic-data-catalog-frontend:
     image: son1i/semantic-data-catalog-frontend:latest
-    container_name: semantic-data-catalog-frontend
     restart: unless-stopped
     environment:
       REACT_APP_OIDC_ISSUER: https://solidcommunity.net
       REACT_APP_REDIRECT_URL: http://localhost/semantic-data-catalog/
       REACT_APP_FOOTER_LOGOS: /assets/images/Logo_GesundesTal.png,/assets/images/Icon_GesundesTal.png
       REACT_APP_VERSION: "0.5.0"
-    ports:
-      - "5000:5000"
-    expose:
-      - "5000"
+    expose: ["5000"]
     networks:
-      - solid-dataspace
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-semantic-data-catalog-frontend
     depends_on:
       - semantic-data-catalog-backend
 
   db:
     image: mariadb:10.5
-    container_name: db
     hostname: db
     restart: unless-stopped
     environment:
@@ -79,30 +74,28 @@ services:
       MYSQL_DATABASE: semantic_data_catalog
       MYSQL_USER: semantic_data_catalog
       MYSQL_PASSWORD: mNXZqSq4oK53Q7
-    ports:
-      - "3306:3306"
-    networks:
-      - solid-dataspace
     volumes:
       - semantic_data_catalog_db_data:/var/lib/mysql
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-db
 
   semantic-data-catalog-fuseki:
     image: stain/jena-fuseki
-    container_name: fuseki
     hostname: fuseki
     restart: unless-stopped
     environment:
       ADMIN_PASSWORD: admin
-    ports:
-      - "3030:3030"
-    networks:
-      - solid-dataspace
     volumes:
       - semantic_data_catalog_fuseki_data:/fuseki
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-fuseki
 
   node-red:
     image: nodered/node-red:latest
-    container_name: node-red
     restart: unless-stopped
     environment:
       - NR_UI_HOST=0.0.0.0
@@ -111,10 +104,11 @@ services:
     volumes:
       - ./settings.js:/data/settings.js
       - nodered-data:/data
+    expose: ["1880"]
     networks:
-      - solid-dataspace  
-    expose:
-      - "1880"
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-node-red
 
   caddy:
     image: caddy:2
@@ -123,7 +117,9 @@ services:
     ports:
       - "80:80"
     networks:
-      - solid-dataspace
+      solid-dataspace:
+        aliases:
+          - solid-dataspace-dev-caddy
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
@@ -135,7 +131,9 @@ services:
 volumes:
   semantic_data_catalog_db_data:
   semantic_data_catalog_fuseki_data:
-  nodered-data: 
+  nodered-data:
 
 networks:
   solid-dataspace:
+    external: true
+    name: solid-dataspace
