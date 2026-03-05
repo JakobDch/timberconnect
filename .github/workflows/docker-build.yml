@@ -2,59 +2,70 @@ name: Build and Push Docker Images
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:  # Allows manual trigger
-
-env:
-  REGISTRY: docker.io
-  # Change this to your Docker Hub username
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build-viewer:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        include:
-          - service: timberconnect-viewer
-            context: ./timberconnect-viewer
-          - service: timberconnect-agent
-            context: ./timberconnect-agent
-          - service: timberconnect-rml-converter
-            context: ./timberconnect-rml-converter
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=
-
-      - name: Build and push
+      - name: Build and push viewer
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.context }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          context: ./timberconnect-viewer
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/timberconnect-viewer:latest
+
+  build-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push agent
+        uses: docker/build-push-action@v5
+        with:
+          context: ./timberconnect-agent
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/timberconnect-agent:latest
+
+  build-converter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push converter
+        uses: docker/build-push-action@v5
+        with:
+          context: ./timberconnect-rml-converter
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/timberconnect-rml-converter:latest
