@@ -1,114 +1,49 @@
-version: '3.8'
-
 services:
-  solid-dataspace-manager:
-    image: son1i/solid-dataspace-manager:latest
+  timberconnect-viewer:
+    build:
+      context: ./timberconnect-viewer
+      dockerfile: Dockerfile
     restart: unless-stopped
-    expose: ["3001"]
+    expose: ["80"]
     networks:
       solid-dataspace:
         aliases:
-          - solid-dataspace-dev-solid-dataspace-manager
+          - solid-dataspace-dev-timberconnect-viewer
 
-  smart-city-urban-heat-monitoring:
-    image: son1i/smart-city-urban-heat-monitoring:latest
-    restart: unless-stopped
-    expose: ["4200"]
-    networks:
-      solid-dataspace:
-        aliases:
-          - solid-dataspace-dev-smart-city-urban-heat-monitoring
-
-  semantic-data-catalog-backend:
-    image: son1i/semantic-data-catalog-backend:latest
+  timberconnect-rml-converter:
+    build:
+      context: ./timberconnect-rml-converter
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      BASE_URI: http://localhost
-      CATALOG_NAME: "Semantic Data Catalog"
-      CATALOG_DESCRIPTION: "Demonstrator"
-      DATABASE_URL: mysql+pymysql://semantic_data_catalog:mNXZqSq4oK53Q7@db:3306/semantic_data_catalog
-      RESET_DB: "true"
-      RUN_POPULATE: "true"
-      SMTP_HOST: "smtp.ionos.de"
-      SMTP_PORT: 587
-      SMTP_USER: "ionos@ionos.de"
-      SMTP_PASS: "abc.123"
-      EMAIL_FROM: "ionos@ionos.de"
-    command: >
-      bash -c "
-      alembic upgrade head &&
-      python populate.py &&
-      uvicorn main:app --host 0.0.0.0 --port 8000
-      "
-    expose: ["8000"]
+      SOLID_POD_URL: https://tmdt-solid-community-server.de/epcisrepository
+      SOLID_ACCESS_TOKEN: ${SOLID_ACCESS_TOKEN:-}
+      # Live Catalog at solid-dataspace-timberconnect.tmdt.info
+      CATALOG_API_URL: https://solid-dataspace-timberconnect.tmdt.info
+      CATALOG_LDP_URL: https://solid-dataspace-timberconnect.tmdt.info/dace/catalog/ds/
+      CATALOG_DEFAULT_PUBLISHER: "TimberConnect RML Converter"
+      CATALOG_DEFAULT_CONTACT: ${CATALOG_DEFAULT_CONTACT:-timberconnect@2050.de}
+      CATALOG_REGISTRATION_ENABLED: ${CATALOG_REGISTRATION_ENABLED:-true}
+    expose: ["8001"]
     networks:
       solid-dataspace:
         aliases:
-          - solid-dataspace-dev-semantic-data-catalog-backend
-    depends_on:
-      - db
-      - semantic-data-catalog-fuseki
+          - solid-dataspace-dev-rml-converter
 
-  semantic-data-catalog-frontend:
-    image: son1i/semantic-data-catalog-frontend:latest
+  timberconnect-agent:
+    build:
+      context: ./timberconnect-agent
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      REACT_APP_OIDC_ISSUER: https://solidcommunity.net
-      REACT_APP_REDIRECT_URL: http://localhost/semantic-data-catalog/
-      REACT_APP_FOOTER_LOGOS: /assets/images/Logo_GesundesTal.png,/assets/images/Icon_GesundesTal.png
-      REACT_APP_VERSION: "0.5.0"
-    expose: ["5000"]
+      TC_AGENT_OLLAMA_BASE_URL: "http://132.195.160.35:11434"
+      TC_AGENT_OLLAMA_MODEL: "llama3.3:70b"
+      TC_AGENT_DEFAULT_LLM_PROVIDER: "ollama"
+    expose: ["8002"]
     networks:
       solid-dataspace:
         aliases:
-          - solid-dataspace-dev-semantic-data-catalog-frontend
-    depends_on:
-      - semantic-data-catalog-backend
-
-  db:
-    image: mariadb:10.5
-    hostname: db
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: 8ED4iwZwPcwKPc
-      MYSQL_DATABASE: semantic_data_catalog
-      MYSQL_USER: semantic_data_catalog
-      MYSQL_PASSWORD: mNXZqSq4oK53Q7
-    volumes:
-      - semantic_data_catalog_db_data:/var/lib/mysql
-    networks:
-      solid-dataspace:
-        aliases:
-          - solid-dataspace-dev-db
-
-  semantic-data-catalog-fuseki:
-    image: stain/jena-fuseki
-    hostname: fuseki
-    restart: unless-stopped
-    environment:
-      ADMIN_PASSWORD: admin
-    volumes:
-      - semantic_data_catalog_fuseki_data:/fuseki
-    networks:
-      solid-dataspace:
-        aliases:
-          - solid-dataspace-dev-fuseki
-
-  node-red:
-    image: nodered/node-red:latest
-    restart: unless-stopped
-    environment:
-      - NR_UI_HOST=0.0.0.0
-      - NR_ADMIN_ROOT=/node-red
-      - NR_NODE_ROOT=/node-red
-    volumes:
-      - ./settings.js:/data/settings.js
-      - nodered-data:/data
-    expose: ["1880"]
-    networks:
-      solid-dataspace:
-        aliases:
-          - solid-dataspace-dev-node-red
+          - solid-dataspace-dev-agent
 
   caddy:
     image: caddy:2
@@ -116,22 +51,25 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
     networks:
       solid-dataspace:
         aliases:
           - solid-dataspace-dev-caddy
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      - solid-dataspace-manager
-      - smart-city-urban-heat-monitoring
-      - semantic-data-catalog-frontend
-      - node-red
+      - timberconnect-viewer
+      - timberconnect-rml-converter
+      - timberconnect-agent
 
 volumes:
-  semantic_data_catalog_db_data:
-  semantic_data_catalog_fuseki_data:
-  nodered-data:
+  caddy_data:
+  caddy_config:
 
 networks:
   solid-dataspace:

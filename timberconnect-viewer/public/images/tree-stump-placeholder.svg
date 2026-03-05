@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <defs>
+    <linearGradient id="barkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#5D4E37"/>
+      <stop offset="50%" style="stop-color:#6B5B45"/>
+      <stop offset="100%" style="stop-color:#5D4E37"/>
+    </linearGradient>
+    <radialGradient id="woodCore" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#E8D4B8"/>
+      <stop offset="100%" style="stop-color:#C4A882"/>
+    </radialGradient>
+    <linearGradient id="grassGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d9660"/>
+      <stop offset="100%" style="stop-color:#1e7a4d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ground/grass -->
+  <ellipse cx="200" cy="250" rx="150" ry="25" fill="url(#grassGrad)" opacity="0.3"/>
+
+  <!-- Tree stump body -->
+  <g transform="translate(200, 150)">
+    <!-- Stump cylinder -->
+    <ellipse cx="0" cy="80" rx="70" ry="20" fill="#4A3B2C"/>
+    <rect x="-70" y="0" width="140" height="80" fill="url(#barkGrad)"/>
+
+    <!-- Bark texture lines -->
+    <line x1="-60" y1="10" x2="-60" y2="75" stroke="#4A3B2C" stroke-width="2" opacity="0.6"/>
+    <line x1="-40" y1="5" x2="-40" y2="80" stroke="#4A3B2C" stroke-width="2" opacity="0.5"/>
+    <line x1="-20" y1="3" x2="-20" y2="80" stroke="#4A3B2C" stroke-width="2" opacity="0.6"/>
+    <line x1="0" y1="0" x2="0" y2="80" stroke="#4A3B2C" stroke-width="2" opacity="0.5"/>
+    <line x1="20" y1="3" x2="20" y2="80" stroke="#4A3B2C" stroke-width="2" opacity="0.6"/>
+    <line x1="40" y1="5" x2="40" y2="80" stroke="#4A3B2C" stroke-width="2" opacity="0.5"/>
+    <line x1="60" y1="10" x2="60" y2="75" stroke="#4A3B2C" stroke-width="2" opacity="0.6"/>
+
+    <!-- Top surface (cross-section) -->
+    <ellipse cx="0" cy="0" rx="70" ry="20" fill="url(#woodCore)"/>
+
+    <!-- Tree rings -->
+    <ellipse cx="0" cy="0" rx="60" ry="17" fill="none" stroke="#B8956A" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="0" cy="0" rx="50" ry="14" fill="none" stroke="#B8956A" stroke-width="1" opacity="0.6"/>
+    <ellipse cx="0" cy="0" rx="40" ry="11" fill="none" stroke="#B8956A" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="0" cy="0" rx="30" ry="8" fill="none" stroke="#B8956A" stroke-width="1" opacity="0.6"/>
+    <ellipse cx="0" cy="0" rx="20" ry="5" fill="none" stroke="#B8956A" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="0" cy="0" rx="10" ry="3" fill="none" stroke="#B8956A" stroke-width="1.5" opacity="0.8"/>
+
+    <!-- Center (heartwood) -->
+    <ellipse cx="0" cy="0" rx="5" ry="1.5" fill="#8B7355"/>
+
+    <!-- Radial cracks -->
+    <line x1="0" y1="0" x2="50" y2="12" stroke="#A08060" stroke-width="0.5" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-45" y2="10" stroke="#A08060" stroke-width="0.5" opacity="0.4"/>
+    <line x1="0" y1="0" x2="30" y2="-8" stroke="#A08060" stroke-width="0.5" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-35" y2="-9" stroke="#A08060" stroke-width="0.5" opacity="0.4"/>
+  </g>
+
+  <!-- Small sprouts/leaves -->
+  <g transform="translate(240, 140)">
+    <path d="M0,0 Q5,-15 0,-20 Q-5,-15 0,0" fill="#2d9660"/>
+    <path d="M5,5 Q12,-8 8,-15 Q2,-8 5,5" fill="#1e7a4d"/>
+  </g>
+
+  <!-- Label -->
+  <text x="200" y="280" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="600" fill="#2d9660">
+    Rundholz / Stamm
+  </text>
+</svg>

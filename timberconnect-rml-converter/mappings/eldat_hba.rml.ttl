@@ -1,0 +1,599 @@
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix tcr: <http://timberconnect.2050.de/resource/> .
+@prefix geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+@prefix eldat: <http://timberconnect.2050.de/ontology/eldat#> .
+
+# =============================================================================
+# WOOD ALLOCATION MAPPING - Holzbereitstellungsanzeige (HBA)
+# =============================================================================
+
+<#WoodAllocationMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/woodAllocation/{wood_data[0].wood_id[0].wood_id_no}" ;
+        rr:class eldat:WoodAllocation
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:docType ;
+        rr:objectMap [ rml:reference "doc_type" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:measurementMethod ;
+        rr:objectMap [ rml:reference "wood_data[0].measurement_method" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:woodDepiction ;
+        rr:objectMap [ rml:reference "wood_data[0].wood_depiction" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:fellingDate ;
+        rr:objectMap [
+            rml:reference "wood_data[0].felling_date" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:statusId ;
+        rr:objectMap [ rml:reference "status.statusid" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:creationDateTime ;
+        rr:objectMap [
+            rml:reference "status.creation_datetime" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    # Verknuepfung zu Polter
+    rr:predicateObjectMap [
+        rr:predicate eldat:hasPolter ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/polter/{wood_data[0].allocated_wood[0].wood_id[0].wood_id_no}"
+        ]
+    ] ;
+
+    # Verknuepfung zu Supplier
+    rr:predicateObjectMap [
+        rr:predicate eldat:hasSupplier ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/organization/{address.supplier.business.business_data.name}"
+        ]
+    ] ;
+
+    # Verknuepfung zu WoodCertification
+    rr:predicateObjectMap [
+        rr:predicate eldat:hasCertification ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/certification/{wood_data[0].wood_certification.wood_origin.state_subdivision}"
+        ]
+    ] .
+
+# =============================================================================
+# TIMBER CONNECT REFERENCE MAPPING
+# =============================================================================
+
+<#TimberConnectRefMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.meta.timberconnect"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/trace/{trace_id}" ;
+        rr:class tc:TraceReference
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:traceId ;
+        rr:objectMap [ rml:reference "trace_id" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:sourceFormat ;
+        rr:objectMap [ rml:reference "source_format" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:sourceStemKey ;
+        rr:objectMap [ rml:reference "source_stem_key" ]
+    ] ;
+
+    # Verknuepfung zu Stem (Forst)
+    rr:predicateObjectMap [
+        rr:predicate tc:referencesStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{source_stem_key}"
+        ]
+    ] .
+
+# =============================================================================
+# SUPPLIER MAPPING - Lieferant
+# =============================================================================
+
+<#SupplierMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation.address.supplier.business.business_data"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/organization/{name}" ;
+        rr:class eldat:Supplier
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:name ;
+        rr:objectMap [ rml:reference "name" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:street ;
+        rr:objectMap [ rml:reference "street" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:postcode ;
+        rr:objectMap [ rml:reference "postcode" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:city ;
+        rr:objectMap [ rml:reference "city" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:state ;
+        rr:objectMap [ rml:reference "state" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:officeName ;
+        rr:objectMap [ rml:reference "forestry.office_name" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:districtName ;
+        rr:objectMap [ rml:reference "forestry.district_name" ]
+    ] ;
+
+    # Rueckverknuepfung zu WoodAllocation
+    rr:predicateObjectMap [
+        rr:predicate eldat:belongsToAllocation ;
+        rr:objectMap [
+            rr:parentTriplesMap <#WoodAllocationMapping>
+        ]
+    ] .
+
+# =============================================================================
+# PRODUCT DATA MAPPING - Produktdaten (einzelne Abschnitte)
+# =============================================================================
+
+<#ProductDataMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation.wood_data[*].product_data[*]"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/product/{wood_id[0].wood_id_no}/{part_no}" ;
+        rr:class eldat:ProductData
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:woodIdNo ;
+        rr:objectMap [ rml:reference "wood_id[0].wood_id_no" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:partNo ;
+        rr:objectMap [
+            rml:reference "part_no" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:meanLength ;
+        rr:objectMap [
+            rml:reference "mean_length" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:thicknessClass ;
+        rr:objectMap [ rml:reference "thickness_class" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:vatRate ;
+        rr:objectMap [
+            rml:reference "vat_rate" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:diameterValue ;
+        rr:objectMap [
+            rml:reference "diameter.diameter_value" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:barkCondition ;
+        rr:objectMap [ rml:reference "diameter.bark_condition" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:barkThickness ;
+        rr:objectMap [
+            rml:reference "diameter.bark_thickness" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:diameterOnBark ;
+        rr:objectMap [
+            rml:reference "diameter.dia_on_bark" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:species ;
+        rr:objectMap [ rml:reference "wood_definition.species" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:use ;
+        rr:objectMap [ rml:reference "wood_definition.use" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:grade ;
+        rr:objectMap [ rml:reference "wood_definition.grade" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:amountValue ;
+        rr:objectMap [
+            rml:reference "wood_definition.amount[0].amount_value" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:amountUnit ;
+        rr:objectMap [ rml:reference "wood_definition.amount[0].amount_unit" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:sourceLogKey ;
+        rr:objectMap [ rml:reference "timberconnect.source_log_key" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:harvesterVolume ;
+        rr:objectMap [
+            rml:reference "timberconnect.harvester_volume_m3sub" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    # Rueckverknuepfung zu WoodAllocation
+    rr:predicateObjectMap [
+        rr:predicate eldat:belongsToAllocation ;
+        rr:objectMap [
+            rr:parentTriplesMap <#WoodAllocationMapping>
+        ]
+    ] .
+
+# =============================================================================
+# POLTER MAPPING - Polter (Holzstapel am Waldweg)
+# =============================================================================
+
+<#PolterMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation.wood_data[*].allocated_wood[*]"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/polter/{wood_id[0].wood_id_no}" ;
+        rr:class eldat:Polter
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:polterId ;
+        rr:objectMap [ rml:reference "wood_id[0].wood_id_no" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:lat ;
+        rr:objectMap [
+            rml:reference "coordinate.latitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:long ;
+        rr:objectMap [
+            rml:reference "coordinate.longitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:crs ;
+        rr:objectMap [ rml:reference "coordinate.crs" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:conversionFactor ;
+        rr:objectMap [
+            rml:reference "conversion_factor" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:preservation ;
+        rr:objectMap [
+            rml:reference "preservation" ;
+            rr:datatype xsd:boolean
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:allWoodText ;
+        rr:objectMap [ rml:reference "all_wood_text" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:totalPieces ;
+        rr:objectMap [
+            rml:reference "product_data[0].wood_definition.amount[0].amount_value" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:totalVolume ;
+        rr:objectMap [
+            rml:reference "product_data[0].wood_definition.amount[1].amount_value" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    # Verknuepfung zu TraceReference
+    rr:predicateObjectMap [
+        rr:predicate tc:hasTraceReference ;
+        rr:objectMap [
+            rr:parentTriplesMap <#TimberConnectRefMapping>
+        ]
+    ] ;
+
+    # Rueckverknuepfung zu WoodAllocation
+    rr:predicateObjectMap [
+        rr:predicate eldat:belongsToAllocation ;
+        rr:objectMap [
+            rr:parentTriplesMap <#WoodAllocationMapping>
+        ]
+    ] ;
+
+    # Verknuepfung zu WoodData
+    rr:predicateObjectMap [
+        rr:predicate tc:hasWoodData ;
+        rr:objectMap [
+            rr:parentTriplesMap <#TimberConnectWoodDataMapping>
+        ]
+    ] .
+
+# =============================================================================
+# TIMBER CONNECT WOOD DATA MAPPING - Rueckverfolgungsdaten
+# =============================================================================
+
+<#TimberConnectWoodDataMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation.wood_data[*].timberconnect"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/woodData/{harvester_stem_key}" ;
+        rr:class tc:WoodData
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:harvesterStemKey ;
+        rr:objectMap [ rml:reference "harvester_stem_key" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:harvestDate ;
+        rr:objectMap [
+            rml:reference "harvest_date" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:lat ;
+        rr:objectMap [
+            rml:reference "harvest_location.latitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:long ;
+        rr:objectMap [
+            rml:reference "harvest_location.longitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:alt ;
+        rr:objectMap [
+            rml:reference "harvest_location.altitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:dbh ;
+        rr:objectMap [
+            rml:reference "dbh_mm" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:totalStemLength ;
+        rr:objectMap [
+            rml:reference "total_stem_length_cm" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:destinationProduct ;
+        rr:objectMap [ rml:reference "destination_product" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:destinationOrder ;
+        rr:objectMap [ rml:reference "destination_order" ]
+    ] ;
+
+    # Verknuepfung zu Stem (Forst)
+    rr:predicateObjectMap [
+        rr:predicate tc:derivedFromStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{harvester_stem_key}"
+        ]
+    ] ;
+
+    # Rueckverknuepfung zu Polter
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToPolter ;
+        rr:objectMap [
+            rr:parentTriplesMap <#PolterMapping>
+        ]
+    ] .
+
+# =============================================================================
+# CERTIFICATION MAPPING - Zertifizierungen
+# =============================================================================
+
+<#CertificationMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation.wood_data[*].wood_certification"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/certification/{wood_origin.state_subdivision}" ;
+        rr:class eldat:WoodCertification
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:originState ;
+        rr:objectMap [ rml:reference "wood_origin.state" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:originSubdivision ;
+        rr:objectMap [ rml:reference "wood_origin.state_subdivision" ]
+    ] ;
+
+    # Rueckverknuepfung zu WoodAllocation
+    rr:predicateObjectMap [
+        rr:predicate eldat:belongsToAllocation ;
+        rr:objectMap [
+            rr:parentTriplesMap <#WoodAllocationMapping>
+        ]
+    ] .
+
+# =============================================================================
+# BUSINESS PARTNER MAPPING - Geschaeftspartner
+# =============================================================================
+
+<#BusinessPartnerMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.document.eldat.wood_allocation.address.other_address[*].other_business"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/business/{business_data.name}" ;
+        rr:class eldat:BusinessPartner
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:role ;
+        rr:objectMap [ rml:reference "role_business" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:name ;
+        rr:objectMap [ rml:reference "business_data.name" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:street ;
+        rr:objectMap [ rml:reference "business_data.street" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:postcode ;
+        rr:objectMap [ rml:reference "business_data.postcode" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:city ;
+        rr:objectMap [ rml:reference "business_data.city" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate eldat:taxNo ;
+        rr:objectMap [ rml:reference "tax.tax_no" ]
+    ] ;
+
+    # Rueckverknuepfung zu WoodAllocation
+    rr:predicateObjectMap [
+        rr:predicate eldat:belongsToAllocation ;
+        rr:objectMap [
+            rr:parentTriplesMap <#WoodAllocationMapping>
+        ]
+    ] .

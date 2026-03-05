@@ -1,12 +1,24 @@
-:80 {
-    reverse_proxy /semantic-data-catalog/* semantic-data-catalog-frontend:5000
-    reverse_proxy /api/* semantic-data-catalog-backend:8000
+{$DOMAIN:localhost} {
+    # TimberConnect Viewer
+    reverse_proxy /timberconnect/* timberconnect-viewer:80
 
-    reverse_proxy /smart-city-urban-heat-monitoring/* smart-city-urban-heat-monitoring:4200
+    # TimberConnect RML Converter API
+    reverse_proxy /api/converter/* timberconnect-rml-converter:8001
 
-    reverse_proxy /fuseki/* fuseki:3030
-    
-    reverse_proxy /node-red/* node-red:1880
+    # TimberConnect Chat Agent
+    handle /timberconnect-agent/* {
+        uri strip_prefix /timberconnect-agent
+        reverse_proxy timberconnect-agent:8002
+    }
 
-    reverse_proxy solid-dataspace-manager:3001
+    # Default: Redirect to TimberConnect Viewer
+    redir / /timberconnect/ permanent
+
+    # Security Headers
+    header {
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Strict-Transport-Security "max-age=31536000"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
 }

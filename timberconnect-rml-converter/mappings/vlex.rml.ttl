@@ -1,0 +1,546 @@
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix tcr: <http://timberconnect.2050.de/resource/> .
+@prefix vlex: <http://timberconnect.2050.de/ontology/vlex#> .
+
+# =============================================================================
+# BSP PANEL MAPPING - BSP-Platte (Brettsperrholz)
+# =============================================================================
+
+<#BSPPanelMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{timberconnect.trace_id}/{artikel}" ;
+        rr:class vlex:BSPPanel
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:artikel ;
+        rr:objectMap [ rml:reference "artikel" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:traceId ;
+        rr:objectMap [ rml:reference "timberconnect.trace_id" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:fscCertification ;
+        rr:objectMap [ rml:reference "timberconnect.certification.fsc" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:pefcCertification ;
+        rr:objectMap [ rml:reference "timberconnect.certification.pefc" ]
+    ] ;
+
+    # Verknuepfung zu BSPConfiguration
+    rr:predicateObjectMap [
+        rr:predicate vlex:hasConfiguration ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/bspConfig/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] ;
+
+    # Verknuepfung zu Dimension
+    rr:predicateObjectMap [
+        rr:predicate vlex:hasDimension ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/dimension/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] ;
+
+    # Verknuepfung zu Production
+    rr:predicateObjectMap [
+        rr:predicate vlex:hasProduction ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/production/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] ;
+
+    # Verknuepfung zu SurfaceQuality
+    rr:predicateObjectMap [
+        rr:predicate vlex:hasSurfaceQuality ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/surfaceQuality/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] ;
+
+    # Verknuepfung zu ForestSource (Lieferkette)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasForestSource ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/sourceChain/forst/{timberconnect.source_chain[0].stem_key}"
+        ]
+    ] ;
+
+    # Verknuepfung zu SawmillSource (Lieferkette)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasSawmillSource ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/sourceChain/saegewerk/{timberconnect.source_chain[1].polter_id}"
+        ]
+    ] ;
+
+    # Verknuepfung zu BSPWerkSource (Lieferkette)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasBSPWerkSource ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/sourceChain/bspwerk/{timberconnect.source_chain[2].order_id}"
+        ]
+    ] ;
+
+    # Verknuepfung zu Stem (Forst) - Direkte Rueckverfolgung zum Ursprungsstamm
+    rr:predicateObjectMap [
+        rr:predicate tc:derivedFromStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{timberconnect.source_chain[0].stem_key}"
+        ]
+    ] ;
+
+    # Verknuepfung zu Polter (Saegewerk)
+    rr:predicateObjectMap [
+        rr:predicate tc:derivedFromPolter ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/polter/{timberconnect.source_chain[1].polter_id}"
+        ]
+    ] .
+
+# =============================================================================
+# SOURCE CHAIN MAPPING - Lieferkette / Rueckverfolgung
+# =============================================================================
+
+<#SourceChainForstMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.timberconnect.source_chain[0]"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/sourceChain/forst/{stem_key}" ;
+        rr:class tc:ForestSource
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:station ;
+        rr:objectMap [ rml:reference "station" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:sourceFormat ;
+        rr:objectMap [ rml:reference "format" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:stemKey ;
+        rr:objectMap [ rml:reference "stem_key" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:harvestDate ;
+        rr:objectMap [
+            rml:reference "harvest_date" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:forestryOffice ;
+        rr:objectMap [ rml:reference "location.forestry_office" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:district ;
+        rr:objectMap [ rml:reference "location.district" ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToPanel ;
+        rr:objectMap [
+            rr:parentTriplesMap <#BSPPanelMapping>
+        ]
+    ] .
+
+<#SourceChainSaewerkMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.timberconnect.source_chain[1]"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/sourceChain/saegewerk/{polter_id}" ;
+        rr:class tc:SawmillSource
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:station ;
+        rr:objectMap [ rml:reference "station" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:sourceFormat ;
+        rr:objectMap [ rml:reference "format" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:polterId ;
+        rr:objectMap [ rml:reference "polter_id" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:company ;
+        rr:objectMap [ rml:reference "company" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:deliveryDate ;
+        rr:objectMap [
+            rml:reference "delivery_date" ;
+            rr:datatype xsd:date
+        ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToPanel ;
+        rr:objectMap [
+            rr:parentTriplesMap <#BSPPanelMapping>
+        ]
+    ] .
+
+<#SourceChainBSPWerkMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.timberconnect.source_chain[2]"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/sourceChain/bspwerk/{order_id}" ;
+        rr:class tc:BSPWerkSource
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:station ;
+        rr:objectMap [ rml:reference "station" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:sourceFormat ;
+        rr:objectMap [ rml:reference "format" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:orderId ;
+        rr:objectMap [ rml:reference "order_id" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:company ;
+        rr:objectMap [ rml:reference "company" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:productionDate ;
+        rr:objectMap [
+            rml:reference "production_date" ;
+            rr:datatype xsd:date
+        ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToPanel ;
+        rr:objectMap [
+            rr:parentTriplesMap <#BSPPanelMapping>
+        ]
+    ] .
+
+# =============================================================================
+# DIMENSION MAPPING - Abmessungen
+# =============================================================================
+
+<#DimensionMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/dimension/{timberconnect.trace_id}/{artikel}" ;
+        rr:class vlex:Dimension
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:laengeGesamt ;
+        rr:objectMap [
+            rml:reference "merkmale.LAENGE_0.wert" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:breite ;
+        rr:objectMap [ rml:reference "merkmale.BREITE.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:hoehe ;
+        rr:objectMap [
+            rml:reference "merkmale.BSP_HOEHE.wert" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:bruttoVolumen ;
+        rr:objectMap [ rml:reference "merkmale.B_VOLUMEN.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:nettoVolumen ;
+        rr:objectMap [ rml:reference "merkmale.N_VOLUMEN.wert" ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate vlex:belongsToPanel ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/bspPanel/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] .
+
+# =============================================================================
+# BSP CONFIGURATION MAPPING - BSP Konfiguration
+# =============================================================================
+
+<#BSPConfigMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspConfig/{timberconnect.trace_id}/{artikel}" ;
+        rr:class vlex:BSPConfiguration
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:bspTyp ;
+        rr:objectMap [ rml:reference "merkmale.BSP_TYP.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:bspTypBezeichnung ;
+        rr:objectMap [ rml:reference "merkmale.BSP_TYP.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:plattencode ;
+        rr:objectMap [ rml:reference "merkmale.BSP_PLATTENCODE.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:plattencodeBezeichnung ;
+        rr:objectMap [ rml:reference "merkmale.BSP_PLATTENCODE.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:anzahlSchichten ;
+        rr:objectMap [
+            rml:reference "merkmale.BSP_SCHICHTEN.wert" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:holzart ;
+        rr:objectMap [ rml:reference "merkmale.HOLZART.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:holzartBezeichnung ;
+        rr:objectMap [ rml:reference "merkmale.HOLZART.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:festigkeit ;
+        rr:objectMap [ rml:reference "merkmale.FESTIGKEIT.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:produktnorm ;
+        rr:objectMap [ rml:reference "merkmale.PNORM.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:brandschutzklasse ;
+        rr:objectMap [ rml:reference "merkmale.BSK.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:pefcZertifiziert ;
+        rr:objectMap [ rml:reference "merkmale.PEFC.wert" ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate vlex:belongsToPanel ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/bspPanel/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] .
+
+# =============================================================================
+# PRODUCTION MAPPING - Produktionsdaten
+# =============================================================================
+
+<#ProductionMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/production/{timberconnect.trace_id}/{artikel}" ;
+        rr:class vlex:Production
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:vertriebsauftragsnummer ;
+        rr:objectMap [ rml:reference "merkmale.VERT_AUFTRAGSNUMMER.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:konstruktionsnummer ;
+        rr:objectMap [ rml:reference "merkmale.KONST_NR.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:beschreibung ;
+        rr:objectMap [ rml:reference "merkmale.BESCHREIBUNG.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:produktionsstandort ;
+        rr:objectMap [ rml:reference "merkmale.PRODORG.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:status ;
+        rr:objectMap [ rml:reference "merkmale.STATUS.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:source ;
+        rr:objectMap [ rml:reference "merkmale.SOURCE.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:cncAbbund ;
+        rr:objectMap [ rml:reference "merkmale.CNC_ABBUND.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:cncMaschine ;
+        rr:objectMap [ rml:reference "merkmale.CNC_MASCHINE.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:zusatzabbund ;
+        rr:objectMap [ rml:reference "merkmale.ZUSATZABBUND.wert" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:zusatzabbundBeschreibung ;
+        rr:objectMap [ rml:reference "merkmale.ZUSATZABBUND_BESCHREIBUNG.wert" ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate vlex:belongsToPanel ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/bspPanel/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] .
+
+# =============================================================================
+# SURFACE QUALITY MAPPING - Oberflaechenqualitaet
+# =============================================================================
+
+<#SurfaceQualityMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/surfaceQuality/{timberconnect.trace_id}/{artikel}" ;
+        rr:class vlex:SurfaceQuality
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:optikSeite1 ;
+        rr:objectMap [ rml:reference "merkmale.OPTIK_S_1.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:optikSeite2 ;
+        rr:objectMap [ rml:reference "merkmale.OPTIK_S_2.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:optikSeite3 ;
+        rr:objectMap [ rml:reference "merkmale.OPTIK_S_3.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:optikSeite4 ;
+        rr:objectMap [ rml:reference "merkmale.OPTIK_S_4.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:optikSeite5 ;
+        rr:objectMap [ rml:reference "merkmale.OPTIK_S_5.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:optikSeite6 ;
+        rr:objectMap [ rml:reference "merkmale.OPTIK_S_6.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:decklageBspSeite1 ;
+        rr:objectMap [ rml:reference "merkmale.DL_BSP_S_1.wert_bezeichnung" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate vlex:decklageBspSeite6 ;
+        rr:objectMap [ rml:reference "merkmale.DL_BSP_S_6.wert_bezeichnung" ]
+    ] ;
+
+    # Rueckverknuepfung zu BSPPanel
+    rr:predicateObjectMap [
+        rr:predicate vlex:belongsToPanel ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/bspPanel/{timberconnect.trace_id}/{artikel}"
+        ]
+    ] .

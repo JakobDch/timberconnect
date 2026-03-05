@@ -1,0 +1,741 @@
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix tcr: <http://timberconnect.2050.de/resource/> .
+@prefix geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+@prefix schema: <http://schema.org/> .
+
+# =============================================================================
+# STEM MAPPING - Hauptentitaet Stamm
+# =============================================================================
+
+<#StemMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{StemKey}" ;
+        rr:class tc:Stem
+    ] ;
+
+    # Stamm-Identifikation
+    rr:predicateObjectMap [
+        rr:predicate tc:stemKey ;
+        rr:objectMap [ rml:reference "StemKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:objectKey ;
+        rr:objectMap [ rml:reference "ObjectKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:subObjectKey ;
+        rr:objectMap [ rml:reference "SubObjectKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:speciesGroupKey ;
+        rr:objectMap [ rml:reference "SpeciesGroupKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:operatorKey ;
+        rr:objectMap [ rml:reference "OperatorKey" ]
+    ] ;
+
+    # Erntedatum
+    rr:predicateObjectMap [
+        rr:predicate tc:harvestDate ;
+        rr:objectMap [
+            rml:reference "HarvestDate" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:stemNumber ;
+        rr:objectMap [
+            rml:reference "StemNumber" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:processingCategory ;
+        rr:objectMap [ rml:reference "ProcessingCategory" ]
+    ] ;
+
+    # StumpTreatment
+    rr:predicateObjectMap [
+        rr:predicate tc:stumpTreatment ;
+        rr:objectMap [
+            rml:reference "StumpTreatment" ;
+            rr:datatype xsd:boolean
+        ]
+    ] ;
+
+    # Extension-Daten
+    rr:predicateObjectMap [
+        rr:predicate tc:sessionId ;
+        rr:objectMap [ rml:reference "Extension/SessionId" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:analyzedLength ;
+        rr:objectMap [
+            rml:reference "Extension/AnalyzedLength" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:fellCutStartTime ;
+        rr:objectMap [
+            rml:reference "Extension/FellCutStartTime" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:fellCutEndTime ;
+        rr:objectMap [
+            rml:reference "Extension/FellCutEndTime" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:tiltUpStartTime ;
+        rr:objectMap [
+            rml:reference "Extension/TiltUpStartTime" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    # GNSS-Qualitaet
+    rr:predicateObjectMap [
+        rr:predicate tc:gnssQualityIndicator ;
+        rr:objectMap [ rml:reference "Extension/QualityIndicatorGNSS" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:satellitesInUse ;
+        rr:objectMap [
+            rml:reference "Extension/NoOfSatellitesInUseGNSS" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:horizontalAccuracy ;
+        rr:objectMap [
+            rml:reference "Extension/AccuracyCoordinateHorizontal" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:verticalAccuracy ;
+        rr:objectMap [
+            rml:reference "Extension/AccuracyCoordinateVertical" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:coordinateEPSGcode ;
+        rr:objectMap [
+            rml:reference "Extension/CoordinateEPSGcode" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:bearingAsDecimal ;
+        rr:objectMap [
+            rml:reference "Extension/BearingAsDecimal" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:qualityIndicatorBearing ;
+        rr:objectMap [ rml:reference "Extension/QualityIndicatorBearing" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:accuracyMachineBearing ;
+        rr:objectMap [
+            rml:reference "Extension/AccuracyMachineBearing" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    # TimberConnect Referenzen
+    rr:predicateObjectMap [
+        rr:predicate tc:forestryOffice ;
+        rr:objectMap [ rml:reference "Extension/TimberConnectRef/ForestryOffice" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:district ;
+        rr:objectMap [ rml:reference "Extension/TimberConnectRef/District" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:fscCertification ;
+        rr:objectMap [ rml:reference "Extension/TimberConnectRef/CertificationFSC" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:pefcCertification ;
+        rr:objectMap [ rml:reference "Extension/TimberConnectRef/CertificationPEFC" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:destinationSawmill ;
+        rr:objectMap [ rml:reference "Extension/TimberConnectRef/DestinationSawmill" ]
+    ] ;
+
+    # Verarbeitungsdaten
+    rr:predicateObjectMap [
+        rr:predicate tc:dbh ;
+        rr:objectMap [
+            rml:reference "SingleTreeProcessedStem/DBH" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:referenceDiameter ;
+        rr:objectMap [
+            rml:reference "SingleTreeProcessedStem/ReferenceDiameter" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:referenceDiameterHeight ;
+        rr:objectMap [
+            rml:reference "SingleTreeProcessedStem/ReferenceDiameter/@referenceDiameterHeight" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    # Verknuepfung zu MachinePosition
+    rr:predicateObjectMap [
+        rr:predicate tc:hasMachinePosition ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{StemKey}/coordinates/machine"
+        ]
+    ] ;
+
+    # Verknuepfung zu CraneTipPosition
+    rr:predicateObjectMap [
+        rr:predicate tc:hasCraneTipPosition ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{StemKey}/coordinates/crane"
+        ]
+    ] ;
+
+    # Verknuepfung zu BoomPositioning
+    rr:predicateObjectMap [
+        rr:predicate tc:hasBoomPositioning ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{StemKey}/boomPositioning"
+        ]
+    ] .
+
+# =============================================================================
+# BOOM POSITIONING MAPPING - Kranpositionierung
+# =============================================================================
+
+<#BoomPositioningMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/BoomPositioning"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../StemKey}/boomPositioning" ;
+        rr:class tc:BoomPositioning
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:boomPositioningCategory ;
+        rr:objectMap [ rml:reference "@boomPositioningCategory" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:boomAngle ;
+        rr:objectMap [
+            rml:reference "BoomAngle" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:boomExtension ;
+        rr:objectMap [
+            rml:reference "BoomExtension" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:machineBearing ;
+        rr:objectMap [
+            rml:reference "MachineBearing" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../StemKey}"
+        ]
+    ] .
+
+# =============================================================================
+# STEM COORDINATES MAPPING - Maschinenposition
+# =============================================================================
+
+<#StemCoordinatesMachineMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/StemCoordinates[@receiverPosition='Base machine position']"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../StemKey}/coordinates/machine" ;
+        rr:class tc:MachinePosition
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:lat ;
+        rr:objectMap [
+            rml:reference "Latitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:long ;
+        rr:objectMap [
+            rml:reference "Longitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:alt ;
+        rr:objectMap [
+            rml:reference "Altitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:coordinateSystem ;
+        rr:objectMap [ rml:reference "@coordinateReferenceSystem" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:receiverPosition ;
+        rr:objectMap [ rml:reference "@receiverPosition" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../StemKey}"
+        ]
+    ] .
+
+# =============================================================================
+# STEM COORDINATES MAPPING - Kranspitzenposition
+# =============================================================================
+
+<#StemCoordinatesCraneMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/StemCoordinates[contains(@receiverPosition, 'Crane tip')]"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../StemKey}/coordinates/crane" ;
+        rr:class tc:CraneTipPosition
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:lat ;
+        rr:objectMap [
+            rml:reference "Latitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:long ;
+        rr:objectMap [
+            rml:reference "Longitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:alt ;
+        rr:objectMap [
+            rml:reference "Altitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../StemKey}"
+        ]
+    ] .
+
+# =============================================================================
+# LOG MAPPING - Einzelne Abschnitte
+# =============================================================================
+
+<#LogMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/SingleTreeProcessedStem/Log"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../../StemKey}/log/{LogKey}" ;
+        rr:class tc:Log
+    ] ;
+
+    # Log-Identifikation
+    rr:predicateObjectMap [
+        rr:predicate tc:logKey ;
+        rr:objectMap [ rml:reference "LogKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:productKey ;
+        rr:objectMap [ rml:reference "ProductKey" ]
+    ] ;
+
+    # Volumen (m3 price)
+    rr:predicateObjectMap [
+        rr:predicate tc:volumePrice ;
+        rr:objectMap [
+            rml:reference "LogVolume[@logVolumeCategory='m3 (price)']" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    # Volumen (m3sob - mit Rinde)
+    rr:predicateObjectMap [
+        rr:predicate tc:volumeOverBark ;
+        rr:objectMap [
+            rml:reference "LogVolume[@logVolumeCategory='m3sob']" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    # Volumen (m3sub - ohne Rinde)
+    rr:predicateObjectMap [
+        rr:predicate tc:volumeUnderBark ;
+        rr:objectMap [
+            rml:reference "LogVolume[@logVolumeCategory='m3sub']" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    # Schnittgrund
+    rr:predicateObjectMap [
+        rr:predicate tc:cuttingReason ;
+        rr:objectMap [ rml:reference "CuttingCategory/CuttingReason" ]
+    ] ;
+
+    # Extension-Daten
+    rr:predicateObjectMap [
+        rr:predicate tc:cuttingStartTime ;
+        rr:objectMap [
+            rml:reference "Extension/CuttingStartTime" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:cuttingEndTime ;
+        rr:objectMap [
+            rml:reference "Extension/CuttingEndTime" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:startPosition ;
+        rr:objectMap [
+            rml:reference "Extension/StartPos" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:polterReference ;
+        rr:objectMap [ rml:reference "Extension/PolterReference" ]
+    ] ;
+
+    # Messdaten
+    rr:predicateObjectMap [
+        rr:predicate tc:logLength ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogLength" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    # Durchmesser Stammfuss
+    rr:predicateObjectMap [
+        rr:predicate tc:diameterButtOverbark ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogDiameter[@logDiameterCategory='Butt ob']" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:diameterButtUnderbark ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogDiameter[@logDiameterCategory='Butt ub']" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    # Durchmesser Mitte
+    rr:predicateObjectMap [
+        rr:predicate tc:diameterMidOverbark ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogDiameter[@logDiameterCategory='Mid ob']" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:diameterMidUnderbark ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogDiameter[@logDiameterCategory='Mid ub']" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    # Durchmesser Zopf
+    rr:predicateObjectMap [
+        rr:predicate tc:diameterTopOverbark ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogDiameter[@logDiameterCategory='Top ob']" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:diameterTopUnderbark ;
+        rr:objectMap [
+            rml:reference "LogMeasurement/LogDiameter[@logDiameterCategory='Top ub']" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    # Verknuepfung zum Stamm
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../../StemKey}"
+        ]
+    ] ;
+
+    # Verknuepfung zu LogPosition
+    rr:predicateObjectMap [
+        rr:predicate tc:hasLogPosition ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../../StemKey}/log/{LogKey}/coordinates"
+        ]
+    ] .
+
+# =============================================================================
+# LOG COORDINATES MAPPING
+# =============================================================================
+
+<#LogCoordinatesMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/SingleTreeProcessedStem/Log/Extension/LogCoordinates"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../../../../StemKey}/log/{../../LogKey}/coordinates" ;
+        rr:class tc:LogPosition
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:lat ;
+        rr:objectMap [
+            rml:reference "Latitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:long ;
+        rr:objectMap [
+            rml:reference "Longitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate geo:alt ;
+        rr:objectMap [
+            rml:reference "Altitude" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:coordinateDate ;
+        rr:objectMap [
+            rml:reference "CoordinateDate" ;
+            rr:datatype xsd:dateTime
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:gnssQualityIndicator ;
+        rr:objectMap [ rml:reference "@qualityIndicatorGNSS" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:coordinateAccuracy ;
+        rr:objectMap [
+            rml:reference "@accuracyCoordinate" ;
+            rr:datatype xsd:decimal
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:logBearing ;
+        rr:objectMap [
+            rml:reference "LogBearing" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    # Verknuepfung zum Log
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToLog ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../../../../StemKey}/log/{../../LogKey}"
+        ]
+    ] .
+
+# =============================================================================
+# DIAMETER DROP MAPPING - Durchmesserverlauf
+# =============================================================================
+
+<#DiameterDropMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/Extension/DiameterDrop"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../../StemKey}/diameterDrop/{@pos}" ;
+        rr:class tc:DiameterDrop
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:diameter ;
+        rr:objectMap [
+            rml:reference "@dia" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:position ;
+        rr:objectMap [
+            rml:reference "@pos" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:dropValue ;
+        rr:objectMap [
+            rml:reference "." ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../../StemKey}"
+        ]
+    ] .
+
+# =============================================================================
+# STEM GRADE MAPPING - Qualitaetsklassen
+# =============================================================================
+
+<#StemGradeMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/Stem/SingleTreeProcessedStem/StemGrade/GradeValue"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stem/{../../../StemKey}/grade/{@gradeStartPosition}" ;
+        rr:class tc:StemGrade
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:gradeValue ;
+        rr:objectMap [
+            rml:reference "." ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:gradeStartPosition ;
+        rr:objectMap [
+            rml:reference "@gradeStartPosition" ;
+            rr:datatype xsd:integer
+        ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToStem ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/stem/{../../../StemKey}"
+        ]
+    ] .
