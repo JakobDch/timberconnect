@@ -1,0 +1,41 @@
+# Docker Compose for production server deployment
+# This file is used on the server where Caddy already runs centrally
+# Do NOT use this locally - use docker-compose.yml instead
+
+services:
+  timberconnect-viewer:
+    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-viewer:latest
+    restart: unless-stopped
+    expose: ["80"]
+    networks:
+      - solid-dataspace
+
+  timberconnect-rml-converter:
+    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-rml-converter:latest
+    restart: unless-stopped
+    environment:
+      SOLID_POD_URL: https://tmdt-solid-community-server.de/epcisrepository
+      SOLID_ACCESS_TOKEN: ${SOLID_ACCESS_TOKEN:-}
+      CATALOG_API_URL: https://solid-dataspace-timberconnect.tmdt.info
+      CATALOG_LDP_URL: https://solid-dataspace-timberconnect.tmdt.info/dace/catalog/ds/
+      CATALOG_DEFAULT_PUBLISHER: "TimberConnect RML Converter"
+      CATALOG_DEFAULT_CONTACT: ${CATALOG_DEFAULT_CONTACT:-timberconnect@2050.de}
+      CATALOG_REGISTRATION_ENABLED: ${CATALOG_REGISTRATION_ENABLED:-true}
+    expose: ["8001"]
+    networks:
+      - solid-dataspace
+
+  timberconnect-agent:
+    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-agent:latest
+    restart: unless-stopped
+    environment:
+      TC_AGENT_OLLAMA_BASE_URL: "http://132.195.160.35:11434"
+      TC_AGENT_OLLAMA_MODEL: "llama3.3:70b"
+      TC_AGENT_DEFAULT_LLM_PROVIDER: "ollama"
+    expose: ["8002"]
+    networks:
+      - solid-dataspace
+
+networks:
+  solid-dataspace:
+    external: true

@@ -1,151 +1,151 @@
 # TimberConnect Deployment-Anleitung
 
-Diese Anleitung beschreibt die Schritte, um TimberConnect auf einem eigenen Server öffentlich zugänglich zu machen.
+Diese Anleitung beschreibt die Schritte, um TimberConnect auf dem Server `solid-prototypes` zu deployen.
 
 ---
 
-## Voraussetzungen
+## Übersicht
 
-### Server-Anforderungen
-- **Betriebssystem**: Ubuntu 22.04 LTS (empfohlen) oder anderes Linux
-- **CPU**: Mindestens 4 Kerne
-- **RAM**: Mindestens 8 GB
-- **Speicher**: Mindestens 50 GB SSD
-- **Netzwerk**: Öffentliche IP-Adresse
-
-### Zugang
-- SSH-Zugang zum Server (root oder sudo-Berechtigungen)
-- Zugang zur DNS-Verwaltung (für Subdomain)
-
----
-
-## Schritt 1: Server beantragen
-
-### Bei Uni-IT
-1. Server-Antrag stellen mit folgenden Angaben:
-   - Zweck: "TimberConnect Web-Anwendung"
-   - Anforderungen: 4 CPU, 8GB RAM, 50GB SSD, Ubuntu 22.04
-   - Ports: 80 (HTTP), 443 (HTTPS), 22 (SSH)
-   - Öffentliche IP benötigt
-
-2. Nach Bereitstellung notieren:
-   - Server-IP: `_______________`
-   - SSH-Benutzer: `_______________`
-
----
-
-## Schritt 2: Domain/DNS einrichten
-
-### Subdomain beantragen
-1. Bei Uni-IT oder Domain-Administrator anfragen:
-   - Gewünschte Subdomain: z.B. `timberconnect.tmdt.info`
-   - Typ: A-Record
-   - Ziel: Server-IP-Adresse
-
-2. DNS-Eintrag prüfen (kann bis zu 24h dauern):
-   ```bash
-   nslookup timberconnect.tmdt.info
-   ```
-
----
-
-## Schritt 3: Server einrichten
-
-### 3.1 Per SSH verbinden
-```bash
-ssh benutzer@server-ip
 ```
-
-### 3.2 System aktualisieren
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-### 3.3 Docker installieren
-```bash
-# Docker installieren
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Benutzer zur Docker-Gruppe hinzufügen
-sudo usermod -aG docker $USER
-
-# Ausloggen und wieder einloggen, damit Gruppe aktiv wird
-exit
-```
-
-Nach erneutem Login prüfen:
-```bash
-docker --version
-docker compose version
-```
-
-### 3.4 Git installieren (falls nicht vorhanden)
-```bash
-sudo apt install git -y
+┌─────────────────────────────────────────────────────────────────┐
+│  GitHub Repository                                              │
+│  github.com/JakobDch/timberconnect                             │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ Push zu main
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  GitHub Actions                                                 │
+│  Baut Docker Images automatisch                                 │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ Push Images
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Docker Hub                                                     │
+│  jakobdch/timberconnect-viewer                                 │
+│  jakobdch/timberconnect-agent                                  │
+│  jakobdch/timberconnect-rml-converter                          │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ Pull Images
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Server (132.195.160.169)                                       │
+│  Zentraler Caddy + TimberConnect Container                      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Schritt 4: Firewall konfigurieren
+## Schritt 1: GitHub Secrets einrichten
 
-```bash
-# UFW aktivieren und Ports öffnen
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
-sudo ufw enable
+1. Gehe zu: https://github.com/JakobDch/timberconnect/settings/secrets/actions
 
-# Status prüfen
-sudo ufw status
-```
+2. Füge diese Secrets hinzu:
+   - `DOCKER_USERNAME`: Dein Docker Hub Benutzername (z.B. `jakobdch`)
+   - `DOCKER_TOKEN`: Docker Hub Access Token (siehe unten)
+
+### Docker Hub Access Token erstellen:
+1. Gehe zu: https://hub.docker.com/settings/security
+2. Klicke "New Access Token"
+3. Name: `github-actions`
+4. Permissions: Read & Write
+5. Token kopieren und als `DOCKER_TOKEN` Secret speichern
 
 ---
 
-## Schritt 5: Anwendung deployen
+## Schritt 2: Ersten Build triggern
 
-### 5.1 Repository klonen
+Nach dem Einrichten der Secrets:
+
 ```bash
-cd /opt
-sudo git clone <REPOSITORY-URL> timberconnect
-sudo chown -R $USER:$USER timberconnect
-cd timberconnect
+# Lokaler Push (triggert GitHub Actions)
+git add .
+git commit -m "trigger ci/cd"
+git push github main
 ```
 
-### 5.2 Docker-Netzwerk erstellen
+Prüfe den Build-Status unter: https://github.com/JakobDch/timberconnect/actions
+
+---
+
+## Schritt 3: Server vorbereiten
+
+### Per SSH verbinden:
 ```bash
-docker network create solid-dataspace
+ssh solid@132.195.160.169
 ```
 
-### 5.3 Environment-Datei erstellen
+### TimberConnect Verzeichnis erstellen:
 ```bash
-cp .env.example .env
+mkdir -p ~/timberconnect
+cd ~/timberconnect
+```
+
+### docker-compose.server.yml herunterladen:
+```bash
+curl -O https://raw.githubusercontent.com/JakobDch/timberconnect/main/docker-compose.server.yml
+```
+
+### .env Datei erstellen:
+```bash
 nano .env
 ```
 
-**Wichtige Einstellungen in `.env`:**
+Inhalt:
 ```
-# Deine Domain (WICHTIG!)
-DOMAIN=timberconnect.tmdt.info
-
-# Sichere Passwörter setzen (Passwörter generieren z.B. mit: openssl rand -base64 32)
-MYSQL_ROOT_PASSWORD=<sicheres-passwort>
-MYSQL_PASSWORD=<sicheres-passwort>
-FUSEKI_ADMIN_PASSWORD=<sicheres-passwort>
+DOCKER_USERNAME=jakobdch
+SOLID_ACCESS_TOKEN=
+CATALOG_DEFAULT_CONTACT=timberconnect@2050.de
+CATALOG_REGISTRATION_ENABLED=true
 ```
 
-### 5.4 Container starten
+---
+
+## Schritt 4: Container starten
+
 ```bash
-docker compose up -d --build
+cd ~/timberconnect
+
+# Images von Docker Hub ziehen und starten
+docker compose -f docker-compose.server.yml pull
+docker compose -f docker-compose.server.yml up -d
+
+# Status prüfen
+docker compose -f docker-compose.server.yml ps
 ```
 
-### 5.5 Logs prüfen
-```bash
-# Alle Logs
-docker compose logs -f
+---
 
-# Nur Caddy (für HTTPS-Zertifikat)
-docker compose logs -f caddy
+## Schritt 5: Caddyfile ergänzen (sobald Domain da ist)
+
+### Caddyfile bearbeiten:
+```bash
+nano ~/solid-css/dataspace/config/Caddyfile
+```
+
+### Diesen Block am Ende hinzufügen:
+```caddy
+timberconnect-tmdt.info {
+    # TimberConnect Viewer (Frontend)
+    reverse_proxy /timberconnect/* timberconnect-viewer:80
+
+    # TimberConnect RML Converter API
+    reverse_proxy /api/converter/* timberconnect-rml-converter:8001
+
+    # TimberConnect Chat Agent
+    handle /timberconnect-agent/* {
+        uri strip_prefix /timberconnect-agent
+        reverse_proxy timberconnect-agent:8002
+    }
+
+    # Default: Redirect to Viewer
+    redir / /timberconnect/ permanent
+}
+```
+
+### Caddy neustarten:
+```bash
+cd ~/solid-css/dataspace
+docker compose restart caddy
 ```
 
 ---
@@ -153,96 +153,63 @@ docker compose logs -f caddy
 ## Schritt 6: Verifizierung
 
 ### Checkliste
-- [ ] `https://timberconnect.tmdt.info` öffnet sich im Browser
-- [ ] Kein Zertifikats-Fehler (grünes Schloss)
+- [ ] GitHub Actions Build erfolgreich (grüner Haken)
+- [ ] Images auf Docker Hub sichtbar
+- [ ] Container auf Server laufen (`docker ps`)
+- [ ] `https://timberconnect-tmdt.info` öffnet sich
 - [ ] Frontend lädt korrekt
-- [ ] QR-Scanner funktioniert
 - [ ] Chat-Agent antwortet
 
-### Befehle zur Diagnose
+### Befehle zur Diagnose:
 ```bash
 # Container-Status
-docker compose ps
+docker compose -f docker-compose.server.yml ps
+docker compose -f docker-compose.server.yml logs -f
 
-# HTTPS-Zertifikat prüfen
-curl -I https://timberconnect.tmdt.info
+# Netzwerk prüfen
+docker network inspect solid-dataspace
 
-# Einzelne Services testen
-curl https://timberconnect.tmdt.info/timberconnect/
-curl https://timberconnect.tmdt.info/api/converter/health
+# Caddy-Logs
+cd ~/solid-css/dataspace && docker compose logs caddy
+```
+
+---
+
+## Aktualisierung (nach Code-Änderungen)
+
+Nach einem Push zu GitHub werden die Images automatisch neu gebaut.
+
+Auf dem Server dann:
+```bash
+cd ~/timberconnect
+docker compose -f docker-compose.server.yml pull
+docker compose -f docker-compose.server.yml up -d
 ```
 
 ---
 
 ## Troubleshooting
 
-### Problem: HTTPS-Zertifikat wird nicht ausgestellt
-
-**Mögliche Ursachen:**
-1. DNS noch nicht propagiert → `nslookup domain` prüfen
-2. Port 80 blockiert → Firewall prüfen
-3. Domain falsch in .env → DOMAIN Variable prüfen
-
-**Lösung:**
-```bash
-# Caddy neustarten
-docker compose restart caddy
-
-# Logs prüfen
-docker compose logs caddy
-```
-
-### Problem: Container startet nicht
-
-```bash
-# Detaillierte Logs anzeigen
-docker compose logs <service-name>
-
-# Container manuell starten für Debug
-docker compose up <service-name>
-```
-
 ### Problem: "Network solid-dataspace not found"
-
 ```bash
 docker network create solid-dataspace
-docker compose up -d
 ```
 
-### Problem: Port bereits belegt
-
+### Problem: Container kann andere nicht erreichen
+Prüfe ob alle Container im gleichen Netzwerk sind:
 ```bash
-# Prüfen was Port 80/443 nutzt
-sudo lsof -i :80
-sudo lsof -i :443
-
-# Anderen Webserver stoppen falls nötig
-sudo systemctl stop apache2
-sudo systemctl stop nginx
+docker network inspect solid-dataspace
 ```
 
----
-
-## Wartung
-
-### Container aktualisieren
+### Problem: Caddy zeigt 502 Bad Gateway
+Container-Namen stimmen nicht mit Caddyfile überein. Prüfe:
 ```bash
-cd /opt/timberconnect
-git pull
-docker compose up -d --build
+docker ps --format "{{.Names}}"
 ```
 
-### Logs rotieren
-Docker rotiert Logs automatisch. Für manuelle Bereinigung:
-```bash
-docker system prune -f
-```
-
-### Backup
-```bash
-# Caddy-Zertifikate sichern
-docker cp reverse-proxy:/data ./backup/caddy_data
-```
+### Problem: GitHub Actions Build fehlgeschlagen
+1. Prüfe die Logs unter https://github.com/JakobDch/timberconnect/actions
+2. Stelle sicher, dass DOCKER_USERNAME und DOCKER_TOKEN korrekt sind
 
 ---
 
@@ -250,14 +217,12 @@ docker cp reverse-proxy:/data ./backup/caddy_data
 
 | Was | Pfad auf Server |
 |-----|-----------------|
-| Anwendung | `/opt/timberconnect/` |
-| Environment | `/opt/timberconnect/.env` |
-| Caddyfile | `/opt/timberconnect/Caddyfile` |
-| Docker Compose | `/opt/timberconnect/docker-compose.yml` |
+| TimberConnect | `~/timberconnect/` |
+| Caddyfile | `~/solid-css/dataspace/config/Caddyfile` |
+| Caddy Docker Compose | `~/solid-css/dataspace/docker-compose.yml` |
 
 ---
 
 ## Kontakt bei Problemen
 
-- Repository Issues: `<REPOSITORY-URL>/issues`
-- Uni-IT Support: (für Server/Netzwerk-Probleme)
+- Repository Issues: https://github.com/JakobDch/timberconnect/issues
