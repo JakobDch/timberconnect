@@ -177,12 +177,12 @@ function App() {
             <img
               src={logoNrwMunv}
               alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-              className="h-12 object-contain"
+              className="h-16 object-contain"
             />
             <img
               src={logoEuKofinanziert}
               alt="Kofinanziert von der Europäischen Union"
-              className="h-12 object-contain"
+              className="h-16 object-contain"
             />
           </div>
         </div>

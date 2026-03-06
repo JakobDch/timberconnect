@@ -27,7 +27,7 @@ export function Header({ onLogoClick }: HeaderProps) {
               <img
                 src="/timberconnect/TimberConnect Logo2.png"
                 alt="TimberConnect"
-                className="h-9 w-auto transition-transform group-hover:scale-[1.02]"
+                className="h-14 w-auto transition-transform group-hover:scale-[1.02]"
               />
             </div>
 
