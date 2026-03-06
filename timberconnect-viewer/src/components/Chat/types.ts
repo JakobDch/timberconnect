@@ -30,11 +30,8 @@ export interface CalculationResult {
   note?: string;
 }
 
-export type LLMProvider = 'ollama' | 'deepseek';
-
 export interface ChatSettings {
-  provider: LLMProvider;
-  deepseekApiKey?: string;
+  apiKey?: string;
 }
 
 export interface ProductContextForChat {

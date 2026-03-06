@@ -1,13 +1,12 @@
 import { Bot, Settings } from 'lucide-react';
-import type { LLMProvider } from './types';
 
 interface ChatHeaderProps {
   onSettingsClick: () => void;
-  provider: LLMProvider;
+  hasApiKey: boolean;
   isConnected?: boolean;
 }
 
-export function ChatHeader({ onSettingsClick, provider, isConnected = true }: ChatHeaderProps) {
+export function ChatHeader({ onSettingsClick, hasApiKey, isConnected = true }: ChatHeaderProps) {
   return (
     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-forest-50 to-white">
       <div className="flex items-center gap-3">
@@ -16,11 +15,12 @@ export function ChatHeader({ onSettingsClick, provider, isConnected = true }: Ch
         </div>
         <div>
           <h3 className="font-semibold text-timber-dark text-sm">TimberConnect Assistent</h3>
-          <span className="text-xs text-forest-600 flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-forest-500 animate-pulse' : 'bg-gray-400'}`} />
-            {isConnected ? 'Online' : 'Offline'}
-            <span className="text-gray-400 ml-1">
-              ({provider === 'ollama' ? 'Llama 3.3' : 'DeepSeek'})
+          <span className="text-xs flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              hasApiKey && isConnected ? 'bg-forest-500 animate-pulse' : 'bg-amber-500'
+            }`} />
+            <span className={hasApiKey ? 'text-forest-600' : 'text-amber-600'}>
+              {hasApiKey ? 'Bereit' : 'API-Key erforderlich'}
             </span>
           </span>
         </div>

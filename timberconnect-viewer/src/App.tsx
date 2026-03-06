@@ -169,8 +169,20 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-timber-gray">
-          <p>TimberConnect - Transparenz in der Holzlieferkette</p>
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
+          <p className="text-sm text-timber-gray">TimberConnect - Transparenz in der Holzlieferkette</p>
+          <div className="flex items-center gap-4">
+            <img
+              src="/logo-nrw-munv.png"
+              alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
+              className="h-12 object-contain"
+            />
+            <img
+              src="/logo-eu-kofinanziert.png"
+              alt="Kofinanziert von der Europäischen Union"
+              className="h-12 object-contain"
+            />
+          </div>
         </div>
       </footer>
     </div>

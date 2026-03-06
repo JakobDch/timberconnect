@@ -53,6 +53,7 @@ interface UseChatAgentReturn {
   settings: ChatSettings;
   streamingContent: string;
   sessionId: string | null;
+  hasApiKey: boolean;
   sendMessage: (message: string) => Promise<void>;
   updateSettings: (settings: ChatSettings) => void;
   clearChat: () => void;
@@ -67,7 +68,7 @@ function loadSettings(): ChatSettings {
   } catch {
     // Ignore errors
   }
-  return { provider: 'ollama' };
+  return {};
 }
 
 function saveSettings(settings: ChatSettings): void {
@@ -120,9 +121,7 @@ export function useChatAgent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: '',
-            product_context: buildProductContext(),
-            llm_provider: settings.provider,
-            deepseek_api_key: settings.deepseekApiKey
+            product_context: buildProductContext()
           })
         });
 
@@ -172,8 +171,7 @@ export function useChatAgent({
       message,
       product_context: buildProductContext(),
       session_id: sessionId,
-      llm_provider: settings.provider,
-      deepseek_api_key: settings.provider === 'deepseek' ? settings.deepseekApiKey : undefined
+      api_key: settings.apiKey
     };
 
     let accumulatedContent = '';
@@ -257,6 +255,8 @@ export function useChatAgent({
     setStreamingContent('');
   }, []);
 
+  const hasApiKey = Boolean(settings.apiKey && settings.apiKey.trim().length > 0);
+
   return {
     messages,
     isLoading: isLoading || isStreaming,
@@ -264,6 +264,7 @@ export function useChatAgent({
     settings,
     streamingContent,
     sessionId,
+    hasApiKey,
     sendMessage,
     updateSettings,
     clearChat

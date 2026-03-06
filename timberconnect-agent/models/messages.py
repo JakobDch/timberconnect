@@ -9,12 +9,6 @@ from typing import Optional, Dict, Any, List, Literal
 from enum import Enum
 
 
-class LLMProvider(str, Enum):
-    """Supported LLM providers"""
-    OLLAMA = "ollama"
-    DEEPSEEK = "deepseek"
-
-
 class ProductContextRequest(BaseModel):
     """Product context sent from frontend"""
     product_id: str = Field(..., description="Unique product/trace ID")
@@ -35,8 +29,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="User's chat message")
     product_context: ProductContextRequest = Field(..., description="Current product context")
     session_id: Optional[str] = Field(None, description="Existing session ID for conversation continuity")
-    llm_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, description="LLM provider to use")
-    deepseek_api_key: Optional[str] = Field(None, description="DeepSeek API key (required if using DeepSeek)")
+    api_key: Optional[str] = Field(None, description="DeepSeek API key (required for chat messages)")
 
 
 class ChatMessage(BaseModel):

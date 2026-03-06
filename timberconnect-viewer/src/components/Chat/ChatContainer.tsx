@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Key } from 'lucide-react';
 import { useChatAgent } from './hooks/useChatAgent';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessages } from './ChatMessages';
@@ -31,6 +32,7 @@ export function ChatContainer({
     error,
     settings,
     streamingContent,
+    hasApiKey,
     sendMessage,
     updateSettings
   } = useChatAgent({
@@ -72,7 +74,7 @@ export function ChatContainer({
     >
       <ChatHeader
         onSettingsClick={() => setShowSettings(true)}
-        provider={settings.provider}
+        hasApiKey={hasApiKey}
         isConnected={!error}
       />
 
@@ -92,9 +94,38 @@ export function ChatContainer({
 
       <ChatInput
         onSend={sendMessage}
-        disabled={isLoading}
-        placeholder="Fragen Sie mich etwas über dieses Holzprodukt..."
+        disabled={isLoading || !hasApiKey}
+        placeholder={hasApiKey ? "Fragen Sie mich etwas über dieses Holzprodukt..." : "Bitte erst API-Key eingeben..."}
       />
+
+      {/* API Key Required Overlay */}
+      {!hasApiKey && (
+        <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center p-6 z-40">
+          <div className="w-16 h-16 rounded-2xl bg-forest-100 flex items-center justify-center mb-4">
+            <Key className="w-8 h-8 text-forest-600" />
+          </div>
+          <h3 className="font-semibold text-timber-dark text-lg mb-2">
+            API-Key erforderlich
+          </h3>
+          <p className="text-sm text-gray-600 text-center mb-6 max-w-xs">
+            Um den Chat zu nutzen, geben Sie bitte Ihren DeepSeek API-Key ein.
+          </p>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="px-6 py-2.5 bg-forest-500 hover:bg-forest-600 text-white rounded-xl font-medium transition-colors"
+          >
+            API-Key eingeben
+          </button>
+          <a
+            href="https://platform.deepseek.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 text-xs text-forest-600 hover:underline"
+          >
+            Noch keinen Key? Hier registrieren
+          </a>
+        </div>
+      )}
 
       {/* Settings Modal */}
       <AnimatePresence>

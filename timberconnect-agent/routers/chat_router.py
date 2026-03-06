@@ -2,17 +2,16 @@
 Chat Router for TimberConnect Chat Agent
 
 Provides SSE streaming endpoint for chat interactions.
+Uses DeepSeek API - users provide their own API key.
 """
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import Optional
-import json
 import uuid
 
-from models.messages import ChatRequest, LLMProvider, SSEEventType
+from models.messages import ChatRequest, SSEEventType
 from models.context import ProductContext, AgentContext
-from llm_services import get_llm_for_provider
+from llm_services import get_llm
 from agents.orchestrating_agent import OrchestratingAgent, format_sse_event
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -44,6 +43,8 @@ async def chat_message(request: ChatRequest):
     """
     Process a chat message and stream the response via SSE.
 
+    Requires a valid DeepSeek API key.
+
     The response includes various event types:
     - status: Processing status updates
     - message_chunk: Streaming text response
@@ -52,11 +53,11 @@ async def chat_message(request: ChatRequest):
     - error: Error information
     - end_stream: Completion signal
     """
-    # Validate LLM configuration
-    if request.llm_provider == LLMProvider.DEEPSEEK and not request.deepseek_api_key:
+    # Validate API key
+    if not request.api_key:
         raise HTTPException(
             status_code=400,
-            detail="DeepSeek API-Key ist erforderlich"
+            detail="API-Key ist erforderlich"
         )
 
     # Get or create session
@@ -76,10 +77,7 @@ async def chat_message(request: ChatRequest):
 
     # Get LLM instance
     try:
-        llm = get_llm_for_provider(
-            request.llm_provider.value,
-            request.deepseek_api_key
-        )
+        llm = get_llm(request.api_key)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -125,7 +123,7 @@ async def chat_message(request: ChatRequest):
 async def get_welcome(request: ChatRequest):
     """
     Get a personalized welcome message for the current product.
-    Does not require LLM - uses templates.
+    Template-based - does not require API key.
     """
     product_context = convert_request_to_product_context(request)
     session_id = request.session_id or str(uuid.uuid4())
@@ -136,11 +134,18 @@ async def get_welcome(request: ChatRequest):
     )
     sessions[session_id] = context
 
-    # Get LLM for welcome message (use Ollama by default for welcome)
-    llm = get_llm_for_provider("ollama")
-    agent = OrchestratingAgent(llm, context)
+    # Template-based welcome message (no LLM needed)
+    welcome_message = f"""Willkommen! Ich bin Ihr TimberConnect Assistent.
 
-    welcome_message = await agent.get_welcome_message()
+Ich sehe, Sie betrachten gerade **{product_context.product_name}** ({product_context.wood_type}).
+
+Ich kann Ihnen helfen mit:
+- Informationen zur Herkunft und Lieferkette
+- CO2-Berechnungen und Nachhaltigkeit
+- Zertifizierungen und Qualität
+- Visualisierungen der Daten
+
+Stellen Sie mir gerne eine Frage!"""
 
     return {
         "session_id": session_id,
