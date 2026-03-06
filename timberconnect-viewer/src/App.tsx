@@ -7,6 +7,8 @@ import { fetchProductData, type SourceStatus } from './services/sparqlService';
 import { mapToProduct, mapToSupplyChain } from './services/productMapper';
 import { initializeCatalog } from './config/solidPods';
 import type { AppView, Product, SupplyChainStep } from './types';
+import logoNrwMunv from '/logo-nrw-munv.png';
+import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
 
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('scanner');
@@ -173,12 +175,12 @@ function App() {
           <p className="text-sm text-timber-gray">TimberConnect - Transparenz in der Holzlieferkette</p>
           <div className="flex items-center gap-4">
             <img
-              src="/logo-nrw-munv.png"
+              src={logoNrwMunv}
               alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
               className="h-12 object-contain"
             />
             <img
-              src="/logo-eu-kofinanziert.png"
+              src={logoEuKofinanziert}
               alt="Kofinanziert von der Europäischen Union"
               className="h-12 object-contain"
             />
