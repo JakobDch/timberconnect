@@ -64,6 +64,10 @@ class DeepSeekLLM:
         await self.client.close()
 
 
+# Type alias for backwards compatibility with agents
+BaseLLM = DeepSeekLLM
+
+
 def get_llm(api_key: str) -> DeepSeekLLM:
     """
     Create DeepSeek LLM instance.
