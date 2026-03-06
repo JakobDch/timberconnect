@@ -26,9 +26,9 @@ from config import settings
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    print(f"TimberConnect Chat Agent starting...")
-    print(f"Ollama URL: {settings.ollama_base_url}")
-    print(f"Default LLM: {settings.default_llm_provider}")
+    print("TimberConnect Chat Agent starting...")
+    print(f"DeepSeek API URL: {settings.deepseek_base_url}")
+    print(f"DeepSeek Model: {settings.deepseek_model}")
     yield
     # Shutdown
     print("TimberConnect Chat Agent shutting down...")
