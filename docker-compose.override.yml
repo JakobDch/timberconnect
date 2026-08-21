@@ -1,0 +1,18 @@
+# Local development override.
+# Publishes backend ports to the host so the Vite dev server (running on the
+# host) can reach the RML converter via its /api/converter proxy, and so you
+# can curl the EPCIS service directly. Not used in production.
+services:
+  # Build the viewer from local sources instead of pulling the Docker Hub
+  # image, so local UI changes are visible in the composed stack.
+  timberconnect-viewer:
+    build:
+      context: ./timberconnect-viewer
+      dockerfile: Dockerfile
+    image: timberconnect-viewer:local
+  timberconnect-rml-converter:
+    ports:
+      - "8001:8001"
+  timberconnect-epcis:
+    ports:
+      - "8003:8003"

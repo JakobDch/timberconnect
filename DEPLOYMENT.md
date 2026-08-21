@@ -22,8 +22,8 @@ Diese Anleitung beschreibt die Schritte, um TimberConnect auf dem Server `solid-
 ┌─────────────────────────────────────────────────────────────────┐
 │  Docker Hub                                                     │
 │  jakobdch/timberconnect-viewer                                 │
-│  jakobdch/timberconnect-agent                                  │
 │  jakobdch/timberconnect-rml-converter                          │
+│  jakobdch/timberconnect-epcis                                  │
 └────────────────┬────────────────────────────────────────────────┘
                  │ Pull Images
                  ▼
@@ -96,6 +96,12 @@ DOCKER_USERNAME=jakobdch
 SOLID_ACCESS_TOKEN=
 CATALOG_DEFAULT_CONTACT=timberconnect@2050.de
 CATALOG_REGISTRATION_ENABLED=true
+
+# EPCIS: Bearer-Token fuer das EECC-EPCAT-Repository.
+# ACHTUNG: TC_EPCIS_EPCAT_ENABLED=true schreibt in das echte LIVE-Repo.
+# Fuer einen Trockenlauf auf false setzen.
+TC_EPCIS_EPCAT_AUTH=Bearer <token>
+TC_EPCIS_EPCAT_ENABLED=true
 ```
 
 ---
@@ -115,7 +121,9 @@ docker compose -f docker-compose.server.yml ps
 
 ---
 
-## Schritt 5: Caddyfile ergänzen (sobald Domain da ist)
+## Schritt 5: Caddyfile ergänzen
+
+Die Domain ist **`timberconnect.tmdt.info`** (→ 132.195.160.169).
 
 ### Caddyfile bearbeiten:
 ```bash
@@ -124,20 +132,30 @@ nano ~/solid-css/dataspace/config/Caddyfile
 
 ### Diesen Block am Ende hinzufügen:
 ```caddy
-timberconnect-tmdt.info {
+timberconnect.tmdt.info {
     # TimberConnect Viewer (Frontend)
     reverse_proxy /timberconnect/* timberconnect-viewer:80
 
     # TimberConnect RML Converter API
     reverse_proxy /api/converter/* timberconnect-rml-converter:8001
 
-    # TimberConnect Chat Agent
-    handle /timberconnect-agent/* {
-        uri strip_prefix /timberconnect-agent
-        reverse_proxy timberconnect-agent:8002
+    # TimberConnect EPCIS authorizing proxy
+    # (der Dienst verarbeitet das /api/epcis-Praefix selbst)
+    reverse_proxy /api/epcis/* timberconnect-epcis:8003
+
+    # DeepSeek-Weiterleitung fuer den Assistenten (same-origin, damit CORS
+    # nicht greift; der API-Key des Nutzers laeuft nur durch)
+    handle /deepseek/* {
+        uri strip_prefix /deepseek
+        reverse_proxy https://api.deepseek.com {
+            header_up Host api.deepseek.com
+        }
     }
 
-    # Default: Redirect to Viewer
+    # Default: Redirect to Viewer.
+    # WICHTIG: nur exakt "/" umleiten, nicht "/*" — sonst verschluckt der
+    # Redirect auch /api/converter/* und /api/epcis/*, und die API-Aufrufe
+    # landen auf der Viewer-index.html statt beim Backend.
     redir / /timberconnect/ permanent
 }
 ```
@@ -156,9 +174,12 @@ docker compose restart caddy
 - [ ] GitHub Actions Build erfolgreich (grüner Haken)
 - [ ] Images auf Docker Hub sichtbar
 - [ ] Container auf Server laufen (`docker ps`)
-- [ ] `https://timberconnect-tmdt.info` öffnet sich
+- [ ] `https://timberconnect.tmdt.info` öffnet sich
 - [ ] Frontend lädt korrekt
 - [ ] Chat-Agent antwortet
+- [ ] API-Routen liefern **nicht** die Viewer-HTML:
+      `curl -sL -o /dev/null -w "%{url_effective}\n" https://timberconnect.tmdt.info/api/converter/pdf-templates`
+      muss auf der API-URL enden, nicht auf `/timberconnect/`
 
 ### Befehle zur Diagnose:
 ```bash

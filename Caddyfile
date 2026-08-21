@@ -1,14 +1,34 @@
-{$DOMAIN:localhost} {
+# Zusaetzlich zu {$DOMAIN} kann ueber {$LAN_HOST} ein weiterer Host bedient
+# werden — z.B. die LAN-IP des Rechners, damit die App vom Mobilgeraet im
+# selben WLAN erreichbar ist (Hardware-Scanner-Test, siehe
+# docs/hardware-scanning.md). Ohne gesetzte Variable aendert sich nichts:
+# der Platzhalter faellt dann auf {$DOMAIN} zurueck.
+{$DOMAIN:localhost}, {$LAN_HOST:localhost} {
     # TimberConnect Viewer
     reverse_proxy /timberconnect/* timberconnect-viewer:80
 
     # TimberConnect RML Converter API
     reverse_proxy /api/converter/* timberconnect-rml-converter:8001
 
-    # TimberConnect Chat Agent
-    handle /timberconnect-agent/* {
-        uri strip_prefix /timberconnect-agent
-        reverse_proxy timberconnect-agent:8002
+    # TimberConnect EPCIS authorizing proxy (service handles the /api/epcis prefix itself)
+    reverse_proxy /api/epcis/* timberconnect-epcis:8003
+
+    # DeepSeek-Weiterleitung fuer den Assistenten ("Sprich mit deinem Bauteil").
+    #
+    # Die Agentenschleife laeuft im Browser, weil nur dort die authentifizierte
+    # Solid-Session und Comunica verfuegbar sind. Ein direkter Aufruf von
+    # api.deepseek.com aus der Seite heraus haengt aber davon ab, ob DeepSeek
+    # CORS-Header schickt — darauf wollen wir uns nicht verlassen. Ueber diese
+    # Route ist der Aufruf same-origin, damit greift CORS gar nicht erst.
+    #
+    # Der API-Key des Nutzers laeuft im Authorization-Header durch; Caddy
+    # speichert ihn nicht. header_up Host ist noetig, weil DeepSeek sonst den
+    # Host "localhost" sieht und mit 404 antwortet.
+    handle /deepseek/* {
+        uri strip_prefix /deepseek
+        reverse_proxy https://api.deepseek.com {
+            header_up Host api.deepseek.com
+        }
     }
 
     # Default: Redirect to TimberConnect Viewer
@@ -18,7 +38,16 @@
     header {
         X-Frame-Options "DENY"
         X-Content-Type-Options "nosniff"
-        Strict-Transport-Security "max-age=31536000"
         Referrer-Policy "strict-origin-when-cross-origin"
     }
+
+    # HSTS nur fuer den regulaeren (TLS-)Host. Ueber die LAN-IP wird per HTTP
+    # ausgeliefert; ein HSTS-Header wuerde den Browser zwingen, den Host ein
+    # Jahr lang ausschliesslich per HTTPS anzusprechen — Chrome verweigert die
+    # Seite dann mit "Connection is not secure", ohne Umgehungsmoeglichkeit.
+    # Der Matcher vergleicht reine Hostnamen; {$DOMAIN} kann ein Schema
+    # enthalten (z.B. "http://localhost"), deshalb wird der Host separat
+    # ueber {$TLS_HOST} gesetzt.
+    @tlsHost host {$TLS_HOST:localhost}
+    header @tlsHost Strict-Transport-Security "max-age=31536000"
 }

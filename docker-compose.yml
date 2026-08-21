@@ -1,8 +1,6 @@
 services:
   timberconnect-viewer:
-    build:
-      context: ./timberconnect-viewer
-      dockerfile: Dockerfile
+    image: deich302/timberconnect-viewer:latest
     restart: unless-stopped
     expose: ["80"]
     networks:
@@ -16,7 +14,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      SOLID_POD_URL: https://tmdt-solid-community-server.de/epcisrepository
+      SOLID_POD_URL: https://solid-community-server.tmdt.info/epcisrepository
       SOLID_ACCESS_TOKEN: ${SOLID_ACCESS_TOKEN:-}
       # Live Catalog at solid-dataspace-timberconnect.tmdt.info
       CATALOG_API_URL: https://solid-dataspace-timberconnect.tmdt.info
@@ -24,26 +22,54 @@ services:
       CATALOG_DEFAULT_PUBLISHER: "TimberConnect RML Converter"
       CATALOG_DEFAULT_CONTACT: ${CATALOG_DEFAULT_CONTACT:-timberconnect@2050.de}
       CATALOG_REGISTRATION_ENABLED: ${CATALOG_REGISTRATION_ENABLED:-true}
+      # Whether the DATA behind catalog entries is world-readable. Data now sits
+      # in WAC-protected containers, so default false (entry stays discoverable,
+      # marked dct:accessRights=restricted). Set true only for fully public data.
+      CATALOG_DATA_PUBLIC: ${CATALOG_DATA_PUBLIC:-false}
+      # EPCIS identifier generation (timberconnect-epcis service)
+      EPCIS_SERVICE_URL: http://timberconnect-epcis:8003
+      EPCIS_ENABLED: ${EPCIS_ENABLED:-true}
     expose: ["8001"]
     networks:
       solid-dataspace:
         aliases:
           - solid-dataspace-dev-rml-converter
+    depends_on:
+      - timberconnect-epcis
 
-  timberconnect-agent:
+  timberconnect-epcis:
     build:
-      context: ./timberconnect-agent
+      context: ./timberconnect-epcis
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      TC_AGENT_OLLAMA_BASE_URL: "http://132.195.160.35:11434"
-      TC_AGENT_OLLAMA_MODEL: "llama3.3:70b"
-      TC_AGENT_DEFAULT_LLM_PROVIDER: "ollama"
-    expose: ["8002"]
+      # GS1 identifiers — defaults from the EECC sample documents.
+      TC_EPCIS_GCP: ${TC_EPCIS_GCP:-4047111124}
+      TC_EPCIS_ITEMREF_FORST: ${TC_EPCIS_ITEMREF_FORST:-015}
+      TC_EPCIS_ITEMREF_SAEGEWERK: ${TC_EPCIS_ITEMREF_SAEGEWERK:-091}
+      TC_EPCIS_ITEMREF_BSPWERK: ${TC_EPCIS_ITEMREF_BSPWERK:-100}
+      # Split large identifier sets across multiple ObjectEvents (OpenEPCIS rejects
+      # very large single events). 50 is safely below the observed ~50-100 limit.
+      TC_EPCIS_MAX_EPCS_PER_EVENT: ${TC_EPCIS_MAX_EPCS_PER_EVENT:-50}
+      TC_EPCIS_DOC_BASE_URL: ${TC_EPCIS_DOC_BASE_URL:-https://solid-community-server.tmdt.info/epcisrepository/public/uploads}
+      # EPCAT repository: the official EECC-hosted repo. Requires a bearer token;
+      # set TC_EPCIS_EPCAT_AUTH="Bearer <token>" in .env (never commit it).
+      TC_EPCIS_EPCAT_BASE_URL: ${TC_EPCIS_EPCAT_BASE_URL:-https://epcat2-timber.prod-k8s.eecc.de/api}
+      TC_EPCIS_EPCAT_AUTH: ${TC_EPCIS_EPCAT_AUTH:-}
+      # Capture is ON by default. Set to false for a dry run.
+      TC_EPCIS_EPCAT_ENABLED: ${TC_EPCIS_EPCAT_ENABLED:-true}
+      # Authorizing query proxy: when true the /events endpoint requires a
+      # verified Solid-OIDC token and filters events by role + owner consent.
+      # Set to false for an open demo (no auth, no consent filter).
+      TC_EPCIS_AUTH_REQUIRED: ${TC_EPCIS_AUTH_REQUIRED:-true}
+      TC_EPCIS_SOLID_READ_TIMEOUT: ${TC_EPCIS_SOLID_READ_TIMEOUT:-10}
+      # EPCAT event-search page size. OpenEPCIS requires perPage and caps it at 100.
+      TC_EPCIS_QUERY_PAGE_SIZE: ${TC_EPCIS_QUERY_PAGE_SIZE:-100}
+    expose: ["8003"]
     networks:
       solid-dataspace:
         aliases:
-          - solid-dataspace-dev-agent
+          - solid-dataspace-dev-epcis
 
   caddy:
     image: caddy:2
@@ -54,6 +80,11 @@ services:
       - "443:443"
     environment:
       DOMAIN: ${DOMAIN:-localhost}
+      # Optionaler zweiter Host, z.B. die LAN-IP fuer den Test am Mobilgeraet.
+      # Nicht gesetzt = unveraendertes Verhalten (faellt auf DOMAIN zurueck).
+      LAN_HOST: ${LAN_HOST:-localhost}
+      # Host (ohne Schema), der HSTS erhaelt — auf dem Server der TLS-Hostname.
+      TLS_HOST: ${TLS_HOST:-localhost}
     networks:
       solid-dataspace:
         aliases:
@@ -65,7 +96,6 @@ services:
     depends_on:
       - timberconnect-viewer
       - timberconnect-rml-converter
-      - timberconnect-agent
 
 volumes:
   caddy_data:

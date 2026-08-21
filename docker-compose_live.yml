@@ -1,0 +1,163 @@
+services:
+  smart-city-urban-heat-monitoring:
+    image: son1i/smart-city-urban-heat-monitoring:latest
+    restart: unless-stopped
+    expose: ["4200"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - smart-city-urban-heat-monitoring
+
+  solid-data-manager:
+    image: son1i/solid-data-manager:latest
+    restart: unless-stopped
+    expose: ["3002"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-data-manager
+
+  semantic-data-catalog-backend:
+    image: son1i/semantic-data-catalog-backend:latest
+    restart: unless-stopped
+    expose: ["8000"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - semantic-data-catalog-backend
+
+  semantic-data-catalog-frontend:
+    image: son1i/semantic-data-catalog-frontend:latest
+    restart: unless-stopped
+    environment:
+      REACT_APP_OIDC_ISSUER: https://solidcommunity.net
+      REACT_APP_REDIRECT_URL: http://localhost/semantic-data-catalog/
+      REACT_APP_FOOTER_LOGOS: /assets/images/Logo_GesundesTal.png,/assets/images/Icon_GesundesTal.png,/assets/images/Logo_KIT.svg
+      REACT_APP_VERSION: "0.7.4"
+    expose: ["5000"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - semantic-data-catalog-frontend
+
+  semantic-data-catalog-fuseki:
+    image: stain/jena-fuseki
+    hostname: fuseki
+    restart: unless-stopped
+    environment:
+      ADMIN_PASSWORD: admin
+    volumes:
+      - semantic_data_catalog_fuseki_data:/fuseki
+    expose: ["3030"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - semantic-data-catalog-fuseki
+
+  solid-chatbot-frontend:
+    image: son1i/solid-chatbot-frontend:latest
+    restart: unless-stopped
+    expose: ["3005"]
+    depends_on:
+      - solid-chatbot-backend
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-chatbot-frontend
+
+  solid-chatbot-backend:
+    image: son1i/solid-chatbot-backend:latest
+    restart: unless-stopped
+    environment:
+      CHAINLIT_DISABLE_TELEMETRY: "true"
+      QDRANT_URL: http://solid-chatbot-qdrant:6333
+      QDRANT_COLLECTION: solid_chatbot
+      OLLAMA_URL: http://solid-chatbot-ollama:11434
+      OLLAMA_MODEL: llama3.2:1b
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+    expose: ["8001"]
+    depends_on:
+      - solid-chatbot-qdrant
+      - solid-chatbot-ollama
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-chatbot-backend
+
+  solid-chatbot-qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    expose: ["6333"]
+    volumes:
+      - solid_chatbot_qdrant_data:/qdrant/storage
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-chatbot-qdrant
+
+  solid-chatbot-ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    expose: ["11434"]
+    volumes:
+      - solid_chatbot_ollama_data:/root/.ollama
+    networks:
+      solid-dataspace:
+        aliases:
+          - solid-chatbot-ollama
+
+  timberconnect-viewer:
+    image: deich302/timberconnect-viewer:latest
+    restart: unless-stopped
+    expose: ["80"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - timberconnect-viewer
+
+  timberconnect-rml-converter:
+    image: deich302/timberconnect-rml-converter:latest
+    restart: unless-stopped
+    environment:
+      SOLID_POD_URL: https://solid-community-server.tmdt.info/epcisrepository
+      SOLID_ACCESS_TOKEN: ${SOLID_ACCESS_TOKEN:-}
+      CATALOG_API_URL: https://solid-dataspace-timberconnect.tmdt.info
+      CATALOG_LDP_URL: https://solid-dataspace-timberconnect.tmdt.info/dace/catalog/ds/
+      CATALOG_DEFAULT_PUBLISHER: "TimberConnect RML Converter"
+      CATALOG_DEFAULT_CONTACT: ${CATALOG_DEFAULT_CONTACT:-timberconnect@2050.de}
+      CATALOG_REGISTRATION_ENABLED: ${CATALOG_REGISTRATION_ENABLED:-true}
+    expose: ["8001"]
+    networks:
+      solid-dataspace:
+        aliases:
+          - timberconnect-rml-converter
+
+  caddy:
+    image: caddy:2
+    container_name: reverse-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - smart-city-urban-heat-monitoring
+      - semantic-data-catalog-frontend
+      - timberconnect-viewer
+    networks:
+      - solid-dataspace
+
+networks:
+  solid-dataspace:
+    external: true
+    name: solid-dataspace
+
+volumes:
+  semantic_data_catalog_fuseki_data: {}
+  caddy_data: {}
+  caddy_config: {}
+  solid_chatbot_qdrant_data: {}
+  solid_chatbot_ollama_data: {}

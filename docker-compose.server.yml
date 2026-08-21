@@ -14,7 +14,7 @@ services:
     image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-rml-converter:latest
     restart: unless-stopped
     environment:
-      SOLID_POD_URL: https://tmdt-solid-community-server.de/epcisrepository
+      SOLID_POD_URL: https://solid-community-server.tmdt.info/epcisrepository
       SOLID_ACCESS_TOKEN: ${SOLID_ACCESS_TOKEN:-}
       CATALOG_API_URL: https://solid-dataspace-timberconnect.tmdt.info
       CATALOG_LDP_URL: https://solid-dataspace-timberconnect.tmdt.info/dace/catalog/ds/
@@ -25,14 +25,26 @@ services:
     networks:
       - solid-dataspace
 
-  timberconnect-agent:
-    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-agent:latest
+  timberconnect-epcis:
+    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-epcis:latest
     restart: unless-stopped
     environment:
-      TC_AGENT_OLLAMA_BASE_URL: "http://132.195.160.35:11434"
-      TC_AGENT_OLLAMA_MODEL: "llama3.3:70b"
-      TC_AGENT_DEFAULT_LLM_PROVIDER: "ollama"
-    expose: ["8002"]
+      # GS1 identifiers — defaults from the EECC sample documents.
+      TC_EPCIS_GCP: ${TC_EPCIS_GCP:-4047111124}
+      TC_EPCIS_ITEMREF_FORST: ${TC_EPCIS_ITEMREF_FORST:-015}
+      TC_EPCIS_ITEMREF_SAEGEWERK: ${TC_EPCIS_ITEMREF_SAEGEWERK:-091}
+      TC_EPCIS_ITEMREF_BSPWERK: ${TC_EPCIS_ITEMREF_BSPWERK:-100}
+      TC_EPCIS_MAX_EPCS_PER_EVENT: ${TC_EPCIS_MAX_EPCS_PER_EVENT:-50}
+      TC_EPCIS_DOC_BASE_URL: ${TC_EPCIS_DOC_BASE_URL:-https://solid-community-server.tmdt.info/epcisrepository/public/uploads}
+      # EPCAT repository: requires a bearer token from .env (never commit it).
+      TC_EPCIS_EPCAT_BASE_URL: ${TC_EPCIS_EPCAT_BASE_URL:-https://epcat2-timber.prod-k8s.eecc.de/api}
+      TC_EPCIS_EPCAT_AUTH: ${TC_EPCIS_EPCAT_AUTH:-}
+      # Capture is ON by default. Set to false for a dry run.
+      TC_EPCIS_EPCAT_ENABLED: ${TC_EPCIS_EPCAT_ENABLED:-true}
+      TC_EPCIS_AUTH_REQUIRED: ${TC_EPCIS_AUTH_REQUIRED:-true}
+      TC_EPCIS_SOLID_READ_TIMEOUT: ${TC_EPCIS_SOLID_READ_TIMEOUT:-10}
+      TC_EPCIS_QUERY_PAGE_SIZE: ${TC_EPCIS_QUERY_PAGE_SIZE:-100}
+    expose: ["8003"]
     networks:
       - solid-dataspace
 
