@@ -13,10 +13,41 @@ import {
 } from '../services/catalogService';
 
 // Base URL for the EPCIS repository Solid Pod (used for uploaded products)
-export const SOLID_POD_BASE = 'https://tmdt-solid-community-server.de/epcisrepository';
+export const SOLID_POD_BASE = 'https://solid-community-server.tmdt.info/epcisrepository';
 
-// Public folder containing TTL data files
+// Public folder containing TTL data files (legacy uploads)
 export const SOLID_POD_PUBLIC = `${SOLID_POD_BASE}/public/`;
+
+/**
+ * Build the candidate TTL source URLs for a product id, covering both the new
+ * WAC-protected layout (data/<id>/<id>_<datatype>.ttl) and the legacy public/
+ * layout. Comunica simply skips URLs that 404, so listing both is safe.
+ */
+export function buildPotentialSources(productId: string): string[] {
+  const dataDir = `${SOLID_POD_BASE}/data/${productId}/`;
+  const sources = [
+    // New layout: data container, <id>_<datatype>.ttl
+    `${dataDir}${productId}_forst.ttl`,
+    `${dataDir}${productId}_saegewerk.ttl`,
+    `${dataDir}${productId}_bspwerk.ttl`,
+    // Legacy layout: public folder, id-prefixed descriptive filenames
+    `${SOLID_POD_PUBLIC}${productId}_Forst_StanForD_HPR.ttl`,
+    `${SOLID_POD_PUBLIC}${productId}_Saegewerk_ELDAT_HBA.ttl`,
+    `${SOLID_POD_PUBLIC}${productId}_BSPWerk_VLEX_Materialfluss.ttl`,
+  ];
+
+  // The bundled demo product (TC-2025-001) is stored under fixed station-number
+  // filenames (01_/02_/03_), not id-prefixed ones. Include them so the demo
+  // resolves even when the catalog is unavailable.
+  if (/^TC-2025-001$/i.test(productId)) {
+    sources.push(
+      `${SOLID_POD_PUBLIC}01_Forst_StanForD_HPR.ttl`,
+      `${SOLID_POD_PUBLIC}02_Saegewerk_ELDAT_HBA.ttl`,
+      `${SOLID_POD_PUBLIC}03_BSPWerk_VLEX_Materialfluss.ttl`,
+    );
+  }
+  return sources;
+}
 
 // Default sources - will be populated from catalog
 export let DEFAULT_SOURCES: string[] = [];
@@ -28,6 +59,9 @@ export const NAMESPACES = {
   eldat: 'http://timberconnect.2050.de/ontology/eldat#',
   vlex: 'http://timberconnect.2050.de/ontology/vlex#',
   geo: 'http://www.w3.org/2003/01/geo/wgs84_pos#',
+  // GeoSPARQL: Flaechengeometrien (geosparql:asWKT). Die Pflanzflaeche aus dem
+  // Stammzertifikat liegt hierunter; Punkte bleiben bei wgs84 (geo:).
+  geosparql: 'http://www.opengis.net/ont/geosparql#',
   xsd: 'http://www.w3.org/2001/XMLSchema#',
   rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
   rdfs: 'http://www.w3.org/2000/01/rdf-schema#'
@@ -48,7 +82,15 @@ export const SPECIES_MAP: Record<string, string> = {
   'bu': 'Buche',
   'BU': 'Buche',
   'ei': 'Eiche',
-  'EI': 'Eiche'
+  'EI': 'Eiche',
+  // StanForD SpeciesGroupName values (Norwegian, e.g. nibio HPR files)
+  'GRAN': 'Fichte',
+  'TØRRGRAN': 'Fichte (trocken)',
+  'FURU': 'Kiefer',
+  'LAUV': 'Laubholz',
+  'BJØRK': 'Birke',
+  'EIK': 'Eiche',
+  'BØK': 'Buche',
 };
 
 // Scientific names for wood species
@@ -202,11 +244,7 @@ export function getSourcesForProduct(productId: string): string[] {
   }
 
   // For unknown products, try to construct URLs based on naming convention
-  const potentialSources = [
-    `${SOLID_POD_PUBLIC}${productId}_Forst_StanForD_HPR.ttl`,
-    `${SOLID_POD_PUBLIC}${productId}_Saegewerk_ELDAT_HBA.ttl`,
-    `${SOLID_POD_PUBLIC}${productId}_BSPWerk_VLEX_Materialfluss.ttl`,
-  ];
+  const potentialSources = buildPotentialSources(productId);
 
   console.log(`[solidPods] Using potential sources for unknown product ${productId}:`, potentialSources);
   return potentialSources;
@@ -239,11 +277,7 @@ export async function getSourcesForProductAsync(productId: string): Promise<stri
   }
 
   // Fallback: construct URLs based on naming convention
-  const potentialSources = [
-    `${SOLID_POD_PUBLIC}${productId}_Forst_StanForD_HPR.ttl`,
-    `${SOLID_POD_PUBLIC}${productId}_Saegewerk_ELDAT_HBA.ttl`,
-    `${SOLID_POD_PUBLIC}${productId}_BSPWerk_VLEX_Materialfluss.ttl`,
-  ];
+  const potentialSources = buildPotentialSources(productId);
 
   console.log(`[solidPods] Using fallback sources for product ${productId}:`, potentialSources);
   return potentialSources;

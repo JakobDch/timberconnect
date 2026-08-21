@@ -6,12 +6,16 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, LogOut, ChevronDown, ExternalLink } from "lucide-react";
+import { User, LogOut, ChevronDown, UserCog, Shield, Lock } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
+import { RoleAccessSettings } from "./RoleAccessSettings";
+import { ProfileSheet } from "./ProfileSheet";
 
 export function UserMenu() {
-  const { userName, webId, logout } = useAuth();
+  const { userName, userPhoto, webId, logout, role, companyPrefix } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -26,9 +30,33 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displayName = userName || "Solid User";
-  const shortWebId = webId
-    ? webId.replace("https://", "").replace("/profile/card#me", "")
+  // Kein gepflegter Name -> das sagen wir offen und bieten die Bearbeitung an,
+  // statt anonym "Solid User" anzuzeigen.
+  const hasName = Boolean(userName && userName.trim());
+  const displayName = hasName ? (userName as string) : "Name ergänzen";
+  // Statt der rohen WebID (".../bspwerk/profile/card#me") nur den Kontonamen --
+  // der ist wiedererkennbar, die URL drumherum ist fuer Nutzer ohne
+  // Solid-Kenntnisse nur Rauschen. Die vollstaendige WebID bleibt im
+  // Profil-Sheet unter "Technische Kennung" einsehbar.
+  const accountName = (() => {
+    if (!webId) return "";
+    try {
+      const segments = new URL(webId).pathname.split("/").filter(Boolean);
+      // Pod-Wurzel ist das erste Segment; "profile/card" faellt weg.
+      return segments[0] ?? new URL(webId).host;
+    } catch {
+      return "";
+    }
+  })();
+
+  /** Initialen für den Avatar, solange kein Bild hinterlegt ist. */
+  const initials = hasName
+    ? (userName as string)
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("")
     : "";
 
   return (
@@ -36,16 +64,26 @@ export function UserMenu() {
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-forest-500/20 hover:bg-forest-500/30 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
       >
-        <div className="w-8 h-8 rounded-full bg-forest-600 flex items-center justify-center">
-          <User className="w-4 h-4 text-white" />
+        <div className="w-8 h-8 rounded-full bg-acid-400 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {userPhoto ? (
+            <img src={userPhoto} alt="" className="w-full h-full object-cover" />
+          ) : initials ? (
+            <span className="text-xs font-bold text-night-950">{initials}</span>
+          ) : (
+            <User className="w-4 h-4 text-night-950" />
+          )}
         </div>
-        <span className="text-sm font-medium text-forest-800 max-w-[120px] truncate">
+        <span
+          className={`text-sm font-medium max-w-[120px] truncate ${
+            hasName ? "text-white" : "text-night-300 italic"
+          }`}
+        >
           {displayName}
         </span>
         <ChevronDown
-          className={`w-4 h-4 text-forest-600 transition-transform ${
+          className={`w-4 h-4 text-night-300 transition-transform ${
             isOpen ? "rotate-180" : ""
           }`}
         />
@@ -58,45 +96,87 @@ export function UserMenu() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50"
+            className="absolute right-0 mt-2 w-64 bg-night-800 rounded-2xl shadow-2xl shadow-black/50 border border-white/10 overflow-hidden z-50"
           >
             {/* User Info */}
-            <div className="p-4 border-b border-gray-100">
+            <div className="p-4 border-b border-white/5">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-forest-100 flex items-center justify-center">
-                  <User className="w-6 h-6 text-forest-600" />
+                <div className="w-12 h-12 rounded-full bg-acid-400/15 border border-acid-400/30 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {userPhoto ? (
+                    <img src={userPhoto} alt="" className="w-full h-full object-cover" />
+                  ) : initials ? (
+                    <span className="text-sm font-bold text-acid-300">{initials}</span>
+                  ) : (
+                    <User className="w-6 h-6 text-acid-300" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-timber-dark truncate">
+                  <div
+                    className={`font-semibold truncate ${
+                      hasName ? "text-white" : "text-night-300 italic"
+                    }`}
+                  >
                     {displayName}
                   </div>
-                  <div className="text-xs text-timber-gray truncate">
-                    {shortWebId}
-                  </div>
+                  {accountName && (
+                    <div className="text-xs text-night-300 truncate">
+                      Konto {accountName}
+                    </div>
+                  )}
+                  {role && (
+                    <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 bg-acid-400/10 border border-acid-400/30 rounded-full">
+                      <Shield className="w-3 h-3 text-acid-300" />
+                      <span className="text-xs font-medium text-acid-300">{role.label}</span>
+                    </div>
+                  )}
+                  {companyPrefix && (
+                    <div
+                      className="mt-1 flex items-center gap-1.5"
+                      title="GS1 Company Prefix — bei der Registrierung festgelegt, nicht änderbar"
+                    >
+                      <Lock className="w-3 h-3 text-night-400 flex-shrink-0" />
+                      <span className="text-xs text-night-300">
+                        GCP <span className="font-mono text-night-200">{companyPrefix}</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Actions */}
             <div className="p-2">
-              {webId && (
-                <a
-                  href={webId}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors text-timber-dark"
-                >
-                  <ExternalLink className="w-4 h-4 text-timber-gray" />
-                  <span className="text-sm">Profil ansehen</span>
-                </a>
-              )}
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  setProfileOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-white"
+              >
+                <UserCog className="w-4 h-4 text-night-300" />
+                <span className="text-sm">Profil bearbeiten</span>
+                {!hasName && (
+                  <span className="ml-auto w-2 h-2 rounded-full bg-acid-400 flex-shrink-0" />
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  setAccessOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-white"
+              >
+                <Shield className="w-4 h-4 text-night-300" />
+                <span className="text-sm">Zugriff verwalten</span>
+              </button>
 
               <button
                 onClick={() => {
                   setIsOpen(false);
                   logout();
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors text-red-400"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="text-sm font-medium">Abmelden</span>
@@ -105,6 +185,9 @@ export function UserMenu() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <RoleAccessSettings isOpen={accessOpen} onClose={() => setAccessOpen(false)} />
+      <ProfileSheet isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

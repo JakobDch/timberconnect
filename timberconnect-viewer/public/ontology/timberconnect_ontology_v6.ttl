@@ -1,0 +1,5676 @@
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# Externe Ontologien (Linked Building Data)
+@prefix bot: <https://w3id.org/bot#> .
+@prefix ifc: <https://standards.buildingsmart.org/IFC/DEV/IFC4/ADD2/OWL#> .
+@prefix bpo: <https://w3id.org/bpo#> .
+@prefix omg: <https://w3id.org/omg#> .
+@prefix fog: <https://w3id.org/fog#> .
+
+#======================================================================
+# TimberConnect Ontologie v5.0
+# Erweiterte semantische Modellierung der Holzlieferkette
+# Basierend auf Analyse von 610 Merkmalen aus 15 Dateitypen
+#
+# v5 Aenderungen gegenueber v4:
+# - Domain-Constraints fuer mechanische Properties gelockert
+# - Spezifische Identifier-Sub-Properties ergaenzt
+# - Saatgut-Properties ergaenzt (Samen-Prozentsaetze)
+# - Stammzertifikat/Vermehrungsgut-Properties ergaenzt
+#
+# Externe Ontologien:
+# - BOT (Building Topology Ontology): https://w3c-lbd-cg.github.io/bot/
+# - ifcOWL: https://technical.buildingsmart.org/standards/ifc/ifc-formats/ifcowl/
+# - BPO (Building Product Ontology): https://w3id.org/bpo
+# - OMG (Ontology for Managing Geometry): https://w3id.org/omg
+# - FOG (File Ontology for Geometry): https://w3id.org/fog
+#======================================================================
+
+<http://timberconnect.2050.de/ontology> a owl:Ontology ;
+    rdfs:label "TimberConnect Ontologie"@de ;
+    rdfs:label "TimberConnect Ontology"@en ;
+    rdfs:comment "Ontologie zur semantischen Beschreibung der Holzlieferkette vom Forst bis zur Immobilie"@de ;
+    dcterms:created "2026-04-12"^^xsd:date ;
+    owl:versionInfo "5.0" ;
+    owl:imports <https://w3id.org/bot> ;
+    rdfs:seeAlso <https://w3c-lbd-cg.github.io/bot/> ;
+    rdfs:seeAlso <https://technical.buildingsmart.org/standards/ifc/ifc-formats/ifcowl/> .
+
+#======================================================================
+# TEIL 1: DOMAIN-KLASSEN (Lieferkette)
+#======================================================================
+
+tc:SupplyChainEntity a owl:Class ;
+    rdfs:label "Lieferketten-Objekt"@de ;
+    rdfs:label "Supply Chain Entity"@en ;
+    rdfs:comment "Basisklasse fuer alle Objekte in der Holzlieferkette"@de .
+
+tc:Seed a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Saatgut"@de ;
+    rdfs:label "Seed"@en ;
+    rdfs:comment "Forstsaatgut mit Keimfaehigkeit, Reinheit, Herkunft"@de .
+
+tc:Seedling a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Setzling"@de ;
+    rdfs:label "Seedling"@en .
+
+tc:Tree a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Baum"@de ;
+    rdfs:label "Tree"@en ;
+    rdfs:comment "Stehender Baum im Wald"@de .
+
+tc:Stem a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Stamm"@de ;
+    rdfs:label "Stem"@en ;
+    rdfs:comment "Gefaellter Baumstamm vor der Aufarbeitung"@de .
+
+tc:Log a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Rundholz"@de ;
+    rdfs:label "Log"@en ;
+    rdfs:comment "Aufgearbeitetes Rundholzstueck mit Durchmesser und Laenge"@de .
+
+tc:Assortment a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Sortiment"@de ;
+    rdfs:label "Assortment"@en ;
+    rdfs:comment "Produktklasse/Sortiment fuer Rundholz"@de .
+
+tc:LogPile a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Polter"@de ;
+    rdfs:label "Log Pile"@en ;
+    rdfs:comment "Gestapelte Rundholzmenge"@de .
+
+tc:SawnTimber a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Schnittholz"@de ;
+    rdfs:label "Sawn Timber"@en ;
+    rdfs:comment "Gesaegtes Holz mit mechanischen Eigenschaften"@de .
+
+tc:BuildingMaterial a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Baustoff"@de ;
+    rdfs:label "Building Material"@en ;
+    rdfs:comment "Baustoff (Holz, Beton, etc.)"@de .
+
+tc:BuildingProduct a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Bauprodukt"@de ;
+    rdfs:label "Building Product"@en ;
+    rdfs:comment "Verarbeitetes Holzprodukt (BSH, CLT, etc.)"@de .
+
+tc:Fastener a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Verbindungsmittel"@de ;
+    rdfs:label "Fastener"@en ;
+    rdfs:comment "Verbindungsmittel (Schrauben, Naegel, etc.)"@de .
+
+tc:Adhesive a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Klebstoff"@de ;
+    rdfs:label "Adhesive"@en .
+
+tc:CLT a owl:Class ;
+    rdfs:subClassOf tc:BuildingProduct ;
+    rdfs:label "Brettsperrholz"@de ;
+    rdfs:label "Cross Laminated Timber"@en ;
+    rdfs:comment "Brettsperrholzplatte (CLT/BSP)"@de .
+
+tc:Panel a owl:Class ;
+    rdfs:subClassOf tc:BuildingProduct ;
+    rdfs:label "Platte"@de ;
+    rdfs:label "Panel"@en .
+
+tc:Insulation a owl:Class ;
+    rdfs:subClassOf tc:BuildingProduct ;
+    rdfs:label "Daemmung"@de ;
+    rdfs:label "Insulation"@en .
+
+tc:BuildingElement a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Bauelement"@de ;
+    rdfs:label "Building Element"@en ;
+    rdfs:comment "Eingebautes Element (Wand, Decke, etc.)"@de .
+
+tc:Wall a owl:Class ;
+    rdfs:subClassOf tc:BuildingElement ;
+    rdfs:label "Wand"@de ;
+    rdfs:label "Wall"@en .
+
+tc:Ceiling a owl:Class ;
+    rdfs:subClassOf tc:BuildingElement ;
+    rdfs:label "Decke"@de ;
+    rdfs:label "Ceiling"@en .
+
+tc:Roof a owl:Class ;
+    rdfs:subClassOf tc:BuildingElement ;
+    rdfs:label "Dach"@de ;
+    rdfs:label "Roof"@en .
+
+#======================================================================
+# TEIL 2: AKTEUR-KLASSEN
+#======================================================================
+
+tc:Actor a owl:Class ;
+    rdfs:label "Akteur"@de ;
+    rdfs:label "Actor"@en ;
+    rdfs:comment "Person oder Organisation mit einer Rolle im Prozess"@de .
+
+tc:Person a owl:Class ;
+    rdfs:subClassOf tc:Actor ;
+    rdfs:label "Person"@de ;
+    rdfs:label "Person"@en .
+
+tc:Organization a owl:Class ;
+    rdfs:subClassOf tc:Actor ;
+    rdfs:label "Organisation"@de ;
+    rdfs:label "Organization"@en .
+
+# Spezifische Akteur-Rollen als Subklassen
+tc:MachineOwner a owl:Class ;
+    rdfs:subClassOf tc:Person ;
+    rdfs:label "Maschinenbesitzer"@de ;
+    rdfs:label "Machine Owner"@en .
+
+tc:Operator a owl:Class ;
+    rdfs:subClassOf tc:Person ;
+    rdfs:label "Bediener"@de ;
+    rdfs:label "Operator"@en .
+
+tc:ForestOwner a owl:Class ;
+    rdfs:subClassOf tc:Actor ;
+    rdfs:label "Waldbesitzer"@de ;
+    rdfs:label "Forest Owner"@en ;
+    rdfs:comment "Kann Person oder Organisation sein"@de .
+
+tc:LoggingContractor a owl:Class ;
+    rdfs:subClassOf tc:Organization ;
+    rdfs:label "Holzunternehmer"@de ;
+    rdfs:label "Logging Contractor"@en .
+
+tc:LoggingOrganisation a owl:Class ;
+    rdfs:subClassOf tc:Organization ;
+    rdfs:label "Forstorganisation"@de ;
+    rdfs:label "Logging Organisation"@en .
+
+tc:ProductBuyer a owl:Class ;
+    rdfs:subClassOf tc:Actor ;
+    rdfs:label "Produktkaeufer"@de ;
+    rdfs:label "Product Buyer"@en .
+
+tc:ProductDestination a owl:Class ;
+    rdfs:subClassOf tc:Actor ;
+    rdfs:label "Produktempfaenger"@de ;
+    rdfs:label "Product Destination"@en .
+
+tc:Carrier a owl:Class ;
+    rdfs:subClassOf tc:Organization ;
+    rdfs:label "Spediteur"@de ;
+    rdfs:label "Carrier"@en .
+
+tc:Dispatcher a owl:Class ;
+    rdfs:subClassOf tc:Person ;
+    rdfs:label "Disponent"@de ;
+    rdfs:label "Dispatcher"@en .
+
+tc:Tester a owl:Class ;
+    rdfs:subClassOf tc:Person ;
+    rdfs:label "Pruefer"@de ;
+    rdfs:label "Tester"@en .
+
+tc:Sender a owl:Class ;
+    rdfs:subClassOf tc:Actor ;
+    rdfs:label "Einsender"@de ;
+    rdfs:label "Sender"@en .
+
+#======================================================================
+# TEIL 3: MASCHINEN-KLASSEN
+#======================================================================
+
+tc:Machine a owl:Class ;
+    rdfs:label "Maschine"@de ;
+    rdfs:label "Machine"@en ;
+    rdfs:comment "Forstmaschine (Harvester, Forwarder, etc.)"@de .
+
+tc:MachineHead a owl:Class ;
+    rdfs:label "Maschinenkopf"@de ;
+    rdfs:label "Machine Head"@en ;
+    rdfs:comment "Erntekopf/Aggregat der Maschine"@de .
+
+tc:Sensor a owl:Class ;
+    rdfs:label "Sensor"@de ;
+    rdfs:label "Sensor"@en ;
+    rdfs:comment "Messsensor der Maschine"@de .
+
+#======================================================================
+# TEIL 4: DEFINITIONS-KLASSEN (Konfiguration)
+#======================================================================
+
+tc:Definition a owl:Class ;
+    rdfs:label "Definition"@de ;
+    rdfs:label "Definition"@en ;
+    rdfs:comment "Konfigurationsdaten fuer Sortierung und Vermessung"@de .
+
+tc:SpeciesGroupDefinition a owl:Class ;
+    rdfs:subClassOf tc:Definition ;
+    rdfs:label "Artengruppen-Definition"@de ;
+    rdfs:label "Species Group Definition"@en ;
+    rdfs:comment "Baumart, Sortiment, Rindenabzug"@de .
+
+tc:ProductDefinition a owl:Class ;
+    rdfs:subClassOf tc:Definition ;
+    rdfs:label "Produkt-Definition"@de ;
+    rdfs:label "Product Definition"@en ;
+    rdfs:comment "Produktvorgaben fuer Sortierung"@de .
+
+tc:ObjectDefinition a owl:Class ;
+    rdfs:subClassOf tc:Definition ;
+    rdfs:label "Objekt-Definition"@de ;
+    rdfs:label "Object Definition"@en ;
+    rdfs:comment "Waldflaeche/Hiebsort"@de .
+
+tc:SubObject a owl:Class ;
+    rdfs:subClassOf tc:Definition ;
+    rdfs:label "Unterobjekt"@de ;
+    rdfs:label "Sub Object"@en ;
+    rdfs:comment "Teilflaeche eines Objekts"@de .
+
+tc:PriceMatrix a owl:Class ;
+    rdfs:subClassOf tc:Definition ;
+    rdfs:label "Preismatrix"@de ;
+    rdfs:label "Price Matrix"@en ;
+    rdfs:comment "Preismatrix fuer Sortimente"@de .
+
+#======================================================================
+# TEIL 5: WEITERE KLASSEN
+#======================================================================
+
+tc:Measurement a owl:Class ;
+    rdfs:label "Messung"@de ;
+    rdfs:label "Measurement"@en ;
+    rdfs:comment "Messwert mit Wert und Einheit"@de .
+
+tc:GeoCoordinate a owl:Class ;
+    rdfs:label "Geokoordinate"@de ;
+    rdfs:label "Geo Coordinate"@en .
+
+tc:Address a owl:Class ;
+    rdfs:label "Adresse"@de ;
+    rdfs:label "Address"@en .
+
+tc:Transport a owl:Class ;
+    rdfs:label "Transport"@de ;
+    rdfs:label "Transport"@en ;
+    rdfs:comment "Holztransport mit Belade- und Entladestelle"@de .
+
+tc:Test a owl:Class ;
+    rdfs:label "Pruefung"@de ;
+    rdfs:label "Test"@en ;
+    rdfs:comment "Laborpruefung"@de .
+
+tc:GerminationTest a owl:Class ;
+    rdfs:subClassOf tc:Test ;
+    rdfs:label "Keimpruefung"@de ;
+    rdfs:label "Germination Test"@en .
+
+tc:MechanicalTest a owl:Class ;
+    rdfs:subClassOf tc:Test ;
+    rdfs:label "Mechanische Pruefung"@de ;
+    rdfs:label "Mechanical Test"@en .
+
+tc:BendingTest a owl:Class ;
+    rdfs:subClassOf tc:MechanicalTest ;
+    rdfs:label "Biegepruefung"@de ;
+    rdfs:label "Bending Test"@en .
+
+tc:Document a owl:Class ;
+    rdfs:label "Dokument"@de ;
+    rdfs:label "Document"@en ;
+    rdfs:comment "Zertifikat, Pruefbericht, Lieferschein"@de .
+
+tc:Certificate a owl:Class ;
+    rdfs:subClassOf tc:Document ;
+    rdfs:label "Zertifikat"@de ;
+    rdfs:label "Certificate"@en .
+
+tc:TestReport a owl:Class ;
+    rdfs:subClassOf tc:Document ;
+    rdfs:label "Pruefbericht"@de ;
+    rdfs:label "Test Report"@en .
+
+tc:DeliveryNote a owl:Class ;
+    rdfs:subClassOf tc:Document ;
+    rdfs:label "Lieferschein"@de ;
+    rdfs:label "Delivery Note"@en .
+
+tc:DeclarationOfPerformance a owl:Class ;
+    rdfs:subClassOf tc:Document ;
+    rdfs:label "Leistungserklaerung"@de ;
+    rdfs:label "Declaration of Performance"@en .
+
+tc:TransportOrder a owl:Class ;
+    rdfs:subClassOf tc:Document ;
+    rdfs:label "Transportauftrag"@de ;
+    rdfs:label "Transport Order"@en .
+
+tc:Project a owl:Class ;
+    rdfs:label "Projekt"@de ;
+    rdfs:label "Project"@en ;
+    rdfs:comment "Bauprojekt"@de .
+
+tc:HarvestData a owl:Class ;
+    rdfs:label "Erntedaten"@de ;
+    rdfs:label "Harvest Data"@en ;
+    rdfs:comment "Container fuer Ernteinformationen"@de .
+
+tc:EPCISEvent a owl:Class ;
+    rdfs:label "EPCIS-Ereignis"@de ;
+    rdfs:label "EPCIS Event"@en ;
+    rdfs:comment "Tracking-Ereignis nach EPCIS-Standard"@de .
+
+tc:AggregationEvent a owl:Class ;
+    rdfs:subClassOf tc:EPCISEvent ;
+    rdfs:label "Aggregationsereignis"@de ;
+    rdfs:label "Aggregation Event"@en .
+
+#======================================================================
+# TEIL 6: OBJECT PROPERTIES (Beziehungen)
+#======================================================================
+
+# --- Lieferkette ---
+tc:derivedFrom a owl:ObjectProperty ;
+    rdfs:label "stammt von"@de ;
+    rdfs:label "derived from"@en ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range tc:SupplyChainEntity ;
+    rdfs:comment "Verknuepft ein Objekt mit seinem Vorgaenger in der Lieferkette"@de .
+
+tc:partOf a owl:ObjectProperty ;
+    rdfs:label "Teil von"@de ;
+    rdfs:label "part of"@en .
+
+tc:contains a owl:ObjectProperty ;
+    rdfs:label "enthaelt"@de ;
+    rdfs:label "contains"@en ;
+    owl:inverseOf tc:partOf .
+
+tc:stackedIn a owl:ObjectProperty ;
+    rdfs:label "gestapelt in"@de ;
+    rdfs:label "stacked in"@en ;
+    rdfs:domain tc:Log ;
+    rdfs:range tc:LogPile .
+
+tc:belongsToAssortment a owl:ObjectProperty ;
+    rdfs:label "gehoert zu Sortiment"@de ;
+    rdfs:label "belongs to assortment"@en ;
+    rdfs:range tc:Assortment .
+
+# --- Akteure ---
+tc:hasOwner a owl:ObjectProperty ;
+    rdfs:label "hat Eigentuemer"@de ;
+    rdfs:range tc:Actor .
+
+tc:hasOperator a owl:ObjectProperty ;
+    rdfs:label "hat Bediener"@de ;
+    rdfs:range tc:Operator .
+
+tc:hasBuyer a owl:ObjectProperty ;
+    rdfs:label "hat Kaeufer"@de ;
+    rdfs:range tc:ProductBuyer .
+
+tc:hasDestination a owl:ObjectProperty ;
+    rdfs:label "hat Empfaenger"@de ;
+    rdfs:range tc:ProductDestination .
+
+tc:hasCarrier a owl:ObjectProperty ;
+    rdfs:label "hat Spediteur"@de ;
+    rdfs:range tc:Carrier .
+
+tc:hasForestOwner a owl:ObjectProperty ;
+    rdfs:label "hat Waldbesitzer"@de ;
+    rdfs:range tc:ForestOwner .
+
+tc:hasContractor a owl:ObjectProperty ;
+    rdfs:label "hat Auftragnehmer"@de ;
+    rdfs:range tc:LoggingContractor .
+
+tc:hasSender a owl:ObjectProperty ;
+    rdfs:label "hat Einsender"@de ;
+    rdfs:range tc:Sender .
+
+tc:hasTester a owl:ObjectProperty ;
+    rdfs:label "hat Pruefer"@de ;
+    rdfs:range tc:Tester .
+
+tc:hasDispatcher a owl:ObjectProperty ;
+    rdfs:label "hat Disponent"@de ;
+    rdfs:range tc:Dispatcher .
+
+tc:signedBy a owl:ObjectProperty ;
+    rdfs:label "unterzeichnet von"@de ;
+    rdfs:label "signed by"@en ;
+    rdfs:domain tc:Document ;
+    rdfs:range tc:Actor .
+
+# --- Maschine ---
+tc:harvestedBy a owl:ObjectProperty ;
+    rdfs:label "geerntet von"@de ;
+    rdfs:label "harvested by"@en ;
+    rdfs:domain tc:Stem ;
+    rdfs:range tc:Machine .
+
+tc:processedBy a owl:ObjectProperty ;
+    rdfs:label "verarbeitet von"@de ;
+    rdfs:label "processed by"@en ;
+    rdfs:domain tc:Log ;
+    rdfs:range tc:Machine .
+
+tc:hasHead a owl:ObjectProperty ;
+    rdfs:label "hat Kopf"@de ;
+    rdfs:domain tc:Machine ;
+    rdfs:range tc:MachineHead .
+
+tc:hasMachineOwner a owl:ObjectProperty ;
+    rdfs:label "hat Maschinenbesitzer"@de ;
+    rdfs:domain tc:Machine ;
+    rdfs:range tc:MachineOwner .
+
+tc:hasSensor a owl:ObjectProperty ;
+    rdfs:label "hat Sensor"@de ;
+    rdfs:domain tc:Machine ;
+    rdfs:range tc:Sensor .
+
+# --- Definitionen ---
+tc:hasSpeciesGroup a owl:ObjectProperty ;
+    rdfs:label "hat Artengruppe"@de ;
+    rdfs:range tc:SpeciesGroupDefinition .
+
+tc:hasProductDefinition a owl:ObjectProperty ;
+    rdfs:label "hat Produktdefinition"@de ;
+    rdfs:range tc:ProductDefinition .
+
+tc:belongsToObject a owl:ObjectProperty ;
+    rdfs:label "gehoert zu Objekt"@de ;
+    rdfs:range tc:ObjectDefinition .
+
+tc:hasSubObject a owl:ObjectProperty ;
+    rdfs:label "hat Unterobjekt"@de ;
+    rdfs:domain tc:ObjectDefinition ;
+    rdfs:range tc:SubObject .
+
+tc:hasPriceMatrix a owl:ObjectProperty ;
+    rdfs:label "hat Preismatrix"@de ;
+    rdfs:range tc:PriceMatrix .
+
+# --- Ort ---
+tc:hasLocation a owl:ObjectProperty ;
+    rdfs:label "hat Standort"@de ;
+    rdfs:range tc:GeoCoordinate .
+
+tc:hasAddress a owl:ObjectProperty ;
+    rdfs:label "hat Adresse"@de ;
+    rdfs:range tc:Address .
+
+tc:hasFellingLocation a owl:ObjectProperty ;
+    rdfs:label "hat Faellort"@de ;
+    rdfs:domain tc:Stem ;
+    rdfs:range tc:GeoCoordinate .
+
+tc:hasLogLocation a owl:ObjectProperty ;
+    rdfs:label "hat Rundholz-Standort"@de ;
+    rdfs:domain tc:Log ;
+    rdfs:range tc:GeoCoordinate .
+
+# --- Transport ---
+tc:transportedBy a owl:ObjectProperty ;
+    rdfs:label "transportiert von"@de ;
+    rdfs:range tc:Transport .
+
+tc:hasLoadingPoint a owl:ObjectProperty ;
+    rdfs:label "hat Beladestelle"@de ;
+    rdfs:domain tc:Transport ;
+    rdfs:range tc:Address .
+
+tc:hasUnloadingPoint a owl:ObjectProperty ;
+    rdfs:label "hat Entladestelle"@de ;
+    rdfs:domain tc:Transport ;
+    rdfs:range tc:Address .
+
+# --- Messung/Pruefung ---
+tc:hasMeasurement a owl:ObjectProperty ;
+    rdfs:label "hat Messung"@de ;
+    rdfs:range tc:Measurement .
+
+tc:hasDocument a owl:ObjectProperty ;
+    rdfs:label "hat Dokument"@de ;
+    rdfs:range tc:Document .
+
+tc:hasTest a owl:ObjectProperty ;
+    rdfs:label "hat Pruefung"@de ;
+    rdfs:range tc:Test .
+
+tc:testedBy a owl:ObjectProperty ;
+    rdfs:label "geprueft von"@de ;
+    rdfs:range tc:Test .
+
+# --- Projekt ---
+tc:belongsToProject a owl:ObjectProperty ;
+    rdfs:label "gehoert zu Projekt"@de ;
+    rdfs:range tc:Project .
+
+# --- EPCIS ---
+tc:hasEPCISEvent a owl:ObjectProperty ;
+    rdfs:label "hat EPCIS-Ereignis"@de ;
+    rdfs:range tc:EPCISEvent .
+
+tc:hasChildEPC a owl:ObjectProperty ;
+    rdfs:label "hat Kind-EPC"@de ;
+    rdfs:domain tc:AggregationEvent .
+
+#======================================================================
+# TEIL 7: DATATYPE PROPERTIES (Generisch)
+#======================================================================
+
+# --- Identifikation ---
+tc:identifier a owl:DatatypeProperty ;
+    rdfs:label "Identifikator"@de ;
+    rdfs:label "identifier"@en ;
+    rdfs:comment "Eindeutige Kennung des Objekts"@de ;
+    rdfs:range xsd:string .
+
+tc:label a owl:DatatypeProperty ;
+    rdfs:label "Bezeichnung"@de ;
+    rdfs:label "label"@en ;
+    rdfs:comment "Bezeichnung/Label"@de ;
+    rdfs:range xsd:string .
+
+tc:name a owl:DatatypeProperty ;
+    rdfs:label "Name"@de ;
+    rdfs:label "name"@en ;
+    rdfs:range xsd:string .
+
+tc:title a owl:DatatypeProperty ;
+    rdfs:label "Titel"@de ;
+    rdfs:label "title"@en ;
+    rdfs:range xsd:string .
+
+tc:description a owl:DatatypeProperty ;
+    rdfs:label "Beschreibung"@de ;
+    rdfs:label "description"@en ;
+    rdfs:range xsd:string .
+
+tc:comment a owl:DatatypeProperty ;
+    rdfs:label "Bemerkung"@de ;
+    rdfs:label "comment"@en ;
+    rdfs:range xsd:string .
+
+# --- Klassifikation ---
+tc:category a owl:DatatypeProperty ;
+    rdfs:label "Kategorie"@de ;
+    rdfs:label "category"@en ;
+    rdfs:range xsd:string .
+
+tc:type a owl:DatatypeProperty ;
+    rdfs:label "Typ"@de ;
+    rdfs:label "type"@en ;
+    rdfs:range xsd:string .
+
+# --- Werte ---
+tc:value a owl:DatatypeProperty ;
+    rdfs:label "Wert"@de ;
+    rdfs:label "value"@en ;
+    rdfs:range xsd:string .
+
+tc:numericValue a owl:DatatypeProperty ;
+    rdfs:label "numerischer Wert"@de ;
+    rdfs:label "numeric value"@en ;
+    rdfs:range xsd:decimal .
+
+tc:booleanValue a owl:DatatypeProperty ;
+    rdfs:label "Wahrheitswert"@de ;
+    rdfs:label "boolean value"@en ;
+    rdfs:range xsd:boolean .
+
+tc:unit a owl:DatatypeProperty ;
+    rdfs:label "Einheit"@de ;
+    rdfs:label "unit"@en ;
+    rdfs:range xsd:string .
+
+# --- Zeit ---
+tc:dateTime a owl:DatatypeProperty ;
+    rdfs:label "Datum/Zeit"@de ;
+    rdfs:label "date time"@en ;
+    rdfs:range xsd:dateTime .
+
+tc:date a owl:DatatypeProperty ;
+    rdfs:label "Datum"@de ;
+    rdfs:label "date"@en ;
+    rdfs:range xsd:date .
+
+tc:createdAt a owl:DatatypeProperty ;
+    rdfs:label "Erstellt am"@de ;
+    rdfs:range xsd:dateTime .
+
+tc:modifiedAt a owl:DatatypeProperty ;
+    rdfs:label "Geaendert am"@de ;
+    rdfs:range xsd:dateTime .
+
+tc:harvestedAt a owl:DatatypeProperty ;
+    rdfs:label "Geerntet am"@de ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:dateTime .
+
+tc:printedAt a owl:DatatypeProperty ;
+    rdfs:label "Gedruckt am"@de ;
+    rdfs:range xsd:dateTime .
+
+tc:startDate a owl:DatatypeProperty ;
+    rdfs:label "Startdatum"@de ;
+    rdfs:range xsd:dateTime .
+
+tc:endDate a owl:DatatypeProperty ;
+    rdfs:label "Enddatum"@de ;
+    rdfs:range xsd:dateTime .
+
+# --- Person ---
+tc:firstName a owl:DatatypeProperty ;
+    rdfs:label "Vorname"@de ;
+    rdfs:domain tc:Person ;
+    rdfs:range xsd:string .
+
+tc:lastName a owl:DatatypeProperty ;
+    rdfs:label "Nachname"@de ;
+    rdfs:domain tc:Person ;
+    rdfs:range xsd:string .
+
+tc:email a owl:DatatypeProperty ;
+    rdfs:label "E-Mail"@de ;
+    rdfs:domain tc:Actor ;
+    rdfs:range xsd:string .
+
+tc:phone a owl:DatatypeProperty ;
+    rdfs:label "Telefon"@de ;
+    rdfs:domain tc:Actor ;
+    rdfs:range xsd:string .
+
+tc:fax a owl:DatatypeProperty ;
+    rdfs:label "Fax"@de ;
+    rdfs:domain tc:Actor ;
+    rdfs:range xsd:string .
+
+tc:role a owl:DatatypeProperty ;
+    rdfs:label "Rolle"@de ;
+    rdfs:domain tc:Actor ;
+    rdfs:range xsd:string .
+
+# --- Organisation ---
+tc:businessName a owl:DatatypeProperty ;
+    rdfs:label "Firmenname"@de ;
+    rdfs:domain tc:Organization ;
+    rdfs:range xsd:string .
+
+tc:businessId a owl:DatatypeProperty ;
+    rdfs:label "Firmen-ID"@de ;
+    rdfs:domain tc:Organization ;
+    rdfs:range xsd:string .
+
+# --- Adresse ---
+tc:street a owl:DatatypeProperty ;
+    rdfs:label "Strasse"@de ;
+    rdfs:domain tc:Address ;
+    rdfs:range xsd:string .
+
+tc:city a owl:DatatypeProperty ;
+    rdfs:label "Stadt/Ort"@de ;
+    rdfs:domain tc:Address ;
+    rdfs:range xsd:string .
+
+tc:postalCode a owl:DatatypeProperty ;
+    rdfs:label "Postleitzahl"@de ;
+    rdfs:domain tc:Address ;
+    rdfs:range xsd:string .
+
+tc:country a owl:DatatypeProperty ;
+    rdfs:label "Land"@de ;
+    rdfs:domain tc:Address ;
+    rdfs:range xsd:string .
+
+tc:province a owl:DatatypeProperty ;
+    rdfs:label "Provinz/Bundesland"@de ;
+    rdfs:domain tc:Address ;
+    rdfs:range xsd:string .
+
+# --- Koordinaten ---
+tc:latitude a owl:DatatypeProperty ;
+    rdfs:label "Breitengrad"@de ;
+    rdfs:domain tc:GeoCoordinate ;
+    rdfs:range xsd:decimal .
+
+tc:longitude a owl:DatatypeProperty ;
+    rdfs:label "Laengengrad"@de ;
+    rdfs:domain tc:GeoCoordinate ;
+    rdfs:range xsd:decimal .
+
+tc:altitude a owl:DatatypeProperty ;
+    rdfs:label "Hoehe"@de ;
+    rdfs:domain tc:GeoCoordinate ;
+    rdfs:range xsd:decimal .
+
+tc:coordinateSystem a owl:DatatypeProperty ;
+    rdfs:label "Koordinatensystem"@de ;
+    rdfs:domain tc:GeoCoordinate ;
+    rdfs:range xsd:string ;
+    rdfs:comment "z.B. EPSG:4326, EPSG:25832"@de .
+
+tc:accuracy a owl:DatatypeProperty ;
+    rdfs:label "Genauigkeit"@de ;
+    rdfs:domain tc:GeoCoordinate ;
+    rdfs:range xsd:decimal .
+
+tc:bearing a owl:DatatypeProperty ;
+    rdfs:label "Peilung/Richtung"@de ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Richtung in Grad"@de .
+
+tc:position a owl:DatatypeProperty ;
+    rdfs:label "Position"@de ;
+    rdfs:range xsd:string .
+
+# --- Maschine ---
+tc:machineCategory a owl:DatatypeProperty ;
+    rdfs:label "Maschinenkategorie"@de ;
+    rdfs:domain tc:Machine ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Harvester, Forwarder, etc."@de .
+
+tc:manufacturer a owl:DatatypeProperty ;
+    rdfs:label "Hersteller"@de ;
+    rdfs:range xsd:string .
+
+tc:model a owl:DatatypeProperty ;
+    rdfs:label "Modell"@de ;
+    rdfs:range xsd:string .
+
+tc:version a owl:DatatypeProperty ;
+    rdfs:label "Version"@de ;
+    rdfs:range xsd:string .
+
+tc:serialNumber a owl:DatatypeProperty ;
+    rdfs:label "Seriennummer"@de ;
+    rdfs:range xsd:string .
+
+tc:softwareVersion a owl:DatatypeProperty ;
+    rdfs:label "Software-Version"@de ;
+    rdfs:range xsd:string .
+
+tc:extension a owl:DatatypeProperty ;
+    rdfs:label "Erweiterung/Auslegung"@de ;
+    rdfs:range xsd:decimal .
+
+tc:angle a owl:DatatypeProperty ;
+    rdfs:label "Winkel"@de ;
+    rdfs:range xsd:decimal .
+
+# --- Geometrie (fuer Log, SawnTimber) ---
+tc:length a owl:DatatypeProperty ;
+    rdfs:label "Laenge"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:decimal .
+
+tc:width a owl:DatatypeProperty ;
+    rdfs:label "Breite"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:decimal .
+
+tc:height a owl:DatatypeProperty ;
+    rdfs:label "Hoehe"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:decimal .
+
+tc:thickness a owl:DatatypeProperty ;
+    rdfs:label "Staerke/Dicke"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:decimal .
+
+tc:diameter a owl:DatatypeProperty ;
+    rdfs:label "Durchmesser"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:decimal .
+
+tc:diameterTop a owl:DatatypeProperty ;
+    rdfs:label "Zopfdurchmesser"@de ;
+    rdfs:domain tc:Log ;
+    rdfs:range xsd:decimal .
+
+tc:diameterButt a owl:DatatypeProperty ;
+    rdfs:label "Stockdurchmesser"@de ;
+    rdfs:domain tc:Log ;
+    rdfs:range xsd:decimal .
+
+tc:diameterMiddle a owl:DatatypeProperty ;
+    rdfs:label "Mittendurchmesser"@de ;
+    rdfs:domain tc:Log ;
+    rdfs:range xsd:decimal .
+
+tc:volume a owl:DatatypeProperty ;
+    rdfs:label "Volumen"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:decimal .
+
+tc:area a owl:DatatypeProperty ;
+    rdfs:label "Flaeche"@de ;
+    rdfs:range xsd:decimal .
+
+tc:surfaceArea a owl:DatatypeProperty ;
+    rdfs:label "Oberflaeche"@de ;
+    rdfs:range xsd:decimal .
+
+tc:weight a owl:DatatypeProperty ;
+    rdfs:label "Gewicht"@de ;
+    rdfs:range xsd:decimal .
+
+tc:grossWeight a owl:DatatypeProperty ;
+    rdfs:label "Bruttogewicht"@de ;
+    rdfs:range xsd:decimal .
+
+tc:netWeight a owl:DatatypeProperty ;
+    rdfs:label "Nettogewicht"@de ;
+    rdfs:range xsd:decimal .
+
+tc:elevation a owl:DatatypeProperty ;
+    rdfs:label "Hoehenkote"@de ;
+    rdfs:range xsd:decimal .
+
+# --- Mengen ---
+tc:count a owl:DatatypeProperty ;
+    rdfs:label "Anzahl"@de ;
+    rdfs:range xsd:integer .
+
+tc:amount a owl:DatatypeProperty ;
+    rdfs:label "Menge"@de ;
+    rdfs:range xsd:decimal .
+
+tc:pieceCount a owl:DatatypeProperty ;
+    rdfs:label "Stueckzahl"@de ;
+    rdfs:range xsd:integer .
+
+tc:treeCount a owl:DatatypeProperty ;
+    rdfs:label "Baumzahl"@de ;
+    rdfs:range xsd:integer .
+
+# --- Qualitaet ---
+tc:grade a owl:DatatypeProperty ;
+    rdfs:label "Gueteklasse"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:string .
+
+tc:species a owl:DatatypeProperty ;
+    rdfs:label "Baumart"@de ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range xsd:string .
+
+tc:speciesCode a owl:DatatypeProperty ;
+    rdfs:label "Baumart-Code"@de ;
+    rdfs:range xsd:string .
+
+tc:quality a owl:DatatypeProperty ;
+    rdfs:label "Qualitaet"@de ;
+    rdfs:range xsd:string .
+
+# --- Mechanische Eigenschaften ---
+# Domain-Constraint bewusst nicht gesetzt (gilt fuer SawnTimber, CLT, BuildingProduct)
+tc:bendingStrength a owl:DatatypeProperty ;
+    rdfs:label "Biegefestigkeit"@de ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "nach EN 338, N/mm2"@de .
+
+tc:tensileStrength a owl:DatatypeProperty ;
+    rdfs:label "Zugfestigkeit"@de ;
+    rdfs:range xsd:decimal .
+
+tc:tensileStrengthParallel a owl:DatatypeProperty ;
+    rdfs:label "Zugfestigkeit parallel"@de ;
+    rdfs:range xsd:decimal .
+
+tc:tensileStrengthPerpendicular a owl:DatatypeProperty ;
+    rdfs:label "Zugfestigkeit rechtwinklig"@de ;
+    rdfs:range xsd:decimal .
+
+tc:compressiveStrength a owl:DatatypeProperty ;
+    rdfs:label "Druckfestigkeit"@de ;
+    rdfs:range xsd:decimal .
+
+tc:compressiveStrengthParallel a owl:DatatypeProperty ;
+    rdfs:label "Druckfestigkeit parallel"@de ;
+    rdfs:range xsd:decimal .
+
+tc:compressiveStrengthPerpendicular a owl:DatatypeProperty ;
+    rdfs:label "Druckfestigkeit rechtwinklig"@de ;
+    rdfs:range xsd:decimal .
+
+tc:shearStrength a owl:DatatypeProperty ;
+    rdfs:label "Schubfestigkeit"@de ;
+    rdfs:range xsd:decimal .
+
+tc:elasticModulus a owl:DatatypeProperty ;
+    rdfs:label "Elastizitaetsmodul"@de ;
+    rdfs:range xsd:decimal .
+
+tc:density a owl:DatatypeProperty ;
+    rdfs:label "Rohdichte"@de ;
+    rdfs:range xsd:decimal .
+
+tc:fireResistanceClass a owl:DatatypeProperty ;
+    rdfs:label "Feuerwiderstandsklasse"@de ;
+    rdfs:range xsd:string .
+
+tc:durabilityClass a owl:DatatypeProperty ;
+    rdfs:label "Dauerhaftigkeitsklasse"@de ;
+    rdfs:range xsd:string .
+
+# --- Pruefung ---
+tc:testForce a owl:DatatypeProperty ;
+    rdfs:label "Pruefkraft"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:testSpeed a owl:DatatypeProperty ;
+    rdfs:label "Pruefgeschwindigkeit"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:preForce a owl:DatatypeProperty ;
+    rdfs:label "Vorkraft"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:maxForce a owl:DatatypeProperty ;
+    rdfs:label "Maximalkraft"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:testDuration a owl:DatatypeProperty ;
+    rdfs:label "Pruefdauer"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:sampleId a owl:DatatypeProperty ;
+    rdfs:label "Probenbezeichnung"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:string .
+
+tc:sampleLength a owl:DatatypeProperty ;
+    rdfs:label "Probenlaenge"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:sampleWidth a owl:DatatypeProperty ;
+    rdfs:label "Probenbreite"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+tc:sampleThickness a owl:DatatypeProperty ;
+    rdfs:label "Probenstaerke"@de ;
+    rdfs:domain tc:Test ;
+    rdfs:range xsd:decimal .
+
+# --- Saatgut ---
+tc:purity a owl:DatatypeProperty ;
+    rdfs:label "Reinheit"@de ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Reinheit in Prozent"@de .
+
+tc:germinationRate a owl:DatatypeProperty ;
+    rdfs:label "Keimfaehigkeit"@de ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Keimfaehigkeit in Prozent"@de .
+
+tc:germinationSpeed a owl:DatatypeProperty ;
+    rdfs:label "Keimschnelligkeit"@de ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+tc:moistureContent a owl:DatatypeProperty ;
+    rdfs:label "Feuchtegehalt"@de ;
+    rdfs:range xsd:decimal .
+
+tc:thousandSeedWeight a owl:DatatypeProperty ;
+    rdfs:label "Tausendkornmasse"@de ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "TKM in Gramm"@de .
+
+tc:origin a owl:DatatypeProperty ;
+    rdfs:label "Herkunft"@de ;
+    rdfs:range xsd:string .
+
+tc:maturityYear a owl:DatatypeProperty ;
+    rdfs:label "Reifejahr"@de ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:string .
+
+# --- Kosten/Preise ---
+tc:price a owl:DatatypeProperty ;
+    rdfs:label "Preis"@de ;
+    rdfs:range xsd:decimal .
+
+tc:cost a owl:DatatypeProperty ;
+    rdfs:label "Kosten"@de ;
+    rdfs:range xsd:decimal .
+
+tc:emission a owl:DatatypeProperty ;
+    rdfs:label "Emission"@de ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "CO2-Emission in kg"@de .
+
+# --- Referenzen ---
+tc:standardReference a owl:DatatypeProperty ;
+    rdfs:label "Norm-Referenz"@de ;
+    rdfs:range xsd:string ;
+    rdfs:comment "z.B. EN 338, DIN 4102"@de .
+
+tc:reference a owl:DatatypeProperty ;
+    rdfs:label "Referenz"@de ;
+    rdfs:range xsd:string .
+
+# --- IFC/BIM ---
+tc:layer a owl:DatatypeProperty ;
+    rdfs:label "Layer/Ebene"@de ;
+    rdfs:range xsd:string .
+
+tc:objectType a owl:DatatypeProperty ;
+    rdfs:label "Objekttyp"@de ;
+    rdfs:range xsd:string .
+
+tc:psetName a owl:DatatypeProperty ;
+    rdfs:label "PropertySet-Name"@de ;
+    rdfs:range xsd:string .
+
+tc:ifcClass a owl:DatatypeProperty ;
+    rdfs:label "IFC-Klasse"@de ;
+    rdfs:range xsd:string .
+
+# --- EPCIS ---
+tc:epc a owl:DatatypeProperty ;
+    rdfs:label "EPC"@de ;
+    rdfs:comment "Electronic Product Code"@de ;
+    rdfs:range xsd:string .
+
+tc:bizStep a owl:DatatypeProperty ;
+    rdfs:label "Business Step"@de ;
+    rdfs:domain tc:EPCISEvent ;
+    rdfs:range xsd:string .
+
+tc:action a owl:DatatypeProperty ;
+    rdfs:label "Aktion"@de ;
+    rdfs:domain tc:EPCISEvent ;
+    rdfs:range xsd:string .
+
+tc:readPoint a owl:DatatypeProperty ;
+    rdfs:label "Lesepunkt"@de ;
+    rdfs:domain tc:EPCISEvent ;
+    rdfs:range xsd:string .
+
+# --- Status/Prozess ---
+tc:status a owl:DatatypeProperty ;
+    rdfs:label "Status"@de ;
+    rdfs:range xsd:string .
+
+tc:processingCategory a owl:DatatypeProperty ;
+    rdfs:label "Bearbeitungskategorie"@de ;
+    rdfs:range xsd:string .
+
+tc:cuttingCategory a owl:DatatypeProperty ;
+    rdfs:label "Faellkategorie"@de ;
+    rdfs:range xsd:string .
+
+tc:cuttingReason a owl:DatatypeProperty ;
+    rdfs:label "Faellgrund"@de ;
+    rdfs:range xsd:string .
+
+tc:treatment a owl:DatatypeProperty ;
+    rdfs:label "Behandlung"@de ;
+    rdfs:range xsd:string .
+
+tc:preservationTreatment a owl:DatatypeProperty ;
+    rdfs:label "Konservierung"@de ;
+    rdfs:range xsd:boolean .
+
+#======================================================================
+# TEIL 8: ALIGNMENTS zu externen Ontologien (BOT, ifcOWL)
+#======================================================================
+
+# --- Alignment zu BOT (Building Topology Ontology) ---
+# https://w3id.org/bot#
+
+# Klassen-Alignments
+tc:Wall rdfs:subClassOf bot:Element .
+tc:Ceiling rdfs:subClassOf bot:Element .
+tc:Roof rdfs:subClassOf bot:Element .
+tc:BuildingElement rdfs:subClassOf bot:Element .
+tc:Project owl:equivalentClass bot:Site .
+
+# Property-Alignments
+tc:partOf rdfs:subPropertyOf bot:containsZone .
+tc:contains owl:inverseOf tc:partOf .
+
+# --- Alignment zu ifcOWL ---
+# https://standards.buildingsmart.org/IFC/DEV/IFC4/ADD2/OWL#
+
+# Klassen-Alignments zu IFC
+tc:Wall owl:equivalentClass ifc:IfcWall .
+tc:Ceiling owl:equivalentClass ifc:IfcSlab .
+tc:BuildingElement owl:equivalentClass ifc:IfcBuildingElement .
+tc:BuildingProduct owl:equivalentClass ifc:IfcProduct .
+
+# --- IFC-spezifische Properties (aus PropertySets) ---
+# Diese Properties koennen fuer IFC-Daten verwendet werden
+
+tc:ifcGlobalId a owl:DatatypeProperty ;
+    rdfs:label "IFC GlobalId"@de ;
+    rdfs:comment "Entspricht ifc:globalId_IfcRoot"@de ;
+    rdfs:range xsd:string .
+
+tc:ifcObjectType a owl:DatatypeProperty ;
+    rdfs:label "IFC ObjectType"@de ;
+    rdfs:comment "Entspricht ifc:objectType_IfcObject"@de ;
+    rdfs:range xsd:string .
+
+tc:ifcTag a owl:DatatypeProperty ;
+    rdfs:label "IFC Tag"@de ;
+    rdfs:comment "Entspricht ifc:tag_IfcElement"@de ;
+    rdfs:range xsd:string .
+
+# Revit-spezifische Properties (haeufig in IFC-Exporten)
+tc:revitFamily a owl:DatatypeProperty ;
+    rdfs:label "Revit Familie"@de ;
+    rdfs:comment "Revit Family Name aus IFC-Export"@de ;
+    rdfs:range xsd:string .
+
+tc:revitType a owl:DatatypeProperty ;
+    rdfs:label "Revit Typ"@de ;
+    rdfs:comment "Revit Type Name aus IFC-Export"@de ;
+    rdfs:range xsd:string .
+
+# Geometrie-Constraints (aus Revit/IFC)
+tc:baseConstraint a owl:DatatypeProperty ;
+    rdfs:label "Basisebene"@de ;
+    rdfs:comment "Ebene an der das Element basiert (Revit Base Constraint)"@de ;
+    rdfs:range xsd:string .
+
+tc:topConstraint a owl:DatatypeProperty ;
+    rdfs:label "Obere Ebene"@de ;
+    rdfs:comment "Obere Begrenzungsebene (Revit Top Constraint)"@de ;
+    rdfs:range xsd:string .
+
+tc:baseOffset a owl:DatatypeProperty ;
+    rdfs:label "Basis-Versatz"@de ;
+    rdfs:range xsd:decimal .
+
+tc:topOffset a owl:DatatypeProperty ;
+    rdfs:label "Oberer Versatz"@de ;
+    rdfs:range xsd:decimal .
+
+tc:unconnectedHeight a owl:DatatypeProperty ;
+    rdfs:label "Nicht verknuepfte Hoehe"@de ;
+    rdfs:range xsd:decimal .
+
+# Raumgrenzen
+tc:roomBounding a owl:DatatypeProperty ;
+    rdfs:label "Raumbegrenzung"@de ;
+    rdfs:comment "Ist das Element raumbegrenzend (Revit Room Bounding)"@de ;
+    rdfs:range xsd:boolean .
+
+# Thermische Properties (aus Pset_WallCommon etc.)
+tc:thermalTransmittance a owl:DatatypeProperty ;
+    rdfs:label "Waermedurchgangskoeffizient"@de ;
+    rdfs:comment "U-Wert in W/(m2*K)"@de ;
+    rdfs:range xsd:decimal .
+
+tc:thermalResistance a owl:DatatypeProperty ;
+    rdfs:label "Waermewiderstand"@de ;
+    rdfs:comment "R-Wert in (m2*K)/W"@de ;
+    rdfs:range xsd:decimal .
+
+tc:thermalMass a owl:DatatypeProperty ;
+    rdfs:label "Thermisch wirksame Masse"@de ;
+    rdfs:range xsd:decimal .
+
+tc:absorptance a owl:DatatypeProperty ;
+    rdfs:label "Absorptionsgrad"@de ;
+    rdfs:range xsd:decimal .
+
+tc:roughness a owl:DatatypeProperty ;
+    rdfs:label "Rauigkeit"@de ;
+    rdfs:range xsd:string .
+
+# Strukturelle Properties
+tc:loadBearing a owl:DatatypeProperty ;
+    rdfs:label "Tragend"@de ;
+    rdfs:comment "Ist das Element tragend (aus Pset_WallCommon/LoadBearing)"@de ;
+    rdfs:range xsd:boolean .
+
+tc:isExternal a owl:DatatypeProperty ;
+    rdfs:label "Aussenbauteil"@de ;
+    rdfs:comment "Ist das Element ein Aussenbauteil (aus Pset_WallCommon/IsExternal)"@de ;
+    rdfs:range xsd:boolean .
+
+# Abbund/Produktion (fuer Holzbau-IFC)
+tc:productionNumber a owl:DatatypeProperty ;
+    rdfs:label "Produktionsnummer"@de ;
+    rdfs:comment "Abbund/Produktions-Nummer"@de ;
+    rdfs:range xsd:string .
+
+tc:assemblyGroup a owl:DatatypeProperty ;
+    rdfs:label "Montagegruppe"@de ;
+    rdfs:range xsd:string .
+
+tc:constructionPhase a owl:DatatypeProperty ;
+    rdfs:label "Bauabschnitt"@de ;
+    rdfs:range xsd:string .
+
+tc:deliveryPhase a owl:DatatypeProperty ;
+    rdfs:label "Lieferung/Anlieferung"@de ;
+    rdfs:range xsd:string .
+
+tc:surfaceQuality a owl:DatatypeProperty ;
+    rdfs:label "Sichtqualitaet"@de ;
+    rdfs:comment "z.B. S1, S2, S3 nach DIN 68365"@de ;
+    rdfs:range xsd:string .
+
+#======================================================================
+# TEIL 9: NEUE PROPERTIES (v5)
+#======================================================================
+
+# --- Spezifische Identifier-Sub-Properties ---
+tc:stemNumber a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Stammnummer"@de ;
+    rdfs:label "Stem Number"@en ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string .
+
+tc:logKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Rundholz-Schluessel"@de ;
+    rdfs:label "Log Key"@en ;
+    rdfs:domain tc:Log ;
+    rdfs:range xsd:string .
+
+tc:machineKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Maschinenschluessel"@de ;
+    rdfs:label "Machine Key"@en ;
+    rdfs:domain tc:Machine ;
+    rdfs:range xsd:string .
+
+tc:operatorKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Bediener-Schluessel"@de ;
+    rdfs:label "Operator Key"@en ;
+    rdfs:domain tc:Operator ;
+    rdfs:range xsd:string .
+
+tc:objectKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Objekt-Schluessel"@de ;
+    rdfs:label "Object Key"@en ;
+    rdfs:domain tc:ObjectDefinition ;
+    rdfs:range xsd:string .
+
+tc:productKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Produkt-Schluessel"@de ;
+    rdfs:label "Product Key"@en ;
+    rdfs:domain tc:ProductDefinition ;
+    rdfs:range xsd:string .
+
+tc:speciesGroupKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Artengruppen-Schluessel"@de ;
+    rdfs:label "Species Group Key"@en ;
+    rdfs:domain tc:SpeciesGroupDefinition ;
+    rdfs:range xsd:string .
+
+tc:subObjectKey a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Unterobjekt-Schluessel"@de ;
+    rdfs:label "Sub Object Key"@en ;
+    rdfs:domain tc:SubObject ;
+    rdfs:range xsd:string .
+
+tc:contractNumber a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Vertragsnummer"@de ;
+    rdfs:label "Contract Number"@en ;
+    rdfs:range xsd:string .
+
+tc:transportNumber a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Transportnummer"@de ;
+    rdfs:label "Transport Number"@en ;
+    rdfs:domain tc:Transport ;
+    rdfs:range xsd:string .
+
+tc:deliveryNumber a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Lieferscheinnummer"@de ;
+    rdfs:label "Delivery Number"@en ;
+    rdfs:domain tc:DeliveryNote ;
+    rdfs:range xsd:string .
+
+tc:orderNumber a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Auftragsnummer"@de ;
+    rdfs:label "Order Number"@en ;
+    rdfs:range xsd:string .
+
+tc:reportNumber a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:identifier ;
+    rdfs:label "Berichtsnummer"@de ;
+    rdfs:label "Report Number"@en ;
+    rdfs:domain tc:TestReport ;
+    rdfs:range xsd:string .
+
+# --- Saatgut-Pruefungs-Properties ---
+tc:hardSeedPercentage a owl:DatatypeProperty ;
+    rdfs:label "Harte Samen Anteil"@de ;
+    rdfs:label "Hard Seed Percentage"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Anteil harter Samen in Prozent"@de .
+
+tc:freshSeedPercentage a owl:DatatypeProperty ;
+    rdfs:label "Frische Samen Anteil"@de ;
+    rdfs:label "Fresh Seed Percentage"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+tc:rottenSeedPercentage a owl:DatatypeProperty ;
+    rdfs:label "Faule Samen Anteil"@de ;
+    rdfs:label "Rotten Seed Percentage"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+tc:hollowSeedPercentage a owl:DatatypeProperty ;
+    rdfs:label "Hohle Samen Anteil"@de ;
+    rdfs:label "Hollow Seed Percentage"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+tc:abnormalSeedPercentage a owl:DatatypeProperty ;
+    rdfs:label "Anomale Samen Anteil"@de ;
+    rdfs:label "Abnormal Seed Percentage"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+tc:viableSeedsPerKg a owl:DatatypeProperty ;
+    rdfs:label "Keimfaehige Samen je kg"@de ;
+    rdfs:label "Viable Seeds Per Kg"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+tc:lotSize a owl:DatatypeProperty ;
+    rdfs:label "Partiegroesse"@de ;
+    rdfs:label "Lot Size"@en ;
+    rdfs:range xsd:decimal .
+
+tc:impurityPercentage a owl:DatatypeProperty ;
+    rdfs:label "Verunreinigung Anteil"@de ;
+    rdfs:label "Impurity Percentage"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:decimal .
+
+# --- Stammzertifikat/Vermehrungsgut-Properties ---
+tc:sourceType a owl:DatatypeProperty ;
+    rdfs:label "Art des Ausgangsmaterials"@de ;
+    rdfs:label "Source Material Type"@en ;
+    rdfs:range xsd:string .
+
+tc:intendedUse a owl:DatatypeProperty ;
+    rdfs:label "Verwendungszweck"@de ;
+    rdfs:label "Intended Use"@en ;
+    rdfs:range xsd:string .
+
+tc:autochthonous a owl:DatatypeProperty ;
+    rdfs:label "Autochthon"@de ;
+    rdfs:label "Autochthonous"@en ;
+    rdfs:range xsd:boolean ;
+    rdfs:comment "Ist das Vermehrungsgut autochthon?"@de .
+
+tc:processingState a owl:DatatypeProperty ;
+    rdfs:label "Aufbereitungszustand"@de ;
+    rdfs:label "Processing State"@en ;
+    rdfs:range xsd:string .
+
+tc:propagationCategory a owl:DatatypeProperty ;
+    rdfs:label "Vermehrungsgutkategorie"@de ;
+    rdfs:label "Propagation Category"@en ;
+    rdfs:range xsd:string .
+
+tc:registerSign a owl:DatatypeProperty ;
+    rdfs:label "Registerzeichen"@de ;
+    rdfs:label "Register Sign"@en ;
+    rdfs:range xsd:string .
+
+tc:numberOfSatellites a owl:DatatypeProperty ;
+    rdfs:label "Anzahl Satelliten"@de ;
+    rdfs:label "Number of Satellites"@en ;
+    rdfs:range xsd:integer ;
+    rdfs:comment "Anzahl der genutzten GNSS-Satelliten"@de .
+
+tc:dbh a owl:DatatypeProperty ;
+    rdfs:label "Brusthoehedurchmesser"@de ;
+    rdfs:label "Diameter at Breast Height"@en ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "BHD in mm"@de .
+
+tc:incoterm a owl:DatatypeProperty ;
+    rdfs:label "Incoterm"@de ;
+    rdfs:label "Incoterm"@en ;
+    rdfs:domain tc:Transport ;
+    rdfs:range xsd:string .
+
+# --- 2a. IFC/BIM Properties ---
+
+tc:forSolid a owl:DatatypeProperty ;
+    rdfs:label "Fuer Koerper"@de ;
+    rdfs:label "For Solid"@en ;
+    rdfs:range xsd:boolean .
+
+tc:topEdgeFixed a owl:DatatypeProperty ;
+    rdfs:label "Oberkante fixiert"@de ;
+    rdfs:label "Top Edge Fixed"@en ;
+    rdfs:range xsd:boolean .
+
+tc:bottomEdgeFixed a owl:DatatypeProperty ;
+    rdfs:label "Unterkante fixiert"@de ;
+    rdfs:label "Bottom Edge Fixed"@en ;
+    rdfs:range xsd:boolean .
+
+tc:openingWrapping a owl:DatatypeProperty ;
+    rdfs:label "Abschluss an Oeffnungen"@de ;
+    rdfs:label "Wrapping at Openings"@en ;
+    rdfs:range xsd:string .
+
+tc:wallWrapping a owl:DatatypeProperty ;
+    rdfs:label "Abschluss an Waenden"@de ;
+    rdfs:label "Wrapping at Walls"@en ;
+    rdfs:range xsd:string .
+
+tc:function a owl:DatatypeProperty ;
+    rdfs:label "Funktion"@de ;
+    rdfs:label "Function"@en ;
+    rdfs:range xsd:string .
+
+tc:extendToStructure a owl:DatatypeProperty ;
+    rdfs:label "Bis Tragwerk verlaengern"@de ;
+    rdfs:label "Extend to Structure"@en ;
+    rdfs:range xsd:boolean .
+
+tc:structuralSystem a owl:DatatypeProperty ;
+    rdfs:label "Tragwerk"@de ;
+    rdfs:label "Structural System"@en ;
+    rdfs:range xsd:boolean .
+
+tc:structuralUsage a owl:DatatypeProperty ;
+    rdfs:label "Tragwerksverwendung"@de ;
+    rdfs:label "Structural Usage"@en ;
+    rdfs:range xsd:string .
+
+tc:hasJunction a owl:DatatypeProperty ;
+    rdfs:label "Hat Verknuepfung"@de ;
+    rdfs:label "Has Junction"@en ;
+    rdfs:range xsd:boolean .
+
+tc:planEdition a owl:DatatypeProperty ;
+    rdfs:label "Planausgabe"@de ;
+    rdfs:label "Plan Edition"@en ;
+    rdfs:range xsd:string .
+
+# --- 2b. Produktion/Logistik Properties ---
+
+tc:sortAssortment a owl:DatatypeProperty ;
+    rdfs:label "Sorte/Sortiment"@de ;
+    rdfs:label "Sort/Assortment"@en ;
+    rdfs:range xsd:string .
+
+tc:group a owl:DatatypeProperty ;
+    rdfs:label "Gruppe"@de ;
+    rdfs:label "Group"@en ;
+    rdfs:range xsd:string .
+
+tc:productionListFlag a owl:DatatypeProperty ;
+    rdfs:label "Produktionsliste"@de ;
+    rdfs:label "Production List Flag"@en ;
+    rdfs:range xsd:string .
+
+tc:sku a owl:DatatypeProperty ;
+    rdfs:label "Artikelnummer (SKU)"@de ;
+    rdfs:label "Stock Keeping Unit"@en ;
+    rdfs:range xsd:string .
+
+tc:userDefinedField a owl:DatatypeProperty ;
+    rdfs:label "Benutzerdefiniertes Feld"@de ;
+    rdfs:label "User Defined Field"@en ;
+    rdfs:range xsd:string .
+
+# --- 2c. Datei Properties ---
+
+tc:fileName a owl:DatatypeProperty ;
+    rdfs:label "Dateiname"@de ;
+    rdfs:label "File Name"@en ;
+    rdfs:range xsd:string .
+
+# --- 2d. EPCIS Properties ---
+
+tc:epcisBody a owl:DatatypeProperty ;
+    rdfs:label "EPCIS Body"@en ;
+    rdfs:range xsd:string .
+
+tc:eventList a owl:DatatypeProperty ;
+    rdfs:label "Ereignisliste"@de ;
+    rdfs:label "Event List"@en ;
+    rdfs:range xsd:string .
+
+tc:aggregationEventType a owl:DatatypeProperty ;
+    rdfs:label "Aggregationsereignis"@de ;
+    rdfs:label "Aggregation Event"@en ;
+    rdfs:range xsd:string .
+
+tc:childEPCList a owl:DatatypeProperty ;
+    rdfs:label "Kind-EPC Liste"@de ;
+    rdfs:label "Child EPC List"@en ;
+    rdfs:range xsd:string .
+
+# --- 2e. HPR/Forstwirtschaft Properties ---
+
+tc:contactInformation a owl:DatatypeProperty ;
+    rdfs:label "Kontaktinformation"@de ;
+    rdfs:label "Contact Information"@en ;
+    rdfs:range xsd:string .
+
+tc:productDefinitionRef a owl:DatatypeProperty ;
+    rdfs:label "Produktdefinition-Referenz"@de ;
+    rdfs:label "Product Definition Reference"@en ;
+    rdfs:range xsd:string .
+
+tc:productClassification a owl:DatatypeProperty ;
+    rdfs:label "Produktklassifikation"@de ;
+    rdfs:label "Product Classification"@en ;
+    rdfs:range xsd:string .
+
+tc:productName a owl:DatatypeProperty ;
+    rdfs:label "Produktname"@de ;
+    rdfs:label "Product Name"@en ;
+    rdfs:range xsd:string .
+
+tc:productInfo a owl:DatatypeProperty ;
+    rdfs:label "Produktinformation"@de ;
+    rdfs:label "Product Information"@en ;
+    rdfs:range xsd:string .
+
+tc:presentationOrder a owl:DatatypeProperty ;
+    rdfs:label "Darstellungsreihenfolge"@de ;
+    rdfs:label "Presentation Order"@en ;
+    rdfs:range xsd:integer .
+
+tc:manualFreeBuck a owl:DatatypeProperty ;
+    rdfs:label "Manueller Freiabschnitt"@de ;
+    rdfs:label "Manual Free Buck"@en ;
+    rdfs:range xsd:boolean .
+
+tc:topLogFreeBuck a owl:DatatypeProperty ;
+    rdfs:label "Wipfel-Freiabschnitt"@de ;
+    rdfs:label "Top Log Free Buck"@en ;
+    rdfs:range xsd:boolean .
+
+tc:productCondition a owl:DatatypeProperty ;
+    rdfs:label "Produktzustand"@de ;
+    rdfs:label "Product Condition"@en ;
+    rdfs:range xsd:string .
+
+tc:limitationResult a owl:DatatypeProperty ;
+    rdfs:label "Begrenzungsergebnis"@de ;
+    rdfs:label "Limitation Result"@en ;
+    rdfs:range xsd:string .
+
+tc:distribution a owl:DatatypeProperty ;
+    rdfs:label "Verteilung"@de ;
+    rdfs:label "Distribution"@en ;
+    rdfs:range xsd:string .
+
+tc:limitation a owl:DatatypeProperty ;
+    rdfs:label "Begrenzung"@de ;
+    rdfs:label "Limitation"@en ;
+    rdfs:range xsd:string .
+
+tc:buckingCriteria a owl:DatatypeProperty ;
+    rdfs:label "Einschnittkriterien"@de ;
+    rdfs:label "Bucking Criteria"@en ;
+    rdfs:range xsd:string .
+
+tc:colorMarking a owl:DatatypeProperty ;
+    rdfs:label "Farbmarkierung"@de ;
+    rdfs:label "Color Marking"@en ;
+    rdfs:range xsd:boolean .
+
+tc:objectName a owl:DatatypeProperty ;
+    rdfs:label "Objektname"@de ;
+    rdfs:label "Object Name"@en ;
+    rdfs:range xsd:string .
+
+tc:forestCertification a owl:DatatypeProperty ;
+    rdfs:label "Waldzertifizierung"@de ;
+    rdfs:label "Forest Certification"@en ;
+    rdfs:range xsd:string .
+
+tc:loggingForm a owl:DatatypeProperty ;
+    rdfs:label "Einschlagsform"@de ;
+    rdfs:label "Logging Form"@en ;
+    rdfs:range xsd:string .
+
+tc:realEstateId a owl:DatatypeProperty ;
+    rdfs:label "Grundstuecks-ID"@de ;
+    rdfs:label "Real Estate ID"@en ;
+    rdfs:range xsd:string .
+
+tc:auditingOrganisation a owl:DatatypeProperty ;
+    rdfs:label "Prueforganisation"@de ;
+    rdfs:label "Auditing Organisation"@en ;
+    rdfs:range xsd:string .
+
+tc:subObjectReference a owl:DatatypeProperty ;
+    rdfs:label "Unterobjekt-Referenz"@de ;
+    rdfs:label "Sub Object Reference"@en ;
+    rdfs:range xsd:string .
+
+tc:coordinateReference a owl:DatatypeProperty ;
+    rdfs:label "Koordinaten-Referenz"@de ;
+    rdfs:label "Coordinate Reference"@en ;
+    rdfs:range xsd:string .
+
+tc:logReference a owl:DatatypeProperty ;
+    rdfs:label "Rundholz-Referenz"@de ;
+    rdfs:label "Log Reference"@en ;
+    rdfs:range xsd:string .
+
+# --- 2f. Pruef/Saatgut/Zertifikat Properties ---
+
+tc:testerName a owl:DatatypeProperty ;
+    rdfs:label "Pruefername"@de ;
+    rdfs:label "Tester Name"@en ;
+    rdfs:range xsd:string .
+
+tc:registrationNumber a owl:DatatypeProperty ;
+    rdfs:label "Registriernummer"@de ;
+    rdfs:label "Registration Number"@en ;
+    rdfs:range xsd:string .
+
+tc:germinationCurve a owl:DatatypeProperty ;
+    rdfs:label "Keimverlauf"@de ;
+    rdfs:label "Germination Curve"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:string .
+
+tc:signature a owl:DatatypeProperty ;
+    rdfs:label "Unterschrift"@de ;
+    rdfs:label "Signature"@en ;
+    rdfs:range xsd:string .
+
+tc:distributionList a owl:DatatypeProperty ;
+    rdfs:label "Verteiler"@de ;
+    rdfs:label "Distribution List"@en ;
+    rdfs:range xsd:string .
+
+tc:guideline a owl:DatatypeProperty ;
+    rdfs:label "Richtlinie"@de ;
+    rdfs:label "Guideline"@en ;
+    rdfs:range xsd:string .
+
+tc:sourceMaterialName a owl:DatatypeProperty ;
+    rdfs:label "Name des Ausgangsmaterials"@de ;
+    rdfs:label "Source Material Name"@en ;
+    rdfs:range xsd:string .
+
+tc:seedOrigin a owl:DatatypeProperty ;
+    rdfs:label "Saatgut-Herkunft"@de ;
+    rdfs:label "Seed Origin"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:string .
+
+tc:seedRemark a owl:DatatypeProperty ;
+    rdfs:label "Saatgut-Bemerkung"@de ;
+    rdfs:label "Seed Remark"@en ;
+    rdfs:domain tc:Seed ;
+    rdfs:range xsd:string .
+
+tc:materialAuthenticity a owl:DatatypeProperty ;
+    rdfs:label "Material-Authentizitaet"@de ;
+    rdfs:label "Material Authenticity"@en ;
+    rdfs:range xsd:boolean .
+
+tc:nurseryCultivationDuration a owl:DatatypeProperty ;
+    rdfs:label "Baumschul-Anzuchtdauer"@de ;
+    rdfs:label "Nursery Cultivation Duration"@en ;
+    rdfs:range xsd:string .
+
+tc:geneticModification a owl:DatatypeProperty ;
+    rdfs:label "Gentechnische Veraenderung"@de ;
+    rdfs:label "Genetic Modification"@en ;
+    rdfs:range xsd:boolean .
+
+tc:vegetativePropagation a owl:DatatypeProperty ;
+    rdfs:label "Vegetative Vermehrung"@de ;
+    rdfs:label "Vegetative Propagation"@en ;
+    rdfs:range xsd:boolean .
+
+tc:authorizedPersonName a owl:DatatypeProperty ;
+    rdfs:label "Name Bevollmaechtigter"@de ;
+    rdfs:label "Authorized Person Name"@en ;
+    rdfs:range xsd:string .
+
+# --- 2g. StanForD/Forst Properties ---
+
+tc:publisher a owl:DatatypeProperty ;
+    rdfs:label "Herausgeber"@de ;
+    rdfs:label "Publisher"@en ;
+    rdfs:range xsd:string .
+
+tc:forestOffice a owl:DatatypeProperty ;
+    rdfs:label "Forstamt"@de ;
+    rdfs:label "Forest Office"@en ;
+    rdfs:range xsd:string .
+
+tc:forestryDistrict a owl:DatatypeProperty ;
+    rdfs:label "Foersterei"@de ;
+    rdfs:label "Forestry District"@en ;
+    rdfs:range xsd:string .
+
+tc:forestOwnerName a owl:DatatypeProperty ;
+    rdfs:label "Waldbesitzername"@de ;
+    rdfs:label "Forest Owner Name"@en ;
+    rdfs:range xsd:string .
+
+tc:volumePerTree a owl:DatatypeProperty ;
+    rdfs:label "Volumen je Baum"@de ;
+    rdfs:label "Volume per Tree"@en ;
+    rdfs:range xsd:decimal .
+
+tc:sectionVolume a owl:DatatypeProperty ;
+    rdfs:label "Sektionsvolumen"@de ;
+    rdfs:label "Section Volume"@en ;
+    rdfs:range xsd:decimal .
+
+tc:summaryStatistic a owl:DatatypeProperty ;
+    rdfs:label "Zusammenfassung/Durchschnitt"@de ;
+    rdfs:label "Summary Statistic"@en ;
+    rdfs:range xsd:string .
+
+tc:reportReference a owl:DatatypeProperty ;
+    rdfs:label "Berichts-Referenz"@de ;
+    rdfs:label "Report Reference"@en ;
+    rdfs:range xsd:string .
+
+# --- 2h. Transport Properties ---
+
+tc:hazardousSubstanceEmission a owl:DatatypeProperty ;
+    rdfs:label "Schadstoffabgabe"@de ;
+    rdfs:label "Hazardous Substance Emission"@en ;
+    rdfs:range xsd:string .
+
+tc:messageRequired a owl:DatatypeProperty ;
+    rdfs:label "Nachricht erforderlich"@de ;
+    rdfs:label "Message Required"@en ;
+    rdfs:range xsd:boolean .
+
+tc:loadingPointDescription a owl:DatatypeProperty ;
+    rdfs:label "Beladestellen-Beschreibung"@de ;
+    rdfs:label "Loading Point Description"@en ;
+    rdfs:range xsd:string .
+
+tc:transportStatus a owl:DatatypeProperty ;
+    rdfs:label "Transportstatus"@de ;
+    rdfs:label "Transport Status"@en ;
+    rdfs:range xsd:string .
+
+tc:oceanTransportEnabled a owl:DatatypeProperty ;
+    rdfs:label "Seetransport aktiviert"@de ;
+    rdfs:label "Ocean Transport Enabled"@en ;
+    rdfs:range xsd:boolean .
+
+tc:hazardClass a owl:DatatypeProperty ;
+    rdfs:label "Gefahrenklasse"@de ;
+    rdfs:label "Hazard Class"@en ;
+    rdfs:range xsd:string .
+
+# --- Geometrie-Verknuepfung (kompatibel mit OMG/FOG) ---
+tc:hasGeometry a owl:ObjectProperty ;
+    rdfs:label "hat Geometrie"@de ;
+    rdfs:comment "Verknuepfung zu Geometrie-Repraesentation (kompatibel mit omg:hasGeometry)"@de .
+
+tc:has3DModel a owl:ObjectProperty ;
+    rdfs:label "hat 3D-Modell"@de ;
+    rdfs:comment "Verknuepfung zu 3D-Modell (kompatibel mit bot:has3DModel)"@de ;
+    rdfs:subPropertyOf tc:hasGeometry .
+
+
+#======================================================================
+# TIMBERCONNECT ONTOLOGIE v6
+# Generiert: 2026-04-27 11:01:53
+# Erweiterung: +404 neue Datatype Properties, +8 neue Klassen, +8 neue Object Properties
+# Quelle: 210426_Datenauswertung_klassifiziert.xlsx
+#======================================================================
+
+#======================================================================
+# v6 — NEUE KLASSEN (Logistik / Supply Chain Erweiterung)
+#======================================================================
+
+tc:DeliveryOrder a owl:Class ;
+    rdfs:label "Lieferauftrag"@de ;
+    rdfs:label "Delivery Order"@en ;
+    skos:notation "KL-19" ;
+    rdfs:comment "Auftrag zur Lieferung von Holz/Bauprodukten an einen Empfänger"@de ;
+    rdfs:subClassOf tc:Document .
+
+tc:Invoice a owl:Class ;
+    rdfs:label "Rechnung"@de ;
+    rdfs:label "Invoice"@en ;
+    skos:notation "KL-20" ;
+    rdfs:comment "Abrechnungsdokument für eine Lieferung oder Leistung"@de ;
+    rdfs:subClassOf tc:Document .
+
+tc:Warehouse a owl:Class ;
+    rdfs:label "Lager"@de ;
+    rdfs:label "Warehouse"@en ;
+    skos:notation "KL-21" ;
+    rdfs:comment "Lagerort für Holz- oder Bauprodukte (Polter, Hallenlager, Versandlager)"@de ;
+    rdfs:subClassOf tc:SupplyChainEntity .
+
+tc:Vehicle a owl:Class ;
+    rdfs:label "Fahrzeug"@de ;
+    rdfs:label "Vehicle"@en ;
+    skos:notation "KL-22" ;
+    rdfs:comment "Transportfahrzeug (LKW, Anhänger) eines Spediteurs"@de ;
+    rdfs:subClassOf tc:SupplyChainEntity .
+
+tc:DeliveryCondition a owl:Class ;
+    rdfs:label "Liefer-/Versandbedingung"@de ;
+    rdfs:label "Delivery Condition"@en ;
+    skos:notation "KL-23" ;
+    rdfs:comment "Vertragliche Bedingung für Lieferung/Versand (Inkoterm, Zahlungsbedingung)"@de .
+
+tc:GPSTrack a owl:Class ;
+    rdfs:label "GPS-Spur"@de ;
+    rdfs:label "GPS Track"@en ;
+    skos:notation "KL-24" ;
+    rdfs:comment "Telemetrie-Datenpunkt eines Transports (Position, Zeit, Aktivität, Achslast)"@de ;
+    rdfs:subClassOf tc:Measurement .
+
+tc:LoadingPoint a owl:Class ;
+    rdfs:label "Ladezone/Ladeort"@de ;
+    rdfs:label "Loading Point"@en ;
+    skos:notation "KL-26" ;
+    rdfs:comment "Geographischer Ort, an dem Holz auf ein Transportfahrzeug verladen wird"@de ;
+    rdfs:subClassOf tc:SupplyChainEntity .
+
+tc:Article a owl:Class ;
+    rdfs:label "Artikelposition"@de ;
+    rdfs:label "Article"@en ;
+    skos:notation "KL-27" ;
+    rdfs:comment "Produkt-/Artikelposition in einem Auftrag oder einer Rechnung"@de .
+
+#======================================================================
+# v6 — NEUE OBJECT PROPERTIES
+#======================================================================
+
+tc:hasDeliveryOrder a owl:ObjectProperty ;
+    rdfs:label "hat Lieferauftrag"@de ;
+    rdfs:label "has Delivery Order"@en ;
+    rdfs:domain tc:SupplyChainEntity ;
+    rdfs:range tc:DeliveryOrder .
+
+tc:hasInvoice a owl:ObjectProperty ;
+    rdfs:label "hat Rechnung"@de ;
+    rdfs:label "has Invoice"@en ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range tc:Invoice .
+
+tc:hasWarehouse a owl:ObjectProperty ;
+    rdfs:label "hat Lager"@de ;
+    rdfs:label "has Warehouse"@en ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range tc:Warehouse .
+
+tc:hasVehicle a owl:ObjectProperty ;
+    rdfs:label "hat Fahrzeug"@de ;
+    rdfs:label "has Vehicle"@en ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range tc:Vehicle .
+
+tc:hasDeliveryCondition a owl:ObjectProperty ;
+    rdfs:label "hat Lieferbedingung"@de ;
+    rdfs:label "has Delivery Condition"@en ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range tc:DeliveryCondition .
+
+tc:hasGPSTrack a owl:ObjectProperty ;
+    rdfs:label "hat GPS-Spur"@de ;
+    rdfs:label "has GPS Track"@en ;
+    rdfs:domain tc:Transport ;
+    rdfs:range tc:GPSTrack .
+
+tc:hasLoadingPoint_v6 a owl:ObjectProperty ;
+    rdfs:label "hat Ladezone"@de ;
+    rdfs:label "has Loading Point"@en ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range tc:LoadingPoint .
+
+tc:hasArticle a owl:ObjectProperty ;
+    rdfs:label "hat Artikel"@de ;
+    rdfs:label "has Article"@en ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range tc:Article .
+
+#======================================================================
+# v6 — NEUE DATATYPE PROPERTIES (404 neue Merkmale)
+#======================================================================
+
+tc:fuhrauftrag a owl:DatatypeProperty ;
+    rdfs:label "Fuhrauftrag"@de ;
+    skos:notation "M-642" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:anyURI ;
+    skos:example "Barcode" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Firmenname a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Firmenname"@de ;
+    skos:notation "M-643" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Spediteur Transport GMBH &Co. KG" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Ort a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Ort"@de ;
+    skos:notation "M-644" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Borgentreich" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Strasse a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Straße"@de ;
+    skos:notation "M-645" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Musterstraße 15" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Postleitzahl a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Postleitzahl"@de ;
+    skos:notation "M-646" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:decimal ;
+    skos:example "34434" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Stadt a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Stadt"@de ;
+    skos:notation "M-647" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Kreis Höxter" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Ansprechpartner_Vorname a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Ansprechpartner: Vorname"@de ;
+    skos:notation "M-648" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Max" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Ansprechpartner_Name a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Ansprechpartner: Name"@de ;
+    skos:notation "M-649" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Ansprechpartner_Telefonnummer a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Ansprechpartner: Telefonnummer"@de ;
+    skos:notation "M-650" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:decimal ;
+    skos:example "01234 567890" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:spediteur_Ansprechpartner_Email_Adresse a owl:DatatypeProperty ;
+    rdfs:label "Spediteur: Ansprechpartner: Email-Adresse"@de ;
+    skos:notation "M-651" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "max.mustermann@gmail.com" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:firmenname a owl:DatatypeProperty ;
+    rdfs:label "Firmenname"@de ;
+    skos:notation "M-652" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "EGGER Sägewerk Brilon GmbH" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:strasse a owl:DatatypeProperty ;
+    rdfs:label "Straße"@de ;
+    skos:notation "M-653" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Im Kissen 19" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:pLZ a owl:DatatypeProperty ;
+    rdfs:label "PLZ"@de ;
+    skos:notation "M-654" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "59929" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:stadt a owl:DatatypeProperty ;
+    rdfs:label "Stadt"@de ;
+    skos:notation "M-655" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Brilon" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:land a owl:DatatypeProperty ;
+    rdfs:label "Land"@de ;
+    skos:notation "M-656" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Deutschland" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:de_Produktart a owl:DatatypeProperty ;
+    rdfs:label "(de Produktart)"@de ;
+    skos:notation "M-657" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Fichte Kurzholz BC" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:lieferant_Forstamt a owl:DatatypeProperty ;
+    rdfs:label "Lieferant: Forstamt"@de ;
+    skos:notation "M-658" ;
+    rdfs:domain tc:ForestOwner ;
+    rdfs:range xsd:string ;
+    skos:example "Forstamt Mustername" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:lieferant_Reviername a owl:DatatypeProperty ;
+    rdfs:label "Lieferant: Reviername"@de ;
+    skos:notation "M-659" ;
+    rdfs:domain tc:ForestOwner ;
+    rdfs:range xsd:string ;
+    skos:example "Musterreviername" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:lieferant_Revierleiter a owl:DatatypeProperty ;
+    rdfs:label "Lieferant: Revierleiter"@de ;
+    skos:notation "M-660" ;
+    rdfs:domain tc:ForestOwner ;
+    rdfs:range xsd:string ;
+    skos:example "Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:lieferant_Telefonnummer a owl:DatatypeProperty ;
+    rdfs:label "Lieferant: Telefonnummer"@de ;
+    skos:notation "M-661" ;
+    rdfs:domain tc:ForestOwner ;
+    rdfs:range xsd:decimal ;
+    skos:example "01575 123487" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:ladezone_Name a owl:DatatypeProperty ;
+    rdfs:label "Ladezone: Name"@de ;
+    skos:notation "M-662" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Ladezone Musterrevier" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:ladezone_PLZ a owl:DatatypeProperty ;
+    rdfs:label "Ladezone: PLZ"@de ;
+    skos:notation "M-663" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "12345" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:ladezone_Stadt a owl:DatatypeProperty ;
+    rdfs:label "Ladezone: Stadt"@de ;
+    skos:notation "M-664" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Musterstadt" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:ladezone_Distanz a owl:DatatypeProperty ;
+    rdfs:label "Ladezone: Distanz"@de ;
+    skos:notation "M-665" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "300" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:kaufnummer a owl:DatatypeProperty ;
+    rdfs:label "Kaufnummer"@de ;
+    skos:notation "M-666" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "1234567890" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:datum a owl:DatatypeProperty ;
+    rdfs:label "Datum"@de ;
+    skos:notation "M-667" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:date ;
+    skos:example "2025-12-22 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:gueltigkeit_von a owl:DatatypeProperty ;
+    rdfs:label "Gültigkeit von"@de ;
+    skos:notation "M-668" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:date ;
+    skos:example "2025-12-22 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:gueltigkeit_bis a owl:DatatypeProperty ;
+    rdfs:label "Gültigkeit bis"@de ;
+    skos:notation "M-669" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:date ;
+    skos:example "31.04.2026" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abfuhrfrist a owl:DatatypeProperty ;
+    rdfs:label "Abfuhrfrist"@de ;
+    skos:notation "M-670" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:date ;
+    skos:example "2026-01-15 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:polter_Nummer a owl:DatatypeProperty ;
+    rdfs:label "Polter Nummer"@de ;
+    skos:notation "M-671" ;
+    rdfs:domain tc:LogPile ;
+    rdfs:range xsd:decimal ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:baumart a owl:DatatypeProperty ;
+    rdfs:label "Baumart"@de ;
+    skos:notation "M-672" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "Fi Fichte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:laenge a owl:DatatypeProperty ;
+    rdfs:label "Länge"@de ;
+    skos:notation "M-673" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:guete a owl:DatatypeProperty ;
+    rdfs:label "Güte"@de ;
+    skos:notation "M-674" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "B/C Güte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:menge_Festmeter a owl:DatatypeProperty ;
+    rdfs:label "Menge (Festmeter"@de ;
+    skos:notation "M-675" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "833.35" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:menge_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Menge (Stück"@de ;
+    skos:notation "M-676" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:integer ;
+    skos:example "2331" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:los_Nr a owl:DatatypeProperty ;
+    rdfs:label "Los-Nr."@de ;
+    skos:notation "M-677" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "65123" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abt a owl:DatatypeProperty ;
+    rdfs:label "Abt."@de ;
+    skos:notation "M-678" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:n a owl:DatatypeProperty ;
+    rdfs:label "N"@de ;
+    skos:notation "M-679" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "0,00000" ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:e a owl:DatatypeProperty ;
+    rdfs:label "E"@de ;
+    skos:notation "M-680" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "0,00000" ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:anteil_zertifiziertes_Holz a owl:DatatypeProperty ;
+    rdfs:label "Anteil_zertifiziertes_Holz"@de ;
+    skos:notation "M-681" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "100" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:summe_Festmeter a owl:DatatypeProperty ;
+    rdfs:label "Summe_Festmeter"@de ;
+    skos:notation "M-682" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "833.35" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:summer_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Summer_Stück"@de ;
+    skos:notation "M-683" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:integer ;
+    skos:example "2331" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abfuhrscheinuebersicht_Stand a owl:DatatypeProperty ;
+    rdfs:label "Abfuhrscheinübersicht: Stand"@de ;
+    skos:notation "M-684" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:dateTime ;
+    skos:example "27.12.2025 (11:14:39)" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abfuhrscheinuebersicht_Kontigent a owl:DatatypeProperty ;
+    rdfs:label "Abfuhrscheinübersicht: Kontigent"@de ;
+    skos:notation "M-685" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "8 FI Fichte / KH_EE07 Fichte Kurzholz BC" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abfuhrscheinuebersicht_Gesamtzahl_Abfuhrscheine a owl:DatatypeProperty ;
+    rdfs:label "Abfuhrscheinübersicht: Gesamtzahl Abfuhrscheine"@de ;
+    skos:notation "M-686" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:integer ;
+    skos:example "29" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abfuhrscheinuebersicht_Genutzte_Abfuhrscheine a owl:DatatypeProperty ;
+    rdfs:label "Abfuhrscheinübersicht: Genutzte Abfuhrscheine"@de ;
+    skos:notation "M-687" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:abfuhrscheinuebersicht_offene_Abfuhrscheine a owl:DatatypeProperty ;
+    rdfs:label "Abfuhrscheinübersicht: offene Abfuhrscheine"@de ;
+    skos:notation "M-688" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:integer ;
+    skos:example "29" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:werksauftragnummer a owl:DatatypeProperty ;
+    rdfs:label "Werksauftragnummer"@de ;
+    skos:notation "M-689" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "2025-76843" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:box a owl:DatatypeProperty ;
+    rdfs:label "Box"@de ;
+    skos:notation "M-690" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "678399" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:zopf a owl:DatatypeProperty ;
+    rdfs:label "Zopf"@de ;
+    skos:notation "M-691" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "230 - 240 " ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:mitte a owl:DatatypeProperty ;
+    rdfs:label "Mitte"@de ;
+    skos:notation "M-692" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "255 - 265" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:stock a owl:DatatypeProperty ;
+    rdfs:label "Stock"@de ;
+    skos:notation "M-693" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "270 - 280" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:rH_Bedarf_Festmeter a owl:DatatypeProperty ;
+    rdfs:label "RH-Bedarf_Festmeter"@de ;
+    skos:notation "M-694" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "1202.11 " ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:rH_Bedarf_Stueck a owl:DatatypeProperty ;
+    rdfs:label "RH-Bedarf_Stück"@de ;
+    skos:notation "M-695" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:integer ;
+    skos:example "4189" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:holzart a owl:DatatypeProperty ;
+    rdfs:label "Holzart"@de ;
+    skos:notation "M-696" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "FI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:klasse a owl:DatatypeProperty ;
+    rdfs:label "Klasse"@de ;
+    skos:notation "M-697" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "B/C" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:laenge_v2 a owl:DatatypeProperty ;
+    rdfs:label "Länge"@de ;
+    skos:notation "M-698" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "5.00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware a owl:DatatypeProperty ;
+    rdfs:label "Hauptware"@de ;
+    skos:notation "M-699" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "25.68" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware a owl:DatatypeProperty ;
+    rdfs:label "Seitenware"@de ;
+    skos:notation "M-700" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "17.87" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hW_Korrektur a owl:DatatypeProperty ;
+    rdfs:label "HW-Korrektur"@de ;
+    skos:notation "M-701" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "13.42" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:gesamt a owl:DatatypeProperty ;
+    rdfs:label "Gesamt"@de ;
+    skos:notation "M-702" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "56.97" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:restholz a owl:DatatypeProperty ;
+    rdfs:label "Restholz"@de ;
+    skos:notation "M-703" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "23.40" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:saegespaene a owl:DatatypeProperty ;
+    rdfs:label "Sägespäne"@de ;
+    skos:notation "M-704" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "12.99" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Vorschnitt_HW___Hw a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Vorschnitt: HW -> Hw"@de ;
+    skos:notation "M-705" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "4.7" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Vorschnitt_HW___SW1 a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Vorschnitt: HW -> SW1"@de ;
+    skos:notation "M-706" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Vorschnitt_SW1___SWN a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Vorschnitt: SW1 -> SWN"@de ;
+    skos:notation "M-707" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "4.2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Vorschnitt_Saegeseg a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Vorschnitt: Sägeseg."@de ;
+    skos:notation "M-708" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Vorschnitt_Putzsaege a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Vorschnitt: Putzsäge"@de ;
+    skos:notation "M-709" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "3.6" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Nachschnitt_HW___Hw a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Nachschnitt: HW -> Hw"@de ;
+    skos:notation "M-710" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "3.8" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Nachschnitt_HW___SW1 a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Nachschnitt: HW -> SW1"@de ;
+    skos:notation "M-711" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "3.8" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Nachschnitt_SW1___SWN a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Nachschnitt: SW1 -> SWN"@de ;
+    skos:notation "M-712" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "3.8" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Nachschnitt_Saegeseg a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Nachschnitt: Sägeseg."@de ;
+    skos:notation "M-713" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fugen_in_mm_Nachschnitt_Putzsaege a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm: Nachschnitt: Putzsäge"@de ;
+    skos:notation "M-714" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "3.8" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Vorschnitt_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Vorschnitt: Stück"@de ;
+    skos:notation "M-715" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Vorschnitt_EM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Vorschnitt: EM"@de ;
+    skos:notation "M-716" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "167.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Vorschnitt_VM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Vorschnitt: VM"@de ;
+    skos:notation "M-717" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "160.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Vorschnitt_Schnittkl a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Vorschnitt: Schnittkl."@de ;
+    skos:notation "M-718" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Nachschnitt_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Nachschnitt: Stück"@de ;
+    skos:notation "M-719" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "3" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Nachschnitt_EM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Nachschnitt: EM"@de ;
+    skos:notation "M-720" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "47.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Nachschnitt_VM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Nachschnitt: VM"@de ;
+    skos:notation "M-721" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "44.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Nachschnitt_Schnittkl a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Nachschnitt: Schnittkl."@de ;
+    skos:notation "M-722" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Auftrennung_EM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Auftrennung: EM"@de ;
+    skos:notation "M-723" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Auftrennung_VM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Auftrennung: VM"@de ;
+    skos:notation "M-724" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Auftrennung_Fuge a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Auftrennung: Fuge"@de ;
+    skos:notation "M-725" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Vorschnitt_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Vorschnitt: Stück"@de ;
+    skos:notation "M-726" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Vorschnitt_EM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Vorschnitt: EM"@de ;
+    skos:notation "M-727" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    skos:example "20.0 x 90.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Vorschnitt_Schnittkl a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Vorschnitt: Schnittkl."@de ;
+    skos:notation "M-728" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "6" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Vorschnitt_VM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Vorschnitt: VM"@de ;
+    skos:notation "M-729" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    skos:example "19.0 x 87.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Vorschnitt_Laenge a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Vorschnitt: Länge"@de ;
+    skos:notation "M-730" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "4.90" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Nachschnitt_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Nachschnitt: Stück"@de ;
+    skos:notation "M-731" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Nachschnitt_EM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Nachschnitt: EM"@de ;
+    skos:notation "M-732" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    skos:example "30.0 x 105.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Nachschnitt_Schnittkl a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Nachschnitt: Schnittkl."@de ;
+    skos:notation "M-733" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "6" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Nachschnitt_VM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Nachschnitt: VM"@de ;
+    skos:notation "M-734" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:string ;
+    skos:example "29.0 x 105.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Nachschnitt_Laenge a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Nachschnitt: Länge"@de ;
+    skos:notation "M-735" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:vorgangsnummer a owl:DatatypeProperty ;
+    rdfs:label "Vorgangsnummer"@de ;
+    skos:notation "M-736" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "0020" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:arbeitsplatz a owl:DatatypeProperty ;
+    rdfs:label "Arbeitsplatz"@de ;
+    skos:notation "M-737" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "18802 ESB Säge" ;
+    rdfs:comment "Anmerkung: Maschiene"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:datum_v2 a owl:DatatypeProperty ;
+    rdfs:label "Datum"@de ;
+    skos:notation "M-738" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:date ;
+    skos:example "2025-12-14 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:barcode a owl:DatatypeProperty ;
+    rdfs:label "Barcode"@de ;
+    skos:notation "M-739" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:anyURI ;
+    skos:example "Bild" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:kundennummer a owl:DatatypeProperty ;
+    rdfs:label "Kundennummer"@de ;
+    skos:notation "M-740" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "123456" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:kundenbez a owl:DatatypeProperty ;
+    rdfs:label "Kundenbez."@de ;
+    skos:notation "M-741" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Dexter" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:lieferanschrift a owl:DatatypeProperty ;
+    rdfs:label "Lieferanschrift"@de ;
+    skos:notation "M-742" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Musterstraße 15, 1234 Musterstadt" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:kaufnummer_v2 a owl:DatatypeProperty ;
+    rdfs:label "Kaufnummer"@de ;
+    skos:notation "M-743" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "12345" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:produktionsstart a owl:DatatypeProperty ;
+    rdfs:label "Produktionsstart"@de ;
+    skos:notation "M-744" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-12-25 07:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:produktionsende a owl:DatatypeProperty ;
+    rdfs:label "Produktionsende"@de ;
+    skos:notation "M-745" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-12-25 09:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:einschnittdauer a owl:DatatypeProperty ;
+    rdfs:label "Einschnittdauer"@de ;
+    skos:notation "M-746" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "120" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:box_Sortiment a owl:DatatypeProperty ;
+    rdfs:label "Box Sortiment"@de ;
+    skos:notation "M-747" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:zopf_min a owl:DatatypeProperty ;
+    rdfs:label "Zopf_min"@de ;
+    skos:notation "M-748" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "220" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:zopf_max a owl:DatatypeProperty ;
+    rdfs:label "Zopf_max"@de ;
+    skos:notation "M-749" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "229" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:laenge_min a owl:DatatypeProperty ;
+    rdfs:label "Länge_min"@de ;
+    skos:notation "M-750" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "5000" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:laenge_max a owl:DatatypeProperty ;
+    rdfs:label "Länge_max"@de ;
+    skos:notation "M-751" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "5000" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:box_v2 a owl:DatatypeProperty ;
+    rdfs:label "Box"@de ;
+    skos:notation "M-752" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Box 25" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:lager a owl:DatatypeProperty ;
+    rdfs:label "Lager"@de ;
+    skos:notation "M-753" ;
+    rdfs:domain tc:Warehouse ;
+    rdfs:range xsd:string ;
+    skos:example "Musterlager 1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:stueck a owl:DatatypeProperty ;
+    rdfs:label "Stück"@de ;
+    skos:notation "M-754" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "3503000" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fM a owl:DatatypeProperty ;
+    rdfs:label "FM"@de ;
+    skos:notation "M-755" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:decimal ;
+    skos:example "11010457" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:leer a owl:DatatypeProperty ;
+    rdfs:label "Leer"@de ;
+    skos:notation "M-756" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Stück"@de ;
+    skos:notation "M-757" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "13077000" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Staerke_EM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Stärke EM"@de ;
+    skos:notation "M-758" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "27.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Staerke_VM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Stärke VM"@de ;
+    skos:notation "M-759" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "44.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Breite_EM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Breite EM"@de ;
+    skos:notation "M-760" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "190.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Breite_VM a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Breite VM"@de ;
+    skos:notation "M-761" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "190.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Soll_m3 a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Soll m3"@de ;
+    skos:notation "M-762" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "588.45" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:hauptware_Soll_Pakete a owl:DatatypeProperty ;
+    rdfs:label "Hauptware: Soll Pakete"@de ;
+    skos:notation "M-763" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "55" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Stueck a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Stück"@de ;
+    skos:notation "M-764" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "7530" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Staerke_EM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Stärke EM"@de ;
+    skos:notation "M-765" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "20.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Staerke_VM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Stärke VM"@de ;
+    skos:notation "M-766" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "18.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Breite_EM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Breite EM"@de ;
+    skos:notation "M-767" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "95.9" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Breite_VM a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Breite VM"@de ;
+    skos:notation "M-768" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "91.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Soll_m3 a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Soll m3"@de ;
+    skos:notation "M-769" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:decimal ;
+    skos:example "61137" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:seitenware_Soll_Pakete a owl:DatatypeProperty ;
+    rdfs:label "Seitenware: Soll Pakete"@de ;
+    skos:notation "M-770" ;
+    rdfs:domain tc:SawnTimber ;
+    rdfs:range xsd:integer ;
+    skos:example "15" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:fertigungshinweise_Saege a owl:DatatypeProperty ;
+    rdfs:label "Fertigungshinweise Säge"@de ;
+    skos:notation "M-771" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "35 pakete von den 45x170 BSH_xxx (gesamt)" ;
+    skos:scopeNote "Wertschöpfungsstufe: Sägewerk"@de .
+
+tc:format a owl:DatatypeProperty ;
+    rdfs:label "Format"@de ;
+    skos:notation "M-772" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "TimberConnect-BordcomputerExport-v1.0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:datenbasis a owl:DatatypeProperty ;
+    rdfs:label "Datenbasis"@de ;
+    skos:notation "M-773" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FMS-Standard v4.0 / CAN-Bus SAE J1939" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:telematiksystem a owl:DatatypeProperty ;
+    rdfs:label "Telematiksystem"@de ;
+    skos:notation "M-774" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Trimble CFLogistics / CarCube" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:exportzeitpunkt a owl:DatatypeProperty ;
+    rdfs:label "Exportzeitpunkt"@de ;
+    skos:notation "M-775" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T17:42:11Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:exportiert_durch a owl:DatatypeProperty ;
+    rdfs:label "Exportiert durch"@de ;
+    skos:notation "M-776" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Telematikserver-AutoExport" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:auftragsnummer a owl:DatatypeProperty ;
+    rdfs:label "Auftragsnummer"@de ;
+    skos:notation "M-777" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "TA-2025-04-03-0471" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:auftraggeber__Name a owl:DatatypeProperty ;
+    rdfs:label "Auftraggeber – Name"@de ;
+    skos:notation "M-778" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Forstbetrieb Hahnenklee GmbH & Co. KG" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:auftraggeber__Adresse a owl:DatatypeProperty ;
+    rdfs:label "Auftraggeber – Adresse"@de ;
+    skos:notation "M-779" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Forstweg 12, 38644 Goslar" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:auftraggeber__Kundennummer a owl:DatatypeProperty ;
+    rdfs:label "Auftraggeber – Kundennummer"@de ;
+    skos:notation "M-780" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "KB-00231" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:auftragnehmer__Name a owl:DatatypeProperty ;
+    rdfs:label "Auftragnehmer – Name"@de ;
+    skos:notation "M-781" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Spedition Waldtrans Bartels GmbH" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrernummer a owl:DatatypeProperty ;
+    rdfs:label "Fahrernummer"@de ;
+    skos:notation "M-782" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FAH-0088" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrzeugkennzeichen a owl:DatatypeProperty ;
+    rdfs:label "Fahrzeugkennzeichen"@de ;
+    skos:notation "M-783" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "GS-TW 441" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:holzart_v2 a owl:DatatypeProperty ;
+    rdfs:label "Holzart"@de ;
+    skos:notation "M-784" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "Rundholz / Langholz" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:baumart_lateinisch a owl:DatatypeProperty ;
+    rdfs:label "Baumart (lateinisch"@de ;
+    skos:notation "M-785" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "Picea abies" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:baumart_deutsch a owl:DatatypeProperty ;
+    rdfs:label "Baumart (deutsch"@de ;
+    skos:notation "M-786" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "Fichte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:guetesortierung a owl:DatatypeProperty ;
+    rdfs:label "Gütesortierung"@de ;
+    skos:notation "M-787" ;
+    rdfs:domain tc:Assortment ;
+    rdfs:range xsd:string ;
+    skos:example "B/C" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:holzmenge a owl:DatatypeProperty ;
+    rdfs:label "Holzmenge"@de ;
+    skos:notation "M-788" ;
+    rdfs:domain tc:Assortment ;
+    rdfs:range xsd:decimal ;
+    skos:example "28,4" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:anzahl_Staemme a owl:DatatypeProperty ;
+    rdfs:label "Anzahl Stämme"@de ;
+    skos:notation "M-789" ;
+    rdfs:domain tc:Assortment ;
+    rdfs:range xsd:integer ;
+    skos:example "18" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:stammlaenge a owl:DatatypeProperty ;
+    rdfs:label "Stammlänge"@de ;
+    skos:notation "M-790" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:decimal ;
+    skos:example "5,0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:durchmesserklasse a owl:DatatypeProperty ;
+    rdfs:label "Durchmesserklasse"@de ;
+    skos:notation "M-791" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "20–34" ;
+    rdfs:comment "Anmerkung: Wertebereich"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:feuchtigkeit a owl:DatatypeProperty ;
+    rdfs:label "Feuchtigkeit"@de ;
+    skos:notation "M-792" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "frisch" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:zertifizierung a owl:DatatypeProperty ;
+    rdfs:label "Zertifizierung"@de ;
+    skos:notation "M-793" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "PEFC" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:zertifikatsnummer a owl:DatatypeProperty ;
+    rdfs:label "Zertifikatsnummer"@de ;
+    skos:notation "M-794" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "PEFC/04-31-1234" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__Bezeichnung a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – Bezeichnung"@de ;
+    skos:notation "M-795" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Polterplatz Revierforstamt Hahnenklee, Abt. 112b" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__Gemeinde a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – Gemeinde"@de ;
+    skos:notation "M-796" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Goslar" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__Bundesland a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – Bundesland"@de ;
+    skos:notation "M-797" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Niedersachsen" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__Breitengrad_lat a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – Breitengrad (lat"@de ;
+    skos:notation "M-798" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "51,8612" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__Laengengrad_lon a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – Längengrad (lon"@de ;
+    skos:notation "M-799" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "10,3754" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__GPS_Genauigkeit a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – GPS-Genauigkeit"@de ;
+    skos:notation "M-800" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladeort__Forstamt a owl:DatatypeProperty ;
+    rdfs:label "Ladeort – Forstamt"@de ;
+    skos:notation "M-801" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Forstamt Clausthal" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladeort__Bezeichnung a owl:DatatypeProperty ;
+    rdfs:label "Entladeort – Bezeichnung"@de ;
+    skos:notation "M-802" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Sägewerk Harzer Holz AG – Einfahrt Rohholzplatz" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladeort__Adresse a owl:DatatypeProperty ;
+    rdfs:label "Entladeort – Adresse"@de ;
+    skos:notation "M-803" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "Industriestraße 4, 38685 Langelsheim" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladeort__Breitengrad_lat a owl:DatatypeProperty ;
+    rdfs:label "Entladeort – Breitengrad (lat"@de ;
+    skos:notation "M-804" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "51,9384" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladeort__Laengengrad_lon a owl:DatatypeProperty ;
+    rdfs:label "Entladeort – Längengrad (lon"@de ;
+    skos:notation "M-805" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:decimal ;
+    skos:example "10,3349" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladeort__Werks_ID a owl:DatatypeProperty ;
+    rdfs:label "Entladeort – Werks-ID"@de ;
+    skos:notation "M-806" ;
+    rdfs:domain tc:LoadingPoint ;
+    rdfs:range xsd:string ;
+    skos:example "SW-LGH-001" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrzeughersteller a owl:DatatypeProperty ;
+    rdfs:label "Fahrzeughersteller"@de ;
+    skos:notation "M-807" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Volvo" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrzeugmodell a owl:DatatypeProperty ;
+    rdfs:label "Fahrzeugmodell"@de ;
+    skos:notation "M-808" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FH16 750" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:baujahr a owl:DatatypeProperty ;
+    rdfs:label "Baujahr"@de ;
+    skos:notation "M-809" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "2022" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrzeugidentifikationsnummer_VIN a owl:DatatypeProperty ;
+    rdfs:label "Fahrzeugidentifikationsnummer (VIN"@de ;
+    skos:notation "M-810" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "YV2RT40A8NB123456" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aufbau a owl:DatatypeProperty ;
+    rdfs:label "Aufbau"@de ;
+    skos:notation "M-811" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Langholztransporter mit Ladekran" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladekran__Hersteller a owl:DatatypeProperty ;
+    rdfs:label "Ladekran – Hersteller"@de ;
+    skos:notation "M-812" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Epsilon" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladekran__Modell a owl:DatatypeProperty ;
+    rdfs:label "Ladekran – Modell"@de ;
+    skos:notation "M-813" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "M12L97" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:achsanzahl a owl:DatatypeProperty ;
+    rdfs:label "Achsanzahl"@de ;
+    skos:notation "M-814" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:zulaessiges_Gesamtgewicht a owl:DatatypeProperty ;
+    rdfs:label "Zulässiges Gesamtgewicht"@de ;
+    skos:notation "M-815" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "42.000" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:eigenmasse_Fahrzeug a owl:DatatypeProperty ;
+    rdfs:label "Eigenmasse Fahrzeug"@de ;
+    skos:notation "M-816" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "14.200" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:reifenprofil a owl:DatatypeProperty ;
+    rdfs:label "Reifenprofil"@de ;
+    skos:notation "M-817" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Michelin X MultiWay 3D XDE 315/80 R22.5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tachograftyp a owl:DatatypeProperty ;
+    rdfs:label "Tachograftyp"@de ;
+    skos:notation "M-818" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "digital" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tachograf_Seriennummer a owl:DatatypeProperty ;
+    rdfs:label "Tachograf-Seriennummer"@de ;
+    skos:notation "M-819" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "TC-VT2200-882341" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrer__Vorname a owl:DatatypeProperty ;
+    rdfs:label "Fahrer – Vorname"@de ;
+    skos:notation "M-820" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:string ;
+    skos:example "Markus" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrer__Nachname a owl:DatatypeProperty ;
+    rdfs:label "Fahrer – Nachname"@de ;
+    skos:notation "M-821" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:string ;
+    skos:example "Brinkmann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fuehrerscheinklassen a owl:DatatypeProperty ;
+    rdfs:label "Führerscheinklassen"@de ;
+    skos:notation "M-822" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "C, CE" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrerkartennummer a owl:DatatypeProperty ;
+    rdfs:label "Fahrerkartennummer"@de ;
+    skos:notation "M-823" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "DE-1234-5678-90" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrt_ID a owl:DatatypeProperty ;
+    rdfs:label "Fahrt-ID"@de ;
+    skos:notation "M-824" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FAHRT-2025-04-03-0471" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrtdatum a owl:DatatypeProperty ;
+    rdfs:label "Fahrtdatum"@de ;
+    skos:notation "M-825" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-03" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:abfahrtzeitpunkt a owl:DatatypeProperty ;
+    rdfs:label "Abfahrtzeitpunkt"@de ;
+    skos:notation "M-826" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T06:12:33Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:abfahrtort a owl:DatatypeProperty ;
+    rdfs:label "Abfahrtort"@de ;
+    skos:notation "M-827" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Betriebshof Spedition Bartels, Goslar" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:kilometerstand_bei_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "Kilometerstand bei Abfahrt"@de ;
+    skos:notation "M-828" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "187.334" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:beladung__Beginn a owl:DatatypeProperty ;
+    rdfs:label "Beladung – Beginn"@de ;
+    skos:notation "M-829" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T07:04:15Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:beladung__Ende a owl:DatatypeProperty ;
+    rdfs:label "Beladung – Ende"@de ;
+    skos:notation "M-830" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T07:51:42Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:leergewicht a owl:DatatypeProperty ;
+    rdfs:label "Leergewicht"@de ;
+    skos:notation "M-831" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "14.200" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gesamtgewicht_beladen a owl:DatatypeProperty ;
+    rdfs:label "Gesamtgewicht beladen"@de ;
+    skos:notation "M-832" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "40.850" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:nutzlast a owl:DatatypeProperty ;
+    rdfs:label "Nutzlast"@de ;
+    skos:notation "M-833" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "26.650" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:achslast__Achse_1_Vorderachse a owl:DatatypeProperty ;
+    rdfs:label "Achslast – Achse 1 (Vorderachse"@de ;
+    skos:notation "M-834" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "7.100" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:achslast__Achse_2_Antrieb a owl:DatatypeProperty ;
+    rdfs:label "Achslast – Achse 2 (Antrieb"@de ;
+    skos:notation "M-835" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "11.300" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:achslast__Achse_3_Antrieb a owl:DatatypeProperty ;
+    rdfs:label "Achslast – Achse 3 (Antrieb"@de ;
+    skos:notation "M-836" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "11.150" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:achslast__Achse_4_Nachlauf a owl:DatatypeProperty ;
+    rdfs:label "Achslast – Achse 4 (Nachlauf"@de ;
+    skos:notation "M-837" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "5.900" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:achslast__Achse_5_Nachlauf a owl:DatatypeProperty ;
+    rdfs:label "Achslast – Achse 5 (Nachlauf"@de ;
+    skos:notation "M-838" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "5.400" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ladungssicherung_geprueft a owl:DatatypeProperty ;
+    rdfs:label "Ladungssicherung geprüft"@de ;
+    skos:notation "M-839" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:kranausleger_eingefahren a owl:DatatypeProperty ;
+    rdfs:label "Kranausleger eingefahren"@de ;
+    skos:notation "M-840" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladung__Beginn a owl:DatatypeProperty ;
+    rdfs:label "Entladung – Beginn"@de ;
+    skos:notation "M-841" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T09:17:08Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:entladung__Ende a owl:DatatypeProperty ;
+    rdfs:label "Entladung – Ende"@de ;
+    skos:notation "M-842" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T09:54:30Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:lieferscheinnummer a owl:DatatypeProperty ;
+    rdfs:label "Lieferscheinnummer"@de ;
+    skos:notation "M-843" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "LS-2025-1103" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:eLDAT_Werkvermessungsreferenz a owl:DatatypeProperty ;
+    rdfs:label "ELDAT-Werkvermessungsreferenz"@de ;
+    skos:notation "M-844" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "ELDAT-2025-04-03-SW-LGH-001-0012" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:empfaenger_Unterschrift_digital a owl:DatatypeProperty ;
+    rdfs:label "Empfänger-Unterschrift digital"@de ;
+    skos:notation "M-845" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:rueckfahrt_Leer a owl:DatatypeProperty ;
+    rdfs:label "Rückfahrt (Leer"@de ;
+    skos:notation "M-846" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T10:01:55Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ankunft_Betriebshof a owl:DatatypeProperty ;
+    rdfs:label "Ankunft Betriebshof"@de ;
+    skos:notation "M-847" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T11:08:22Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:kilometerstand_bei_Ankunft a owl:DatatypeProperty ;
+    rdfs:label "Kilometerstand bei Ankunft"@de ;
+    skos:notation "M-848" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "187.406" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gesamtstrecke a owl:DatatypeProperty ;
+    rdfs:label "Gesamtstrecke"@de ;
+    skos:notation "M-849" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "72" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gesamtstrecke_davon_Forstweg a owl:DatatypeProperty ;
+    rdfs:label "Gesamtstrecke davon Forstweg"@de ;
+    skos:notation "M-850" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "8,4" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gesamtstrecke_davon_Landstrasse a owl:DatatypeProperty ;
+    rdfs:label "Gesamtstrecke davon Landstraße"@de ;
+    skos:notation "M-851" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "34,2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:de_Gesamtstrecke_davon_Autobahn a owl:DatatypeProperty ;
+    rdfs:label "(de, Gesamtstrecke davon Autobahn="@de ;
+    skos:notation "M-852" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "29,4" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:datenquelle_Telemetrie a owl:DatatypeProperty ;
+    rdfs:label "Datenquelle Telemetrie"@de ;
+    skos:notation "M-853" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FMS-Standard v4.0 / CAN-Bus SAE J1939" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aufzeichnungsintervall a owl:DatatypeProperty ;
+    rdfs:label "Aufzeichnungsintervall"@de ;
+    skos:notation "M-854" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "10" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:fahrzeit_gesamt a owl:DatatypeProperty ;
+    rdfs:label "Fahrzeit gesamt"@de ;
+    skos:notation "M-855" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "174" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:standzeit_Motor_an a owl:DatatypeProperty ;
+    rdfs:label "Standzeit Motor an"@de ;
+    skos:notation "M-856" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "22" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:durchschnittsgeschwindigkeit a owl:DatatypeProperty ;
+    rdfs:label "Durchschnittsgeschwindigkeit"@de ;
+    skos:notation "M-857" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "54,3" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:maximalgeschwindigkeit a owl:DatatypeProperty ;
+    rdfs:label "Maximalgeschwindigkeit"@de ;
+    skos:notation "M-858" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "84" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:kraftstoffverbrauch_gesamt a owl:DatatypeProperty ;
+    rdfs:label "Kraftstoffverbrauch gesamt"@de ;
+    skos:notation "M-859" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "52,8" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:kraftstoffverbrauch_beladen a owl:DatatypeProperty ;
+    rdfs:label "Kraftstoffverbrauch beladen"@de ;
+    skos:notation "M-860" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "48,3" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:kraftstoffverbrauch_leer a owl:DatatypeProperty ;
+    rdfs:label "Kraftstoffverbrauch leer"@de ;
+    skos:notation "M-861" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "27,1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:motorlaufzeit_gesamt a owl:DatatypeProperty ;
+    rdfs:label "Motorlaufzeit gesamt"@de ;
+    skos:notation "M-862" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "3,5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:motordrehzahl_ a owl:DatatypeProperty ;
+    rdfs:label "Motordrehzahl Ø"@de ;
+    skos:notation "M-863" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "1.240" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:cO_Ausstoss a owl:DatatypeProperty ;
+    rdfs:label "CO₂-Ausstoß"@de ;
+    skos:notation "M-864" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "138,9" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tempomatanteil a owl:DatatypeProperty ;
+    rdfs:label "Tempomatanteil"@de ;
+    skos:notation "M-865" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "44" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:motorueberdrehzahl_Anteil a owl:DatatypeProperty ;
+    rdfs:label "Motorüberdrehzahl-Anteil"@de ;
+    skos:notation "M-866" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "0,2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:hartes_Bremsen__Ereignisse a owl:DatatypeProperty ;
+    rdfs:label "Hartes Bremsen – Ereignisse"@de ;
+    skos:notation "M-867" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:integer ;
+    skos:example "2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:starkes_Beschleunigen__Ereignisse a owl:DatatypeProperty ;
+    rdfs:label "Starkes Beschleunigen – Ereignisse"@de ;
+    skos:notation "M-868" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:leerlaufzeit a owl:DatatypeProperty ;
+    rdfs:label "Leerlaufzeit"@de ;
+    skos:notation "M-869" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "22" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tankfuellung_bei_Start a owl:DatatypeProperty ;
+    rdfs:label "Tankfüllung bei Start"@de ;
+    skos:notation "M-870" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "78" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tankfuellung_bei_Ende a owl:DatatypeProperty ;
+    rdfs:label "Tankfüllung bei Ende"@de ;
+    skos:notation "M-871" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "62" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Zeitstempel_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Zeitstempel (Abfahrt"@de ;
+    skos:notation "M-872" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T06:12:33Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Breitengrad_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Breitengrad (Abfahrt"@de ;
+    skos:notation "M-873" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "51,9044" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Laengengrad_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Längengrad (Abfahrt"@de ;
+    skos:notation "M-874" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "10,4277" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Geschwindigkeit_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Geschwindigkeit (Abfahrt"@de ;
+    skos:notation "M-875" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Motordrehzahl_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Motordrehzahl (Abfahrt"@de ;
+    skos:notation "M-876" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "650" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Motorstatus_Abfahrt a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Motorstatus (Abfahrt"@de ;
+    skos:notation "M-877" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "an" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Zeitstempel_Forstweg a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Zeitstempel (Forstweg"@de ;
+    skos:notation "M-878" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T07:01:52Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Geschwindigkeit_Forstweg a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Geschwindigkeit (Forstweg"@de ;
+    skos:notation "M-879" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "18" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Kraftstoffverbrauch_momentan_Forstweg a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Kraftstoffverbrauch momentan (Forstweg"@de ;
+    skos:notation "M-880" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "12,1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Zeitstempel_Beladung_Start a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Zeitstempel (Beladung Start"@de ;
+    skos:notation "M-881" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T07:04:15Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Nebenabtrieb_aktiv_Beladung_Start a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Nebenabtrieb aktiv (Beladung Start"@de ;
+    skos:notation "M-882" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Ereignistyp_Beladung_Start a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Ereignistyp (Beladung Start"@de ;
+    skos:notation "M-883" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "BELADUNG_START" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Zeitstempel_Beladung_Ende a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Zeitstempel (Beladung Ende"@de ;
+    skos:notation "M-884" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T07:51:42Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Achslast_gesamt_Beladung_Ende a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Achslast gesamt (Beladung Ende"@de ;
+    skos:notation "M-885" ;
+    rdfs:domain tc:Vehicle ;
+    rdfs:range xsd:decimal ;
+    skos:example "40.850" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Kraftstoffverbrauch_momentan_Fahrt_beladen a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Kraftstoffverbrauch momentan (Fahrt beladen"@de ;
+    skos:notation "M-886" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "48,2" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Gangstufe_Fahrt_beladen a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Gangstufe (Fahrt beladen"@de ;
+    skos:notation "M-887" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "12" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Zeitstempel_Entladung_Start a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Zeitstempel (Entladung Start"@de ;
+    skos:notation "M-888" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T09:17:08Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Nebenabtrieb_aktiv_Entladung_Start a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Nebenabtrieb aktiv (Entladung Start"@de ;
+    skos:notation "M-889" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Zeitstempel_Fahrt_Ende a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Zeitstempel (Fahrt Ende"@de ;
+    skos:notation "M-890" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T11:08:22Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:gPS_Track__Motorstatus_Fahrt_Ende a owl:DatatypeProperty ;
+    rdfs:label "GPS-Track – Motorstatus (Fahrt Ende"@de ;
+    skos:notation "M-891" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "aus" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tachograf__Typ a owl:DatatypeProperty ;
+    rdfs:label "Tachograf – Typ"@de ;
+    skos:notation "M-892" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "digital (VU)" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tachograf__Fahrerkarte_eingesteckt a owl:DatatypeProperty ;
+    rdfs:label "Tachograf – Fahrerkarte eingesteckt"@de ;
+    skos:notation "M-893" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T05:58:00Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:tachograf__Fahrerkarte_gezogen a owl:DatatypeProperty ;
+    rdfs:label "Tachograf – Fahrerkarte gezogen"@de ;
+    skos:notation "M-894" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T11:10:00Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:lenkzeit_gesamt a owl:DatatypeProperty ;
+    rdfs:label "Lenkzeit gesamt"@de ;
+    skos:notation "M-895" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "2,8" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:pause_gesamt a owl:DatatypeProperty ;
+    rdfs:label "Pause gesamt"@de ;
+    skos:notation "M-896" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "45" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:bereitschaftszeit a owl:DatatypeProperty ;
+    rdfs:label "Bereitschaftszeit"@de ;
+    skos:notation "M-897" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "50" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:andere_Arbeit_z_B_Kran a owl:DatatypeProperty ;
+    rdfs:label "Andere Arbeit (z. B. Kran"@de ;
+    skos:notation "M-898" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "96" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:ruhezeit_Vorvorschicht a owl:DatatypeProperty ;
+    rdfs:label "Ruhezeit Vorvorschicht"@de ;
+    skos:notation "M-899" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:decimal ;
+    skos:example "9,5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_1__Typ a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 1 – Typ"@de ;
+    skos:notation "M-900" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FAHREN" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_1__Von a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 1 – Von"@de ;
+    skos:notation "M-901" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T06:12:33Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_1__Bis a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 1 – Bis"@de ;
+    skos:notation "M-902" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-03T07:04:15Z" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_2__Typ a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 2 – Typ"@de ;
+    skos:notation "M-903" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "ANDERE_ARBEIT" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_2__Bemerkung a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 2 – Bemerkung"@de ;
+    skos:notation "M-904" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Beladung / Ladekranbetrieb" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_3__Typ a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 3 – Typ"@de ;
+    skos:notation "M-905" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "FAHREN" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_4__Typ a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 4 – Typ"@de ;
+    skos:notation "M-906" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "ANDERE_ARBEIT" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_4__Bemerkung a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 4 – Bemerkung"@de ;
+    skos:notation "M-907" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "Entladung / Ladekranbetrieb" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:aktivitaet_5__Typ a owl:DatatypeProperty ;
+    rdfs:label "Aktivität 5 – Typ"@de ;
+    skos:notation "M-908" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "PAUSE" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:lieferschein_digitalisiert a owl:DatatypeProperty ;
+    rdfs:label "Lieferschein digitalisiert"@de ;
+    skos:notation "M-909" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:lieferscheinnummer_Nachweis a owl:DatatypeProperty ;
+    rdfs:label "Lieferscheinnummer (Nachweis"@de ;
+    skos:notation "M-910" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "LS-2025-1103" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:eLDAT_Lieferanzeige_gesendet a owl:DatatypeProperty ;
+    rdfs:label "ELDAT-Lieferanzeige gesendet"@de ;
+    skos:notation "M-911" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:boolean ;
+    skos:example "Ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:eLDAT_Referenznummer a owl:DatatypeProperty ;
+    rdfs:label "ELDAT-Referenznummer"@de ;
+    skos:notation "M-912" ;
+    rdfs:domain tc:GPSTrack ;
+    rdfs:range xsd:string ;
+    skos:example "ELDAT-2025-04-03-SW-LGH-001-0012" ;
+    skos:scopeNote "Wertschöpfungsstufe: Transportunternehmen"@de .
+
+tc:artikel a owl:DatatypeProperty ;
+    rdfs:label "Artikel"@de ;
+    skos:notation "M-913" ;
+    rdfs:domain tc:Article ;
+    rdfs:range xsd:string ;
+    skos:example "BSP-200001 Pos. 1001 X-100/5S NSI/NSI AW-Wandplatte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:bezug a owl:DatatypeProperty ;
+    rdfs:label "Bezug"@de ;
+    skos:notation "M-914" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:kontraktposition a owl:DatatypeProperty ;
+    rdfs:label "Kontraktposition"@de ;
+    skos:notation "M-915" ;
+    rdfs:domain tc:Article ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:liefertermin a owl:DatatypeProperty ;
+    rdfs:label "Liefertermin"@de ;
+    skos:notation "M-916" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-01 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:versandtermin a owl:DatatypeProperty ;
+    rdfs:label "Versandtermin"@de ;
+    skos:notation "M-917" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-03-31 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:wiedervorlagetermin a owl:DatatypeProperty ;
+    rdfs:label "Wiedervorlagetermin"@de ;
+    skos:notation "M-918" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-03-24 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:transportavis_erforderlich a owl:DatatypeProperty ;
+    rdfs:label "Transportavis erforderlich"@de ;
+    skos:notation "M-919" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:gemaess_statischer_Berechnung a owl:DatatypeProperty ;
+    rdfs:label "gemäß statischer Berechnung"@de ;
+    skos:notation "M-920" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "nein" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:pack_Gruppe a owl:DatatypeProperty ;
+    rdfs:label "Pack-Gruppe"@de ;
+    skos:notation "M-921" ;
+    rdfs:domain tc:Article ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:konfigurationsregel a owl:DatatypeProperty ;
+    rdfs:label "Konfigurationsregel"@de ;
+    skos:notation "M-922" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "BSP XLAM" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:gesamtmenge a owl:DatatypeProperty ;
+    rdfs:label "Gesamtmenge"@de ;
+    skos:notation "M-923" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:auftrag a owl:DatatypeProperty ;
+    rdfs:label "Auftrag"@de ;
+    skos:notation "M-924" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "Vertriebsauftragsposition 220-25VA000001-110" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:typ_der_BSP_Platte a owl:DatatypeProperty ;
+    rdfs:label "Typ der BSP Platte"@de ;
+    skos:notation "M-925" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "X Wandaufbau" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:konstruktionsnummer a owl:DatatypeProperty ;
+    rdfs:label "Konstruktionsnummer"@de ;
+    skos:notation "M-926" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "1001" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:nettovolumen_Produkt a owl:DatatypeProperty ;
+    rdfs:label "Nettovolumen Produkt"@de ;
+    skos:notation "M-927" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.07" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:cNC_Abbund a owl:DatatypeProperty ;
+    rdfs:label "CNC-Abbund"@de ;
+    skos:notation "M-928" ;
+    rdfs:domain tc:BuildingProduct ;
+    rdfs:range xsd:boolean ;
+    skos:example "ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zusatzabbund a owl:DatatypeProperty ;
+    rdfs:label "Zusatzabbund"@de ;
+    skos:notation "M-929" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "nein" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:deckelage_BSP a owl:DatatypeProperty ;
+    rdfs:label "Deckelage BSP"@de ;
+    skos:notation "M-930" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "FI Fichte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:optik_Seite_1 a owl:DatatypeProperty ;
+    rdfs:label "Optik Seite 1"@de ;
+    skos:notation "M-931" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "NSI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:optik_Seite_2 a owl:DatatypeProperty ;
+    rdfs:label "Optik Seite 2"@de ;
+    skos:notation "M-932" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "NSI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:optik_Seite_3 a owl:DatatypeProperty ;
+    rdfs:label "Optik Seite 3"@de ;
+    skos:notation "M-933" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "NSI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:optik_Seite_4 a owl:DatatypeProperty ;
+    rdfs:label "Optik Seite 4"@de ;
+    skos:notation "M-934" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "NSI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:optik_Seite_5 a owl:DatatypeProperty ;
+    rdfs:label "Optik Seite 5"@de ;
+    skos:notation "M-935" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "NSI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:optik_Seite_6 a owl:DatatypeProperty ;
+    rdfs:label "Optik Seite 6"@de ;
+    skos:notation "M-936" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "NSI" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:kubikmeter a owl:DatatypeProperty ;
+    rdfs:label "Kubikmeter"@de ;
+    skos:notation "M-937" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "0.072" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:cNC_Maschiene a owl:DatatypeProperty ;
+    rdfs:label "CNC Maschiene"@de ;
+    skos:notation "M-938" ;
+    rdfs:domain tc:BuildingProduct ;
+    rdfs:range xsd:string ;
+    skos:example "REICH Reichbacher" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:hoehe__Staerke a owl:DatatypeProperty ;
+    rdfs:label "Höhe / Stärke"@de ;
+    skos:notation "M-939" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "100" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:breite a owl:DatatypeProperty ;
+    rdfs:label "Breite"@de ;
+    skos:notation "M-940" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "1325" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:laenge_v3 a owl:DatatypeProperty ;
+    rdfs:label "Länge"@de ;
+    skos:notation "M-941" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "567" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:anzahl_der_Schichten_innerhalb_einer_BSP_Platte a owl:DatatypeProperty ;
+    rdfs:label "Anzahl der Schichten innerhalb einer BSP-Platte"@de ;
+    skos:notation "M-942" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:example "5" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschreibung_Freitext a owl:DatatypeProperty ;
+    rdfs:label "Beschreibung (Freitext"@de ;
+    skos:notation "M-943" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "AW-Wandplatte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:bauteil_Sonderform a owl:DatatypeProperty ;
+    rdfs:label "Bauteil Sonderform"@de ;
+    skos:notation "M-944" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "000 Keine Sonderform" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:bruttovolumen_Produkt a owl:DatatypeProperty ;
+    rdfs:label "Bruttovolumen Produkt"@de ;
+    skos:notation "M-945" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.07" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:produktnorm a owl:DatatypeProperty ;
+    rdfs:label "Produktnorm"@de ;
+    skos:notation "M-946" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "200 ETA-11/0189:07.04.2026" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:festigkeit__Material_Produkt a owl:DatatypeProperty ;
+    rdfs:label "Festigkeit / Material Produkt"@de ;
+    skos:notation "M-947" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "C24" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:brandschutzklasse_Produkt a owl:DatatypeProperty ;
+    rdfs:label "Brandschutzklasse Produkt"@de ;
+    skos:notation "M-948" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "R0" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:holzart_v3 a owl:DatatypeProperty ;
+    rdfs:label "Holzart"@de ;
+    skos:notation "M-949" ;
+    rdfs:domain tc:Stem ;
+    rdfs:range xsd:string ;
+    skos:example "FI Fichte" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Seite_1_BxL a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Seite 1 (BxL"@de ;
+    skos:notation "M-950" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Ohne" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Seite_2_HxL a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Seite 2 (HxL"@de ;
+    skos:notation "M-951" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Ohne" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Seite_3_BxH a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Seite 3 (BxH"@de ;
+    skos:notation "M-952" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Ohne" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Seite_4_BxH a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Seite 4 (BxH"@de ;
+    skos:notation "M-953" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Ohne" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Seite_5_HxL a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Seite 5 (HxL"@de ;
+    skos:notation "M-954" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Ohne" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Seite_6_BxL a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Seite 6 (BxL"@de ;
+    skos:notation "M-955" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Ohne" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:oberflaeche_einer_Plattenseite a owl:DatatypeProperty ;
+    rdfs:label "Oberfläche einer Plattenseite"@de ;
+    skos:notation "M-956" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.75" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:quadratmeter_aller_6_Plattenseiten a owl:DatatypeProperty ;
+    rdfs:label "Quadratmeter aller 6 Plattenseiten"@de ;
+    skos:notation "M-957" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "1.88" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:pA_Gruppe a owl:DatatypeProperty ;
+    rdfs:label "PA Gruppe"@de ;
+    skos:notation "M-958" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschaffungsweg_Eigenfertigung_Zukauf a owl:DatatypeProperty ;
+    rdfs:label "Beschaffungsweg (Eigenfertigung, Zukauf"@de ;
+    skos:notation "M-959" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "100 Produktion" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:pEFC a owl:DatatypeProperty ;
+    rdfs:label "PEFC"@de ;
+    skos:notation "M-960" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "nein" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:merkmal_ob_aus_Cadwork_importiert a owl:DatatypeProperty ;
+    rdfs:label "Merkmal, ob aus Cadwork importiert"@de ;
+    skos:notation "M-961" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "ja" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:eckausbildung a owl:DatatypeProperty ;
+    rdfs:label "Eckausbildung"@de ;
+    skos:notation "M-962" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Eckausbildung rund" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:produktionsstandort a owl:DatatypeProperty ;
+    rdfs:label "Produktionsstandort"@de ;
+    skos:notation "M-963" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "912 WK" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:vertriebsauftragsnummer a owl:DatatypeProperty ;
+    rdfs:label "Vertriebsauftragsnummer"@de ;
+    skos:notation "M-964" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "220-25VA000001-110" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:organisation a owl:DatatypeProperty ;
+    rdfs:label "Organisation"@de ;
+    skos:notation "M-965" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "912" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:verpackung a owl:DatatypeProperty ;
+    rdfs:label "Verpackung"@de ;
+    skos:notation "M-966" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Standard" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:kennzeichnung_der_Ware_Label a owl:DatatypeProperty ;
+    rdfs:label "Kennzeichnung der Ware (Label"@de ;
+    skos:notation "M-967" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Standardlabel" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Anzahl_Lagen_Seite_1 a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Anzahl Lagen Seite 1"@de ;
+    skos:notation "M-968" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Anzahl_Lagen_Seite_2 a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Anzahl Lagen Seite 2"@de ;
+    skos:notation "M-969" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Anzahl_Lagen_Seite_3 a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Anzahl Lagen Seite 3"@de ;
+    skos:notation "M-970" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Anzahl_Lagen_Seite_4 a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Anzahl Lagen Seite 4"@de ;
+    skos:notation "M-971" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Anzahl_Lagen_Seite_5 a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Anzahl Lagen Seite 5"@de ;
+    skos:notation "M-972" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beschichtung_Anzahl_Lagen_Seite_6 a owl:DatatypeProperty ;
+    rdfs:label "Beschichtung Anzahl Lagen Seite 6"@de ;
+    skos:notation "M-973" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:bauteilstatus_Produktion a owl:DatatypeProperty ;
+    rdfs:label "Bauteilstatus Produktion"@de ;
+    skos:notation "M-974" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "100 Bauteil produziert" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:plattencode_BSP a owl:DatatypeProperty ;
+    rdfs:label "Plattencode BSP"@de ;
+    skos:notation "M-975" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "142 X-100/5S - 20  20 20 20 20" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:meter a owl:DatatypeProperty ;
+    rdfs:label "Meter"@de ;
+    skos:notation "M-976" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.567" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:produktionslagerort a owl:DatatypeProperty ;
+    rdfs:label "Produktionslagerort"@de ;
+    skos:notation "M-977" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "9125 Produktion XLAM" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lagerlogistikorganisation a owl:DatatypeProperty ;
+    rdfs:label "Lagerlogistikorganisation"@de ;
+    skos:notation "M-978" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "91210 xx GmbH und Co KG" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:vertriebs_Aufttagsposition a owl:DatatypeProperty ;
+    rdfs:label "Vertriebs-Aufttagsposition"@de ;
+    skos:notation "M-979" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "220 25V000394 00110" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:soll_Menge a owl:DatatypeProperty ;
+    rdfs:label "Soll-Menge"@de ;
+    skos:notation "M-980" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:ist_Menge a owl:DatatypeProperty ;
+    rdfs:label "Ist-Menge"@de ;
+    skos:notation "M-981" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:ausschussmenge a owl:DatatypeProperty ;
+    rdfs:label "Ausschussmenge"@de ;
+    skos:notation "M-982" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zugangslagerort a owl:DatatypeProperty ;
+    rdfs:label "Zugangslagerort"@de ;
+    skos:notation "M-983" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "9123 Versandlager [WK]" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zustaendiger_Mitarbeiter a owl:DatatypeProperty ;
+    rdfs:label "Zuständiger Mitarbeiter"@de ;
+    skos:notation "M-984" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:beladungsplan_Position a owl:DatatypeProperty ;
+    rdfs:label "Beladungsplan-Position"@de ;
+    skos:notation "M-985" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:soll_Beginndatum a owl:DatatypeProperty ;
+    rdfs:label "Soll-Beginndatum"@de ;
+    skos:notation "M-986" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "31.03.2025 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:ist_Beginndatum a owl:DatatypeProperty ;
+    rdfs:label "Ist-Beginndatum"@de ;
+    skos:notation "M-987" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "31.03.2025 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:soll_Ruestzeit a owl:DatatypeProperty ;
+    rdfs:label "Soll-Rüstzeit"@de ;
+    skos:notation "M-988" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "3.66" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:ist_Ruestzeit a owl:DatatypeProperty ;
+    rdfs:label "Ist-Rüstzeit"@de ;
+    skos:notation "M-989" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.15" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferauftragsnummer a owl:DatatypeProperty ;
+    rdfs:label "Lieferauftragsnummer"@de ;
+    skos:notation "M-990" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "00010" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lademittel a owl:DatatypeProperty ;
+    rdfs:label "Lademittel"@de ;
+    skos:notation "M-991" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:nettogewicht a owl:DatatypeProperty ;
+    rdfs:label "Nettogewicht"@de ;
+    skos:notation "M-992" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "32.4" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lagerort a owl:DatatypeProperty ;
+    rdfs:label "Lagerort"@de ;
+    skos:notation "M-993" ;
+    rdfs:domain tc:Warehouse ;
+    rdfs:range xsd:string ;
+    skos:example "9123" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:bestandseigentuemer a owl:DatatypeProperty ;
+    rdfs:label "Bestandseigentümer"@de ;
+    skos:notation "M-994" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "89100 Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:auspraegungstyp a owl:DatatypeProperty ;
+    rdfs:label "Ausprägungstyp"@de ;
+    skos:notation "M-995" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zu_liefernde_Menge_Stk a owl:DatatypeProperty ;
+    rdfs:label "Zu liefernde Menge Stk"@de ;
+    skos:notation "M-996" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zu_liefernde_Menge_m a owl:DatatypeProperty ;
+    rdfs:label "Zu liefernde Menge m³"@de ;
+    skos:notation "M-997" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.075" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:gelieferte_rueckgemeldete_Menge_Stk a owl:DatatypeProperty ;
+    rdfs:label "Gelieferte/ rückgemeldete Menge Stk."@de ;
+    skos:notation "M-998" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:integer ;
+    skos:example "1" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:gelieferte_rueckgemeldete_Menge_m a owl:DatatypeProperty ;
+    rdfs:label "Gelieferte/ rückgemeldete Menge m³"@de ;
+    skos:notation "M-999" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.075" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferauftrag a owl:DatatypeProperty ;
+    rdfs:label "Lieferauftrag"@de ;
+    skos:notation "M-1000" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    skos:example "210-25LA001214" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferempfaenger a owl:DatatypeProperty ;
+    rdfs:label "Lieferempfänger"@de ;
+    skos:notation "M-1001" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:spediteur a owl:DatatypeProperty ;
+    rdfs:label "Spediteur"@de ;
+    skos:notation "M-1002" ;
+    rdfs:domain tc:Carrier ;
+    rdfs:range xsd:string ;
+    skos:example "Lisa Musterfrau" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lagerlogistikorgansiation a owl:DatatypeProperty ;
+    rdfs:label "Lagerlogistikorgansiation"@de ;
+    skos:notation "M-1003" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "91210  xx GmbH & Co. KG" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferbedingung a owl:DatatypeProperty ;
+    rdfs:label "Lieferbedingung"@de ;
+    skos:notation "M-1004" ;
+    rdfs:domain tc:DeliveryCondition ;
+    rdfs:range xsd:string ;
+    skos:example "Liefern ohne Entladen" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:versandbedingung a owl:DatatypeProperty ;
+    rdfs:label "Versandbedingung"@de ;
+    skos:notation "M-1005" ;
+    rdfs:domain tc:DeliveryCondition ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferant a owl:DatatypeProperty ;
+    rdfs:label "Lieferant"@de ;
+    skos:notation "M-1006" ;
+    rdfs:domain tc:ForestOwner ;
+    rdfs:range xsd:string ;
+    skos:example "xx GmbH" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:route a owl:DatatypeProperty ;
+    rdfs:label "Route"@de ;
+    skos:notation "M-1007" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:startdatum a owl:DatatypeProperty ;
+    rdfs:label "Startdatum"@de ;
+    skos:notation "M-1008" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-03-31 14:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferdatum a owl:DatatypeProperty ;
+    rdfs:label "Lieferdatum"@de ;
+    skos:notation "M-1009" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-04-01 08:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:status_Avisierung a owl:DatatypeProperty ;
+    rdfs:label "Status Avisierung"@de ;
+    skos:notation "M-1010" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Avisierung erforderlich" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:erfasst_von a owl:DatatypeProperty ;
+    rdfs:label "Erfasst von"@de ;
+    skos:notation "M-1011" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:erfasst_um a owl:DatatypeProperty ;
+    rdfs:label "Erfasst um"@de ;
+    skos:notation "M-1012" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:dateTime ;
+    skos:example "2025-03-25 14:12:03" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:belegdatum a owl:DatatypeProperty ;
+    rdfs:label "Belegdatum"@de ;
+    skos:notation "M-1013" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-03-25 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:transportmittel a owl:DatatypeProperty ;
+    rdfs:label "Transportmittel"@de ;
+    skos:notation "M-1014" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "110 Offener Sattel" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:entladeeinrichtung a owl:DatatypeProperty ;
+    rdfs:label "Entladeeinrichtung"@de ;
+    skos:notation "M-1015" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:info_VA a owl:DatatypeProperty ;
+    rdfs:label "Info VA"@de ;
+    skos:notation "M-1016" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zustaendiger_Mitarbeiter_v2 a owl:DatatypeProperty ;
+    rdfs:label "Zuständiger Mitarbeiter"@de ;
+    skos:notation "M-1017" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zuletzt_geaendert_von a owl:DatatypeProperty ;
+    rdfs:label "Zuletzt geändert von"@de ;
+    skos:notation "M-1018" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Lisa Musterfrau" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:zuletzt_geaendert_um a owl:DatatypeProperty ;
+    rdfs:label "Zuletzt geändert um"@de ;
+    skos:notation "M-1019" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-02 10:42:03" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:termin_fix a owl:DatatypeProperty ;
+    rdfs:label "Termin fix"@de ;
+    skos:notation "M-1020" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Planung" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:versandstelle a owl:DatatypeProperty ;
+    rdfs:label "Versandstelle"@de ;
+    skos:notation "M-1021" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "X-LAM 0 1 LZV  415" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:status_AV a owl:DatatypeProperty ;
+    rdfs:label "Status AV"@de ;
+    skos:notation "M-1022" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Verladen Auflieger" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:genehmigung_erforderlich a owl:DatatypeProperty ;
+    rdfs:label "Genehmigung erforderlich"@de ;
+    skos:notation "M-1023" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "nein" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:vA_Nr a owl:DatatypeProperty ;
+    rdfs:label "VA-Nr."@de ;
+    skos:notation "M-1024" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "220" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lT_Kennung a owl:DatatypeProperty ;
+    rdfs:label "LT-Kennung"@de ;
+    skos:notation "M-1025" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "LT01" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:qS_Kontrolle a owl:DatatypeProperty ;
+    rdfs:label "QS-Kontrolle"@de ;
+    skos:notation "M-1026" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "FM0106 Schnitt…" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:bV_Kunde a owl:DatatypeProperty ;
+    rdfs:label "BV/ Kunde"@de ;
+    skos:notation "M-1027" ;
+    rdfs:domain tc:DeliveryOrder ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:hinweis_intern a owl:DatatypeProperty ;
+    rdfs:label "Hinweis (intern"@de ;
+    skos:notation "M-1028" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "keine Überbreite!" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:abholung_Termin a owl:DatatypeProperty ;
+    rdfs:label "Abholung: Termin"@de ;
+    skos:notation "M-1029" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-03-31 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:abholung_Uhrzeit a owl:DatatypeProperty ;
+    rdfs:label "Abholung: Uhrzeit"@de ;
+    skos:notation "M-1030" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:time ;
+    skos:example "14:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:abholung_PLZ a owl:DatatypeProperty ;
+    rdfs:label "Abholung: PLZ"@de ;
+    skos:notation "M-1031" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "49492" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:abholung_Ort a owl:DatatypeProperty ;
+    rdfs:label "Abholung: Ort"@de ;
+    skos:notation "M-1032" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Westerkappeln" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferung_Termin a owl:DatatypeProperty ;
+    rdfs:label "Lieferung: Termin"@de ;
+    skos:notation "M-1033" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-01 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferung_Uhrzeit a owl:DatatypeProperty ;
+    rdfs:label "Lieferung: Uhrzeit"@de ;
+    skos:notation "M-1034" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:time ;
+    skos:example "08:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferung_PLZ a owl:DatatypeProperty ;
+    rdfs:label "Lieferung: PLZ"@de ;
+    skos:notation "M-1035" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "49377" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:lieferung_Ort a owl:DatatypeProperty ;
+    rdfs:label "Lieferung: Ort"@de ;
+    skos:notation "M-1036" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:string ;
+    skos:example "Vechta" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:rechnungsempfaenger a owl:DatatypeProperty ;
+    rdfs:label "Rechnungsempfänger"@de ;
+    skos:notation "M-1037" ;
+    rdfs:domain tc:Invoice ;
+    rdfs:range xsd:string ;
+    skos:example "xx GmbH und  Co KG" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:rechnungsempfaenger_Name a owl:DatatypeProperty ;
+    rdfs:label "Rechnungsempfänger: Name"@de ;
+    skos:notation "M-1038" ;
+    rdfs:domain tc:Invoice ;
+    rdfs:range xsd:string ;
+    skos:example "Max Mustermann" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:rechnungsempfaenger_Adresse a owl:DatatypeProperty ;
+    rdfs:label "Rechnungsempfänger: Adresse"@de ;
+    skos:notation "M-1039" ;
+    rdfs:domain tc:Invoice ;
+    rdfs:range xsd:string ;
+    skos:example "Teststraße 15 45555 Teststadt" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:belegdatum_v2 a owl:DatatypeProperty ;
+    rdfs:label "Belegdatum"@de ;
+    skos:notation "M-1040" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-15 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:leistungsdatum a owl:DatatypeProperty ;
+    rdfs:label "Leistungsdatum"@de ;
+    skos:notation "M-1041" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-16 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:buchungsdatum a owl:DatatypeProperty ;
+    rdfs:label "Buchungsdatum"@de ;
+    skos:notation "M-1042" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:date ;
+    skos:example "2025-04-17 00:00:00" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:steuerschluessel a owl:DatatypeProperty ;
+    rdfs:label "Steuerschlüssel"@de ;
+    skos:notation "M-1043" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    skos:example "111" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:artikelpreis_Klassifikation a owl:DatatypeProperty ;
+    rdfs:label "Artikelpreis-Klassifikation"@de ;
+    skos:notation "M-1044" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Anmerkung: Bedeutung unklar"@de ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+tc:anstrich_vorhanden a owl:DatatypeProperty ;
+    rdfs:label "Anstrich vorhanden"@de ;
+    skos:notation "M-1045" ;
+    rdfs:domain tc:Panel ;
+    rdfs:range xsd:boolean ;
+    skos:example "nein" ;
+    skos:scopeNote "Wertschöpfungsstufe: Holzwerkstoffproduzent"@de .
+
+#======================================================================
+# v6 — Eigenes Beispiel als Ergänzung für 87 bestehende Properties
+# (PA019 war in der alten Datei leer, ergänzt aus neuer Spalte)
+#======================================================================
+
+# M-17: skos:example "12345"
+# M-22: skos:example "Max"
+# M-23: skos:example "Mustermann"
+# M-25: skos:example "Musterstraße 1"
+# M-26: skos:example "Musterstadt 1"
+# M-27: skos:example "Musterprovinz 1"
+# M-28: skos:example "Musterland 1"
+# M-29: skos:example "Mustertelefonnummer 1"
+# M-30: skos:example "Musterfax 1"
+# M-31: skos:example "Musteremail 1"
+# M-32: skos:example "Fäller"
+# M-33: skos:example "12345"
+# M-34: skos:example "Max"
+# M-35: skos:example "Mustermann"
+# M-37: skos:example "Musterstraße 1"
+# M-38: skos:example "Musterstadt 1"
+# M-39: skos:example "Nordrhein-Westfalen"
+# M-40: skos:example "Germany"
+# M-41: skos:example "Mustertelefonnummer 1"
+# M-42: skos:example "Musterfax 1"
+# M-43: skos:example "Musteremail 1"
+# M-44: skos:example "TransportX"
+# M-45: skos:example "54321"
+# M-48: skos:example "only aviable an Monday"
+# M-50: skos:example "Mustermann"
+# M-85: skos:example "Max"
+# M-86: skos:example "Mustermann"
+# M-87: skos:example "Musterstraße 1"
+# M-88: skos:example "0800 6543210"
+# M-89: skos:example "0800 6543211"
+# M-90: skos:example "xx@xy.de"
+# M-91: skos:example "Sägewerk TOP"
+# M-92: skos:example "678910"
+# M-93: skos:example "Max"
+# M-94: skos:example "Mustermann"
+# M-95: skos:example "Musterstraße 1"
+# M-96: skos:example "0800 6543210"
+# M-97: skos:example "0800 6543211"
+# M-98: skos:example "xx@xy.de"
+# M-99: skos:example "Logger"
+# M-100: skos:example "12345"
+# M-101: skos:example "Max"
+# M-102: skos:example "Mustermann"
+# M-103: skos:example "Musteraddresse 1"
+# M-104: skos:example "0800 6543210"
+# M-105: skos:example "xx@xy.de"
+# M-106: skos:example "Aimi"
+# M-107: skos:example "12345"
+# M-157: skos:example "Musteraddresse 1"
+# M-158: skos:example "Logger"
+# M-160: skos:example "Musteradresse 1"
+# M-161: skos:example "12345"
+# M-164: skos:example "Musterprüfstelle"
+# M-262: skos:example "Musterunterschrift  (Name)"
+# M-269: skos:example "Fichtenholz"
+# M-277: skos:example "Finnland"
+# M-297: skos:example "82.52"
+# M-298: skos:example "82.52"
+# M-300: skos:example "82.52"
+# M-301: skos:example "82.52"
+# M-302: skos:example "82.52"
+# M-306: skos:example "Max Mustermann"
+# M-307: skos:example "Musterunterschrift (Name)"
+# M-316: skos:example "Musterforstamt"
+# M-317: skos:example "Musterförsterei"
+# M-318: skos:example "Musterwaldbesitzer"
+# M-322: skos:example "345"
+# M-331: skos:example "345"
+# M-334: skos:example "345"
+# M-335: skos:example "345"
+# M-377: skos:example "567"
+# M-378: skos:example "12345"
+# M-586: skos:example "Musterspedition 1"
+# M-587: skos:example "Musterstraße 1"
+# M-588: skos:example "Musterort"
+# M-589: skos:example "0800 6543210"
+# M-590: skos:example "0800 7654321"
+# M-598: skos:example "Musterbeladestelle"
+# M-599: skos:example "Fanatsiestraße 1"
+# M-600: skos:example "Fantasieort"
+# M-602: skos:example "Fanatasieentladestelle "
+# M-603: skos:example "Fanatsiestraße 1"
+# M-604: skos:example "Fantasieort"
+# M-605: skos:example "0172 1234567"
+# M-619: skos:example "5"
+# M-625: skos:example "Musterstoffe 1"
+# M-640: skos:example "Musteranmerkung 1"
+
+#======================================================================
+# ERWEITERUNG 07/2026: PDF-Dokument-Integration (manuelle Datenerfassung)
+# Neue Klasse + Properties fuer die 7 PDF-Templates des Upload-Flows:
+#   Pruefzertifikat (Saatgut), LOCTITE-Klebstoffdatenblatt, Schnittbild,
+#   Biegepruefung Schnittholz, Leistungserklaerung, Transportauftrag,
+#   Stammzertifikat
+#======================================================================
+
+# --- Klassen ---------------------------------------------------------
+
+tc:CuttingPattern a owl:Class ;
+    rdfs:subClassOf tc:Document ;
+    rdfs:label "Schnittbild"@de ;
+    rdfs:label "Cutting Pattern"@en ;
+    rdfs:comment "Saegewerks-Schnittbild: Einschnittplan eines Stammes mit Haupt- und Seitenware"@de .
+
+# --- Pruefzertifikat Saatgut (Erweiterungen) -------------------------
+
+tc:senderName a owl:DatatypeProperty ;
+    rdfs:label "Einsender"@de ;
+    rdfs:label "Sender name"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Name des Einsenders einer Probe"@de .
+
+tc:otherSpeciesSeedPercentage a owl:DatatypeProperty ;
+    rdfs:label "Samen anderer Arten"@de ;
+    rdfs:label "Other species seed percentage"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Anteil Samen anderer Arten in Prozent"@de .
+
+tc:germinationSpeedWeeks a owl:DatatypeProperty ;
+    rdfs:label "Keimschnelligkeit nach Wochen"@de ;
+    rdfs:label "Germination speed weeks"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Anzahl Wochen, nach denen die Keimschnelligkeit ermittelt wurde"@de .
+
+tc:germinationRateWeeks a owl:DatatypeProperty ;
+    rdfs:label "Keimfaehigkeit nach Wochen"@de ;
+    rdfs:label "Germination rate weeks"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Anzahl Wochen, nach denen die Keimfaehigkeit ermittelt wurde"@de .
+
+# --- Klebstoff-Datenblatt (tc:Adhesive) ------------------------------
+
+tc:technology a owl:DatatypeProperty ;
+    rdfs:label "Technologie"@de ;
+    rdfs:label "Technology"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Technologie eines Produkts (z.B. Polyurethan)"@de .
+
+tc:applicationMethod a owl:DatatypeProperty ;
+    rdfs:label "Auftrag"@de ;
+    rdfs:label "Application method"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Auftragsverfahren (z.B. Flaechenverklebung, Keilzinkung)"@de .
+
+tc:components a owl:DatatypeProperty ;
+    rdfs:label "Komponenten"@de ;
+    rdfs:label "Components"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Komponenten (z.B. einkomponentig)"@de .
+
+tc:baseMaterial a owl:DatatypeProperty ;
+    rdfs:label "Basis"@de ;
+    rdfs:label "Base material"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Chemische Basis (z.B. Polyurethan-Prepolymer)"@de .
+
+tc:consistency a owl:DatatypeProperty ;
+    rdfs:label "Beschaffenheit"@de ;
+    rdfs:label "Consistency"@en ;
+    rdfs:range xsd:string .
+
+tc:appearance a owl:DatatypeProperty ;
+    rdfs:label "Aussehen"@de ;
+    rdfs:label "Appearance"@en ;
+    rdfs:range xsd:string .
+
+tc:curingType a owl:DatatypeProperty ;
+    rdfs:label "Aushaertung"@de ;
+    rdfs:label "Curing type"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Aushaertungsmechanismus (z.B. feuchtigkeitshaertend)"@de .
+
+tc:solidsContent a owl:DatatypeProperty ;
+    rdfs:label "Feststoffgehalt"@de ;
+    rdfs:label "Solids content"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Feststoffgehalt in Prozent"@de .
+
+tc:viscosity a owl:DatatypeProperty ;
+    rdfs:label "Viskositaet"@de ;
+    rdfs:label "Viscosity"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Viskositaet in mPa.s"@de .
+
+tc:viscosityConditions a owl:DatatypeProperty ;
+    rdfs:label "Viskositaet Messbedingungen"@de ;
+    rdfs:label "Viscosity conditions"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Messbedingungen der Viskositaet (Temperatur, Spindel, Drehzahl)"@de .
+
+tc:processingNote a owl:DatatypeProperty ;
+    rdfs:label "Verarbeitungshinweise"@de ;
+    rdfs:label "Processing note"@en ;
+    rdfs:range xsd:string .
+
+tc:safetyNote a owl:DatatypeProperty ;
+    rdfs:label "Sicherheitsmassnahmen"@de ;
+    rdfs:label "Safety note"@en ;
+    rdfs:range xsd:string .
+
+tc:cleaningNote a owl:DatatypeProperty ;
+    rdfs:label "Reinigung"@de ;
+    rdfs:label "Cleaning note"@en ;
+    rdfs:range xsd:string .
+
+tc:storageConditions a owl:DatatypeProperty ;
+    rdfs:label "Lagerbedingungen"@de ;
+    rdfs:label "Storage conditions"@en ;
+    rdfs:range xsd:string .
+
+tc:labeling a owl:DatatypeProperty ;
+    rdfs:label "Kennzeichnung"@de ;
+    rdfs:label "Labeling"@en ;
+    rdfs:range xsd:string .
+
+tc:hazardLabeling a owl:DatatypeProperty ;
+    rdfs:label "Gefahrstoffkennzeichnung"@de ;
+    rdfs:label "Hazard labeling"@en ;
+    rdfs:range xsd:string .
+
+tc:transportRegulation a owl:DatatypeProperty ;
+    rdfs:label "Transportvorschriften"@de ;
+    rdfs:label "Transport regulation"@en ;
+    rdfs:range xsd:string .
+
+tc:safetyRegulation a owl:DatatypeProperty ;
+    rdfs:label "Sicherheitsbestimmungen"@de ;
+    rdfs:label "Safety regulation"@en ;
+    rdfs:range xsd:string .
+
+# --- Biegepruefung (Erweiterungen) -----------------------------------
+
+tc:samplingNote a owl:DatatypeProperty ;
+    rdfs:label "Probenentnahme"@de ;
+    rdfs:label "Sampling note"@en ;
+    rdfs:range xsd:string .
+
+tc:deformationAtMaxForce a owl:DatatypeProperty ;
+    rdfs:label "Verformung bei Fmax"@de ;
+    rdfs:label "Deformation at max force"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Verformung dl bei Maximalkraft in mm"@de .
+
+# --- Leistungserklaerung (Erweiterungen) -----------------------------
+
+tc:typeNumber a owl:DatatypeProperty ;
+    rdfs:label "Typennummer"@de ;
+    rdfs:label "Type number"@en ;
+    rdfs:range xsd:string .
+
+tc:manufacturerAddress a owl:DatatypeProperty ;
+    rdfs:label "Herstelleranschrift"@de ;
+    rdfs:label "Manufacturer address"@en ;
+    rdfs:range xsd:string .
+
+tc:conformitySystem a owl:DatatypeProperty ;
+    rdfs:label "Konformitaetssystem"@de ;
+    rdfs:label "Conformity system"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Konformitaetssystem gemaess EU 305, Anhang V"@de .
+
+tc:notifiedBody a owl:DatatypeProperty ;
+    rdfs:label "Notifizierte Stelle"@de ;
+    rdfs:label "Notified body"@en ;
+    rdfs:range xsd:string .
+
+tc:thicknessTolerance a owl:DatatypeProperty ;
+    rdfs:label "Dickentoleranz"@de ;
+    rdfs:label "Thickness tolerance"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Dickentoleranz nach EN 336 in mm"@de .
+
+tc:widthTolerance a owl:DatatypeProperty ;
+    rdfs:label "Breitentoleranz"@de ;
+    rdfs:label "Width tolerance"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Breitentoleranz nach EN 336 in mm"@de .
+
+tc:fireResistanceClassNational a owl:DatatypeProperty ;
+    rdfs:label "Feuerwiderstandsklasse DIN 4102"@de ;
+    rdfs:label "National fire resistance class"@en ;
+    rdfs:range xsd:string .
+
+tc:durabilityInsects a owl:DatatypeProperty ;
+    rdfs:label "Dauerhaftigkeit gegen Insekten"@de ;
+    rdfs:label "Durability against insects"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Natuerliche Dauerhaftigkeit gegen Insekten, Termiten, maritime Holzzerstoerer (EN 350-2)"@de .
+
+# --- Transportauftrag (Erweiterungen) --------------------------------
+
+tc:dispatchOffice a owl:DatatypeProperty ;
+    rdfs:label "Dispositionsstelle"@de ;
+    rdfs:label "Dispatch office"@en ;
+    rdfs:range xsd:string .
+
+tc:dispatcherName a owl:DatatypeProperty ;
+    rdfs:label "Disponent"@de ;
+    rdfs:label "Dispatcher name"@en ;
+    rdfs:range xsd:string .
+
+tc:maxPrice a owl:DatatypeProperty ;
+    rdfs:label "Maximalpreis"@de ;
+    rdfs:label "Maximum price"@en ;
+    rdfs:range xsd:decimal .
+
+tc:actualPrice a owl:DatatypeProperty ;
+    rdfs:label "Aktueller Preis"@de ;
+    rdfs:label "Actual price"@en ;
+    rdfs:range xsd:decimal .
+
+tc:loadingAddress a owl:DatatypeProperty ;
+    rdfs:label "Beladestelle Anschrift"@de ;
+    rdfs:label "Loading address"@en ;
+    rdfs:range xsd:string .
+
+tc:unloadingAddress a owl:DatatypeProperty ;
+    rdfs:label "Entladestelle Anschrift"@de ;
+    rdfs:label "Unloading address"@en ;
+    rdfs:range xsd:string .
+
+tc:goodsReceivingHours a owl:DatatypeProperty ;
+    rdfs:label "Warenannahmezeiten"@de ;
+    rdfs:label "Goods receiving hours"@en ;
+    rdfs:range xsd:string .
+
+# --- Stammzertifikat (Erweiterungen) ---------------------------------
+
+tc:propagationMaterialType a owl:DatatypeProperty ;
+    rdfs:label "Art des Vermehrungsgutes"@de ;
+    rdfs:label "Propagation material type"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Saatgut, Pflanzenteile oder Pflanzen"@de .
+
+tc:admissionUnitOwner a owl:DatatypeProperty ;
+    rdfs:label "Eigentuemer der Zulassungseinheit"@de ;
+    rdfs:label "Admission unit owner"@en ;
+    rdfs:range xsd:string .
+
+tc:sourceMaterialOrigin a owl:DatatypeProperty ;
+    rdfs:label "Ursprung des Ausgangsmaterials"@de ;
+    rdfs:label "Source material origin"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Ursprung fuer nicht autochthones Material, falls bekannt"@de .
+
+tc:sourceMaterialCountry a owl:DatatypeProperty ;
+    rdfs:label "Land des Ausgangsmaterials"@de ;
+    rdfs:label "Source material country"@en ;
+    rdfs:range xsd:string .
+
+tc:provenanceRegionName a owl:DatatypeProperty ;
+    rdfs:label "Bezeichnung des Herkunftsgebiets"@de ;
+    rdfs:label "Provenance region name"@en ;
+    rdfs:range xsd:string .
+
+tc:provenanceRegionNumber a owl:DatatypeProperty ;
+    rdfs:label "Nr. des Herkunftsgebiets"@de ;
+    rdfs:label "Provenance region number"@en ;
+    rdfs:range xsd:string .
+
+tc:amountInWords a owl:DatatypeProperty ;
+    rdfs:label "Menge in Worten"@de ;
+    rdfs:label "Amount in words"@en ;
+    rdfs:range xsd:string .
+
+tc:predecessorCertificateNumber a owl:DatatypeProperty ;
+    rdfs:label "Nr. des Vorlaeufer-Zertifikates"@de ;
+    rdfs:label "Predecessor certificate number"@en ;
+    rdfs:range xsd:string .
+
+tc:initialLotAmount a owl:DatatypeProperty ;
+    rdfs:label "Menge der Anfangspartie"@de ;
+    rdfs:label "Initial lot amount"@en ;
+    rdfs:range xsd:string .
+
+tc:familyCount a owl:DatatypeProperty ;
+    rdfs:label "Anzahl Familien"@de ;
+    rdfs:label "Family count"@en ;
+    rdfs:range xsd:integer .
+
+tc:cloneCount a owl:DatatypeProperty ;
+    rdfs:label "Anzahl Klone"@de ;
+    rdfs:label "Clone count"@en ;
+    rdfs:range xsd:integer .
+
+tc:crossingMethod a owl:DatatypeProperty ;
+    rdfs:label "Kreuzungsmethode"@de ;
+    rdfs:label "Crossing method"@en ;
+    rdfs:range xsd:string .
+
+tc:componentFamilyComposition a owl:DatatypeProperty ;
+    rdfs:label "Prozentuale Zusammensetzung von Komponentenfamilien"@de ;
+    rdfs:label "Component family composition"@en ;
+    rdfs:range xsd:string .
+
+tc:propagationMethod a owl:DatatypeProperty ;
+    rdfs:label "Vermehrungsmethode"@de ;
+    rdfs:label "Propagation method"@en ;
+    rdfs:range xsd:string .
+
+tc:propagationCycleCount a owl:DatatypeProperty ;
+    rdfs:label "Anzahl der Vermehrungszyklen"@de ;
+    rdfs:label "Propagation cycle count"@en ;
+    rdfs:range xsd:integer .
+
+tc:firstRecipientName a owl:DatatypeProperty ;
+    rdfs:label "Name des 1. Empfaengers"@de ;
+    rdfs:label "First recipient name"@en ;
+    rdfs:range xsd:string .
+
+tc:firstRecipientAddress a owl:DatatypeProperty ;
+    rdfs:label "Anschrift des 1. Empfaengers"@de ;
+    rdfs:label "First recipient address"@en ;
+    rdfs:range xsd:string .
+
+tc:supplierName a owl:DatatypeProperty ;
+    rdfs:label "Name des Lieferanten"@de ;
+    rdfs:label "Supplier name"@en ;
+    rdfs:range xsd:string .
+
+tc:supplierAddress a owl:DatatypeProperty ;
+    rdfs:label "Anschrift des Lieferanten"@de ;
+    rdfs:label "Supplier address"@en ;
+    rdfs:range xsd:string .
+
+tc:stateAuthorityName a owl:DatatypeProperty ;
+    rdfs:label "Name der Landesstelle"@de ;
+    rdfs:label "State authority name"@en ;
+    rdfs:range xsd:string .
+
+tc:stateAuthorityAddress a owl:DatatypeProperty ;
+    rdfs:label "Anschrift der Landesstelle"@de ;
+    rdfs:label "State authority address"@en ;
+    rdfs:range xsd:string .
+
+# --- Nachtrag PDF-Integration: Schnittbild-Fugen (aggregiert) + DoP ---------
+
+tc:fugen_in_mm_Vorschnitt a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm (Vorschnitt)"@de ;
+    rdfs:label "Kerf width precut"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Fugenbreite in mm fuer den Vorschnitt (Schnittbild)"@de .
+
+tc:fugen_in_mm_Nachschnitt a owl:DatatypeProperty ;
+    rdfs:label "Fugen in mm (Nachschnitt)"@de ;
+    rdfs:label "Kerf width recut"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Fugenbreite in mm fuer den Nachschnitt (Schnittbild)"@de .
+
+tc:notifiedBodyAddress a owl:DatatypeProperty ;
+    rdfs:label "Anschrift der notifizierten Stelle"@de ;
+    rdfs:label "Notified body address"@en ;
+    rdfs:range xsd:string .

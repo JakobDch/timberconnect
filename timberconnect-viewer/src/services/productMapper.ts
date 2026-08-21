@@ -102,13 +102,25 @@ export function mapToProduct(
     return null;
   }
 
-  // Determine wood type from various sources
-  const holzartCode = getValue(product, 'holzart');
+  // Determine wood type. Try, in order: product's explicit name, product's code,
+  // the stem's resolved SpeciesGroupName (e.g. "GRAN" for forest-only HPR uploads),
+  // then the raw numeric group key. First one that resolves to a known name wins.
   const holzartBezeichnung = getValue(product, 'holzartBezeichnung');
-  const woodType = holzartBezeichnung || mapSpeciesCode(holzartCode);
-  const woodTypeScientific = holzartBezeichnung
-    ? getScientificName(holzartBezeichnung)
-    : getScientificName(woodType);
+  const candidates = [
+    holzartBezeichnung,
+    getValue(product, 'holzart'),
+    getValue(stem, 'speciesName'),
+    getValue(stem, 'species'),
+  ];
+  let woodType = 'Unbekannt';
+  for (const c of candidates) {
+    const mapped = mapSpeciesCode(c);
+    if (mapped !== 'Unbekannt') {
+      woodType = mapped;
+      break;
+    }
+  }
+  const woodTypeScientific = getScientificName(woodType);
 
   // Get dimensions
   const laenge = getValue(product, 'laenge');

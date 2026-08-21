@@ -1,123 +1,134 @@
-import { motion } from 'framer-motion';
-import {
-  FileText,
-  Leaf,
-  Recycle,
-  GitBranch,
-  Building,
-  Wrench,
-  Hammer,
-  RefreshCw,
-  ArrowRight,
-  MapPin,
-  Award,
-  BadgeCheck,
-  MessageCircle,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Info } from 'lucide-react';
 import { ToggleSwitch } from '../UI/ToggleSwitch';
-import type { UseCase } from '../../types';
-
-const iconMap: Record<string, LucideIcon> = {
-  'file-text': FileText,
-  leaf: Leaf,
-  recycle: Recycle,
-  'git-branch': GitBranch,
-  building: Building,
-  wrench: Wrench,
-  hammer: Hammer,
-  'refresh-cw': RefreshCw,
-  'map-pin': MapPin,
-  award: Award,
-  'badge-check': BadgeCheck,
-  'message-circle': MessageCircle,
-};
+import { DEFAULT_USE_CASE_ICON, type UseCaseDefinition } from '../../config/useCases';
 
 interface UseCaseToggleCardProps {
-  useCase: UseCase;
+  useCase: UseCaseDefinition;
   isEnabled: boolean;
   onToggle: (enabled: boolean) => void;
   onClick: () => void;
+  /** Fuer dieses Bauteil nutzbar? Kommt aus useCaseAvailability(). */
+  available?: boolean;
+  /** Warum nicht — wird beim Hovern/Antippen eingeblendet. */
+  unavailableReason?: string;
 }
 
 export function UseCaseToggleCard({
   useCase,
   isEnabled,
   onToggle,
-  onClick
+  onClick,
+  available = true,
+  unavailableReason,
 }: UseCaseToggleCardProps) {
-  const Icon = iconMap[useCase.icon] || FileText;
-  const isInteractive = useCase.active && isEnabled;
+  const Icon = useCase.icon ?? DEFAULT_USE_CASE_ICON;
+  const isInteractive = available && isEnabled;
+
+  // Auf dem Touchscreen gibt es kein Hovern — deshalb laesst sich der Grund
+  // auch antippen. Ohne das waere die Begruendung am Geraet unerreichbar.
+  const [showReason, setShowReason] = useState(false);
+  const canExplain = !available && !!unavailableReason;
 
   return (
     <motion.div
       className={`
         relative h-full p-5 rounded-2xl border transition-all
         ${isInteractive
-          ? 'bg-white border-gray-200 shadow-soft hover:border-forest-300 hover:shadow-forest'
-          : 'bg-gray-50 border-gray-200'
+          ? 'bg-night-800 border-white/10 hover:border-acid-400/40'
+          : 'bg-night-800/50 border-white/5'
         }
       `}
       whileHover={isInteractive ? { y: -2 } : {}}
       transition={{ duration: 0.2 }}
+      onMouseEnter={() => canExplain && setShowReason(true)}
+      onMouseLeave={() => setShowReason(false)}
     >
-      {/* Toggle in top right */}
+      {/* Toggle oben rechts */}
       <div className="absolute top-4 right-4">
         <ToggleSwitch
           checked={isEnabled}
           onChange={onToggle}
-          disabled={!useCase.active}
+          disabled={!available}
           size="sm"
         />
       </div>
 
-      {/* Icon */}
       <div
         className={`
-          w-12 h-12 rounded-xl flex items-center justify-center mb-4
-          ${isEnabled && useCase.active
-            ? 'bg-forest-500 shadow-lg shadow-forest-500/20'
-            : 'bg-gray-200'
+          w-12 h-12 rounded-xl flex items-center justify-center mb-4 border
+          ${isEnabled && available
+            ? 'bg-acid-400 border-acid-300 shadow-lg shadow-acid-400/20'
+            : 'bg-night-700 border-white/5'
           }
         `}
       >
         <Icon
-          className={`w-6 h-6 ${isEnabled && useCase.active ? 'text-white' : 'text-gray-400'}`}
+          className={`w-6 h-6 ${isEnabled && available ? 'text-night-950' : 'text-night-400'}`}
         />
       </div>
 
-      {/* Title */}
       <h3
         className={`font-bold mb-1.5 text-base pr-12 ${
-          isEnabled ? 'text-timber-dark' : 'text-gray-400'
+          isEnabled && available ? 'text-white' : 'text-night-400'
         }`}
       >
         {useCase.title}
       </h3>
 
-      {/* Description */}
       <p
         className={`text-sm leading-relaxed mb-5 line-clamp-2 ${
-          isEnabled ? 'text-timber-gray' : 'text-gray-400'
+          isEnabled && available ? 'text-night-300' : 'text-night-400/70'
         }`}
       >
         {useCase.description}
       </p>
 
-      {/* CTA */}
       {isInteractive ? (
         <button
           onClick={onClick}
-          className="flex items-center text-forest-600 text-sm font-semibold hover:text-forest-700 transition-colors group"
+          className="flex items-center text-acid-300 text-sm font-semibold hover:text-acid-200 transition-colors group"
         >
-          <span>Offnen</span>
+          <span>Öffnen</span>
           <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
         </button>
+      ) : canExplain ? (
+        <button
+          type="button"
+          onClick={() => setShowReason((v) => !v)}
+          aria-expanded={showReason}
+          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-night-700 hover:bg-night-600 text-night-300 rounded-full transition-colors"
+        >
+          <Info className="w-3.5 h-3.5" />
+          Nicht verfügbar
+        </button>
       ) : (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-gray-200 text-gray-500 rounded-full">
-          {useCase.active ? 'Deaktiviert' : 'Demnachst verfugbar'}
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-night-700 text-night-300 rounded-full">
+          Deaktiviert
         </span>
       )}
+
+      {/* Begruendung — nennt den Grund, statt die Kachel wortlos auszugrauen */}
+      <AnimatePresence>
+        {canExplain && showReason && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.15 }}
+            role="tooltip"
+            className="absolute left-4 right-4 bottom-4 z-10 px-3.5 py-3 rounded-xl bg-night-950/95 border border-acid-400/30 shadow-xl shadow-black/50 backdrop-blur-sm"
+          >
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-acid-300 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-night-200 leading-relaxed">
+                {unavailableReason}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

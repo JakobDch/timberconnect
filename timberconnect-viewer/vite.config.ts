@@ -12,6 +12,11 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
+      // Proxy EPCIS authorizing proxy during development
+      '/api/epcis': {
+        target: 'http://localhost:8003',
+        changeOrigin: true,
+      },
     },
   },
 })

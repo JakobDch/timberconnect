@@ -1,7 +1,18 @@
 import { motion } from 'framer-motion';
-import { TreePine, Truck, Factory, Cog, Building2, MapPin, CheckCircle2, Calendar, ExternalLink } from 'lucide-react';
+import { TreePine, Truck, Factory, Cog, Building2, MapPin, Calendar } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { SupplyChainStep } from '../../types';
+
+/**
+ * Die Stationen der Lieferkette als senkrechte Zeitachse.
+ *
+ * Frueher trug jede Station ein Haekchen und den Abschluss zierte die
+ * Zeile "Lieferkette vollstaendig dokumentiert" -- beides ohne jede
+ * Datengrundlage: die Marken erschienen auch dann, wenn die Station nur aus
+ * einem Firmennamen bestand. In einem Datenraum-Demonstrator ist eine
+ * unbelegte Bestaetigung schaedlicher als gar keine, deshalb nennt der
+ * Abschluss jetzt nur noch die Zahl der Stationen.
+ */
 
 const stageIcons: Record<string, LucideIcon> = {
   forest: TreePine,
@@ -42,7 +53,7 @@ export function SupplyChainTimeline({ steps }: SupplyChainTimelineProps) {
             {/* Timeline connector */}
             {!isLast && (
               <div
-                className="absolute left-7 top-[72px] w-0.5 h-[calc(100%-40px)] bg-gradient-to-b from-forest-300 to-forest-200"
+                className="absolute left-7 top-[72px] w-0.5 h-[calc(100%-40px)] bg-gradient-to-b from-acid-400/40 to-white/10"
                 style={{ zIndex: 0 }}
               />
             )}
@@ -50,60 +61,52 @@ export function SupplyChainTimeline({ steps }: SupplyChainTimelineProps) {
             {/* Step indicator */}
             <div className="flex flex-col items-center gap-3 flex-shrink-0 relative z-10">
               {/* Icon node */}
-              <div className="relative w-14 h-14 rounded-2xl bg-forest-500 flex items-center justify-center shadow-lg shadow-forest-500/20">
-                <Icon className="w-7 h-7 text-white" />
-                {/* Check badge */}
-                <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100">
-                  <CheckCircle2 className="w-4 h-4 text-forest-500" />
-                </div>
+              <div className="relative w-14 h-14 rounded-2xl bg-acid-400 flex items-center justify-center shadow-lg shadow-acid-400/20">
+                <Icon className="w-7 h-7 text-night-950" />
               </div>
               {/* Step number */}
-              <span className="text-xs font-bold text-timber-gray bg-gray-100 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-bold text-night-300 bg-night-700 px-2 py-0.5 rounded-full">
                 {index + 1}/{steps.length}
               </span>
             </div>
 
             {/* Content card */}
-            <div className="flex-1 bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-soft hover:shadow-soft-lg transition-shadow">
+            <div className="flex-1 bg-night-800 rounded-2xl border border-white/5 p-5 sm:p-6 hover:border-white/10 transition-colors">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                 <div className="flex-1">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-forest-100 text-forest-700 mb-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-acid-400/15 border border-acid-400/30 text-acid-300 mb-2">
                     {stageLabel}
                   </span>
-                  <h4 className="font-bold text-timber-dark text-lg">
+                  <h4 className="font-bold text-white text-lg">
                     {step.company}
                   </h4>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-timber-gray bg-gray-100 px-3 py-1.5 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-night-200 bg-night-700 px-3 py-1.5 rounded-lg">
                   <Calendar className="w-4 h-4" />
                   <span className="font-medium">{step.date}</span>
                 </div>
               </div>
 
               {/* Description */}
-              <p className="text-timber-gray mb-4 leading-relaxed">{step.description}</p>
+              <p className="text-night-300 mb-4 leading-relaxed">{step.description}</p>
 
               {/* Location */}
-              <div className="flex items-center justify-between gap-4 pb-5 mb-5 border-b border-gray-100">
-                <div className="flex items-center gap-2 text-timber-gray">
+              <div className="flex items-center gap-4 pb-5 mb-5 border-b border-white/5">
+                <div className="flex items-center gap-2 text-night-300">
                   <MapPin className="w-4 h-4" />
                   <span className="text-sm">{step.location}</span>
                 </div>
-                <button className="btn btn-ghost btn-sm gap-1.5 text-xs text-timber-gray hover:text-timber-dark">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Details
-                </button>
               </div>
 
               {/* Details grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {step.details.map((detail, i) => (
-                  <div key={i} className="bg-gray-50 rounded-xl p-3.5">
-                    <p className="text-[10px] text-timber-gray uppercase tracking-wider font-semibold mb-1">
+                  <div key={i} className="bg-night-700/50 border border-white/5 rounded-xl p-3.5">
+                    <p className="text-[10px] text-night-300 uppercase tracking-wider font-semibold mb-1">
                       {detail.label}
                     </p>
-                    <p className="text-sm font-bold text-timber-dark">
+                    <p className="text-sm font-bold text-white">
                       {detail.value}
                     </p>
                   </div>
@@ -114,7 +117,7 @@ export function SupplyChainTimeline({ steps }: SupplyChainTimelineProps) {
         );
       })}
 
-      {/* End marker */}
+      {/* Abschluss -- nennt die Zahl der Stationen, bestaetigt nichts. */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -122,16 +125,13 @@ export function SupplyChainTimeline({ steps }: SupplyChainTimelineProps) {
         className="flex items-center gap-5 pt-2"
       >
         <div className="w-14 flex justify-center">
-          <div className="w-5 h-5 rounded-full bg-forest-500 shadow-lg shadow-forest-500/30 flex items-center justify-center">
-            <CheckCircle2 className="w-3 h-3 text-white" />
-          </div>
+          <div className="w-5 h-5 rounded-full bg-night-700 border border-white/10" />
         </div>
-        <div className="flex items-center gap-3 px-4 py-2 bg-forest-50 border border-forest-200 rounded-xl">
-          <CheckCircle2 className="w-5 h-5 text-forest-600" />
-          <span className="text-sm font-semibold text-forest-700">
-            Lieferkette vollständig dokumentiert
-          </span>
-        </div>
+        <span className="text-sm text-night-300">
+          {steps.length}{' '}
+          {steps.length === 1 ? 'Station belegt' : 'Stationen belegt'} — weitere
+          Schritte sind in den geladenen Quellen nicht dokumentiert.
+        </span>
       </motion.div>
     </div>
   );

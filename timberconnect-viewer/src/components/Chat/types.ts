@@ -2,6 +2,10 @@
  * Types for TimberConnect Chat Component
  */
 
+import type { ToolCallTrace } from '../../services/agent/agentLoop';
+
+export type { ToolCallTrace };
+
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface ChatMessageData {
@@ -9,6 +13,15 @@ export interface ChatMessageData {
   role: MessageRole;
   content: string;
   timestamp: Date;
+  /**
+   * Womit diese Antwort belegt ist: welche Abfragen liefen, wozu, mit wie
+   * vielen Treffern. Aufklappbar unter der Nachricht.
+   *
+   * Nachvollziehbarkeit zaehlt hier mehr als Politur: der Assistent darf nur
+   * Daten dieses Bauteils ausgeben, und die Trace ist die Stelle, an der man
+   * das nachpruefen kann, statt es glauben zu muessen.
+   */
+  traces?: ToolCallTrace[];
   metadata?: {
     intent?: string;
     hasImage?: boolean;
@@ -32,42 +45,4 @@ export interface CalculationResult {
 
 export interface ChatSettings {
   apiKey?: string;
-}
-
-export interface ProductContextForChat {
-  product_id: string;
-  product_name: string;
-  wood_type: string;
-  quality?: string;
-  dimensions?: {
-    length?: number;
-    width?: number;
-    thickness?: number;
-  };
-  certifications: string[];
-  origin?: {
-    location?: string;
-    region?: string;
-    coordinates?: {
-      lat: number;
-      lng: number;
-    };
-  };
-  harvest_date?: string;
-  supply_chain: Array<{
-    stage?: string;
-    title?: string;
-    company?: string;
-    name?: string;
-    date?: string;
-    location?: string;
-    details?: Record<string, unknown>;
-  }>;
-  data_sources: string[];
-  semantic_model_url?: string;
-}
-
-export interface SSEEvent {
-  event: string;
-  data: Record<string, unknown>;
 }

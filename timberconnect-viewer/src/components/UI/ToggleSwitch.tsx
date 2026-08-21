@@ -29,9 +29,9 @@ export function ToggleSwitch({
       className={`
         relative inline-flex items-center rounded-full transition-colors duration-200
         ${s.track}
-        ${checked ? 'bg-forest-500' : 'bg-gray-300'}
+        ${checked ? 'bg-acid-400' : 'bg-night-600'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'}
-        focus:outline-none focus:ring-2 focus:ring-forest-500 focus:ring-offset-2
+        focus:outline-none focus:ring-2 focus:ring-acid-400/50
       `}
     >
       <motion.span

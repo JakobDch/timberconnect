@@ -8,6 +8,7 @@
 import type { CatalogDataset, CatalogCache } from '../types/catalog';
 import type { ProductConfig } from '../config/solidPods';
 import { Parser, Store, DataFactory } from 'n3';
+import { getAuthFetch } from './authFetch';
 
 const { namedNode } = DataFactory;
 
@@ -19,7 +20,7 @@ const LDP = 'http://www.w3.org/ns/ldp#';
 // Configuration
 const FEDERATION_REGISTRY_URL =
   import.meta.env.VITE_FEDERATION_REGISTRY_URL ||
-  'https://tmdt-solid-community-server.de/semanticdatacatalog/public/dace/';
+  'https://solid-community-server.tmdt.info/semanticdatacatalog/public/dace/';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Cache instance
@@ -37,7 +38,7 @@ let catalogProducts: ProductConfig[] = [];
 async function discoverRegisteredPods(): Promise<string[]> {
   console.log('[CatalogService] Discovering pods from Federation Registry:', FEDERATION_REGISTRY_URL);
 
-  const response = await fetch(FEDERATION_REGISTRY_URL, {
+  const response = await getAuthFetch()(FEDERATION_REGISTRY_URL, {
     headers: { Accept: 'text/turtle' },
     signal: AbortSignal.timeout(10000),
   });
@@ -124,7 +125,7 @@ async function fetchPodCatalogUrls(podUrl: string): Promise<string[]> {
   console.log('[CatalogService] Fetching catalog:', catalogUrl);
 
   try {
-    const response = await fetch(catalogUrl, {
+    const response = await getAuthFetch()(catalogUrl, {
       headers: { Accept: 'text/turtle' },
       signal: AbortSignal.timeout(10000),
     });
@@ -197,7 +198,7 @@ async function fetchPodCatalogUrls(podUrl: string): Promise<string[]> {
  */
 async function fetchAndParseDataset(datasetUrl: string): Promise<CatalogDataset | null> {
   try {
-    const response = await fetch(datasetUrl, {
+    const response = await getAuthFetch()(datasetUrl, {
       headers: { Accept: 'text/turtle' },
       signal: AbortSignal.timeout(5000),
     });
@@ -289,7 +290,11 @@ async function fetchAndParseDataset(datasetUrl: string): Promise<CatalogDataset 
       description: getFirst(DCT + 'description'),
       issued: getFirst(DCT + 'issued'),
       modified: getFirst(DCT + 'modified'),
-      is_public: getFirst(DCT + 'accessRights') === 'public' || true,
+      // Catalog = discovery: every entry is listed regardless of accessRights.
+      // Access enforcement happens at query time (role pre-filter + WAC), not
+      // by hiding restricted datasets from the catalog. Kept always-true so
+      // access-controlled datasets remain discoverable.
+      is_public: true,
       access_url_dataset: downloadUrl,
       access_url_semantic_model: getFirst(DCT + 'conformsTo'),
       file_format: getFirst(DCT + 'format'),
@@ -499,55 +504,81 @@ function extractTraceIdFromMetadata(dataset: CatalogDataset): string | null {
   return null;
 }
 
+// Cache: data URL -> extracted product id (so each file is fetched at most once).
+const dataIdCache = new Map<string, string | null>();
+
 /**
- * Extract TimberConnect Trace ID by loading and parsing the actual data file.
- * Searches for TC-YYYY-NNN pattern in URIs and literals.
+ * Extract the product grouping id from the actual data file. Bridges the two
+ * id worlds: returns a legacy TC-xxxx-xxx trace id when present, otherwise the
+ * GS1 EpcisDocument doc_hash (the last path segment of the tc:EpcisDocument URI).
+ * Returns null if neither is found.
  */
-async function extractTraceIdFromData(downloadUrl: string): Promise<string | null> {
+async function extractIdFromData(downloadUrl: string): Promise<string | null> {
+  if (dataIdCache.has(downloadUrl)) return dataIdCache.get(downloadUrl)!;
+
+  let result: string | null = null;
   try {
-    const response = await fetch(downloadUrl, {
+    const response = await getAuthFetch()(downloadUrl, {
       headers: { Accept: 'text/turtle' },
       signal: AbortSignal.timeout(10000),
     });
+    if (response.ok) {
+      const ttl = await response.text();
 
-    if (!response.ok) {
-      console.warn('[CatalogService] Failed to fetch data for TC-ID extraction:', downloadUrl);
-      return null;
+      // 1) Legacy trace id wins (demo data carries tc:traceId "TC-YYYY-NNN").
+      const tc = ttl.match(/TC-\d{4}-\d{3}/i);
+      if (tc) {
+        result = tc[0].toUpperCase();
+      } else {
+        // 2) GS1 world: group by the EpcisDocument doc_hash.
+        //    .../resource/epcisDocument/<docHash>
+        const epcisDoc = ttl.match(/epcisDocument\/([A-Za-z0-9]+)/);
+        if (epcisDoc) result = epcisDoc[1];
+      }
     }
-
-    const turtleText = await response.text();
-
-    // Search for TC-YYYY-NNN pattern in the data
-    const tcPattern = /TC-\d{4}-\d{3}/gi;
-    const matches = turtleText.match(tcPattern);
-
-    if (matches && matches.length > 0) {
-      // Return the first match, normalized to uppercase
-      return matches[0].toUpperCase();
-    }
-
-    return null;
   } catch (error) {
-    console.warn('[CatalogService] Error extracting TC-ID from data:', downloadUrl, error);
-    return null;
+    console.warn('[CatalogService] Error extracting id from data:', downloadUrl, error);
   }
+
+  dataIdCache.set(downloadUrl, result);
+  return result;
 }
 
 /**
- * Extract TimberConnect Trace ID - first from metadata, then from data if needed.
+ * Derive a stable grouping id from metadata/URL as a last resort (no download).
+ * Strips a trailing data-type suffix so the station files of one product group.
+ */
+function deriveGroupingId(dataset: CatalogDataset): string | null {
+  const id = dataset.identifier;
+  if (id) {
+    const stripped = id.replace(/_(forst|saegewerk|bspwerk|unknown)$/i, '');
+    if (stripped) return stripped.toUpperCase();
+  }
+  const url = dataset.access_url_dataset;
+  if (url) {
+    const file = url.split('/').pop()?.replace(/\.ttl$/i, '') || '';
+    const stripped = file.replace(/_(forst|saegewerk|bspwerk|unknown).*$/i, '');
+    if (stripped) return stripped.toUpperCase();
+  }
+  return null;
+}
+
+/**
+ * Extract the product grouping id for a dataset. Order:
+ *  1. TC-id from catalog metadata (fast path),
+ *  2. real id from the data file (TC-id or GS1 doc_hash) — the reliable path,
+ *  3. derived from identifier/URL (last resort).
  */
 async function extractTraceId(dataset: CatalogDataset): Promise<string | null> {
-  // First: Try to get TC-ID from catalog metadata (fast)
   const metadataId = extractTraceIdFromMetadata(dataset);
   if (metadataId) return metadataId;
 
-  // Second: Load the actual data file and search for TC-ID (slower but accurate)
   if (dataset.access_url_dataset) {
-    const dataId = await extractTraceIdFromData(dataset.access_url_dataset);
+    const dataId = await extractIdFromData(dataset.access_url_dataset);
     if (dataId) return dataId;
   }
 
-  return null;
+  return deriveGroupingId(dataset);
 }
 
 function detectDataType(dataset: CatalogDataset): 'forst' | 'saegewerk' | 'bspwerk' | 'unknown' {

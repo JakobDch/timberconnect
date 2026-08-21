@@ -24,5 +24,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests gehoeren nicht in den Auslieferungs-Build. Der Docker-Build fuehrt
+  // "tsc -b && vite build" aus; ohne diesen Ausschluss brechen dort die
+  // Vitest-Typen (vi.fn) den Build ab, obwohl die Tests selbst laufen.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

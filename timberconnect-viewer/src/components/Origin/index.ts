@@ -1,0 +1,1 @@
+export { OriginProofView } from './OriginProofView';

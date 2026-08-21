@@ -1,4 +1,14 @@
-export type AppView = 'scanner' | 'usecases' | 'productpass';
+export type AppView =
+  | 'landing'
+  | 'scanner'
+  | 'usecases'
+  | 'productpass'
+  | 'co2'
+  | 'origin'
+  | 'deconstruction'
+  | 'documentation'
+  | 'liability'
+  | 'chat';
 
 export interface Dimensions {
   length: number;
@@ -50,14 +60,6 @@ export interface SupplyChainStep {
     value: string;
   }[];
   icon: string;
-}
-
-export interface UseCase {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  active: boolean;
 }
 
 export interface ProductPassData {

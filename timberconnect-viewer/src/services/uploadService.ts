@@ -4,6 +4,16 @@
  * Handles file uploads, RML conversion, and Solid Pod storage.
  */
 
+import {
+  stampContainerAcl,
+  getAllowedRoles,
+  podBaseFromUrl,
+  podBaseFromWebId,
+  writeEpcisConsent,
+} from './accessControlService';
+import { writePricingDoc, type PricingEntry } from './pricingService';
+import { registerDatasetInOwnPod } from './catalogWriteService';
+
 // Use absolute URL to support authenticated fetch (Inrupt SDK requires absolute URLs)
 const getConverterApiUrl = () => {
   if (typeof window !== 'undefined') {
@@ -23,6 +33,10 @@ export interface MappingConfig {
 export interface FileResult {
   raw_url?: string;
   rdf_url?: string;
+  /** Im Dokument eingebettete Produkt-EPCs (ERP-Excel: Blatt "Identifikation"). */
+  epcs?: string[];
+  /** Vormaterial-EPCs (tc:derivedFrom), z.B. Lamellen aus dem Aufsägevorgang. */
+  input_epcs?: string[];
 }
 
 export interface UploadResult {
@@ -73,6 +87,10 @@ export interface AutoUploadResult {
   detection_warnings: string[];
   converted_at: string;
   message?: string;
+  /** Datenpunkte (RDF-Triples) pro Datentyp — Preisgrundlage der Token-Währung. */
+  datapoint_counts?: Record<string, number>;
+  /** Gesamtzahl der Datenpunkte = Wert des Uploads in Token. */
+  total_datapoints?: number;
 }
 
 // Convert-only types (for frontend upload to Solid Pod)
@@ -83,6 +101,14 @@ export interface ConvertedFileData {
   raw_content_type: string;
   rdf_content: string | null; // Base64 encoded TTL
   rdf_filename: string | null;
+  /** Anzahl RDF-Triples (= Datenpunkte), vom Backend beim Konvertieren gezählt. */
+  triple_count?: number | null;
+  /** Maschinenlesbares JSON-Zwischendokument (ERP-Excel), Base64. */
+  json_content?: string | null;
+  json_filename?: string | null;
+  /** Eingebettete GS1-Idente der ERP-Excel (Blatt "Identifikation"). */
+  epcs?: string[] | null;
+  input_epcs?: string[] | null;
   error: string | null;
 }
 
@@ -112,6 +138,12 @@ export interface CatalogRegistrationRequest {
   raw_url?: string;
   catalog_id: number;
   publisher?: string;  // Solid user name from authentication
+  /**
+   * WebID des Pod-Eigentuemers. Pflichtfeld der Katalog-API
+   * (DatasetWriteRequest.ownerWebId): ohne sie wird die Registrierung mit
+   * HTTP 422 abgewiesen und der Datensatz ist fuer keine Abfrage sichtbar.
+   */
+  owner_webid?: string;
 }
 
 export interface CatalogRegistrationResponse {
@@ -145,7 +177,7 @@ export async function getCatalogs(): Promise<Catalog[]> {
 }
 
 // Solid Pod configuration
-const SOLID_POD_BASE_URL = 'https://tmdt-solid-community-server.de/epcisrepository';
+const SOLID_POD_BASE_URL = 'https://solid-community-server.tmdt.info/epcisrepository';
 
 /**
  * Get available RML mappings from the converter service.
@@ -309,7 +341,10 @@ export async function uploadAndConvertAuto(
  */
 async function convertFilesOnly(
   files: File[],
-  traceIdOverride?: string
+  traceIdOverride?: string,
+  docBaseUrl?: string,
+  companyPrefix?: string,
+  ifcEpc?: string
 ): Promise<ConvertOnlyResponse> {
   const formData = new FormData();
 
@@ -319,6 +354,23 @@ async function convertFilesOnly(
 
   if (traceIdOverride) {
     formData.append('trace_id_override', traceIdOverride);
+  }
+
+  if (ifcEpc) {
+    // Ident des in der IFC geplanten Bauteils. Die Ausfuehrungsplanung kennt
+    // die GS1-Serie des gefertigten Bauteils nicht, deshalb wird der Bezug
+    // erst hier hergestellt — ohne ihn lehnt der Converter die IFC ab.
+    formData.append('ifc_epc', ifcEpc);
+  }
+
+  if (docBaseUrl) {
+    formData.append('doc_base_url', docBaseUrl);
+  }
+
+  if (companyPrefix) {
+    // GCP des angemeldeten Uploaders — der Converter lehnt Requests ohne
+    // gültigen Prefix ab (Upload ohne Login/Registrierung nicht erlaubt).
+    formData.append('company_prefix', companyPrefix);
   }
 
   const response = await fetch(`${getConverterApiUrl()}/convert-only`, {
@@ -342,9 +394,10 @@ async function uploadToSolidPod(
   content: ArrayBuffer,
   filename: string,
   contentType: string,
-  folder: string = 'public/uploads'
+  folder: string,
+  podBase: string = `${SOLID_POD_BASE_URL}/`
 ): Promise<string> {
-  const url = `${SOLID_POD_BASE_URL}/${folder}/${filename}`;
+  const url = `${podBase}${folder}/${filename}`;
 
   // Convert ArrayBuffer to Blob for fetch body
   const blob = new Blob([content], { type: contentType });
@@ -380,21 +433,50 @@ async function uploadToSolidPod(
  * @param files - Files to convert and upload
  * @param traceIdOverride - Optional trace ID override
  * @param authenticatedFetch - Authenticated fetch from Solid session
- * @param catalogId - Optional catalog ID for registration (if not provided, catalog registration is skipped)
  * @param userName - Optional Solid user name for catalog publisher field
+ * @param ownerWebId - WebID of the uploading owner; required to stamp the WAC ACL on the data container
+ * @param ifcEpc - GS1-EPC des geplanten Bauteils; Pflicht, sobald eine IFC-Datei dabei ist
  */
 export async function convertAndUploadWithSession(
   files: File[],
   traceIdOverride: string | undefined,
   authenticatedFetch: typeof fetch,
-  catalogId?: number,
-  userName?: string | null
+  userName?: string | null,
+  ownerWebId?: string | null,
+  companyPrefix?: string | null,
+  ifcEpc?: string | null
 ): Promise<AutoUploadResult> {
-  // Step 1: Convert files (backend only converts, doesn't upload)
-  const convertResult = await convertFilesOnly(files, traceIdOverride);
+  // Data lands in the pod of the logged-in uploader (derived from their WebID),
+  // not the shared epcisrepository pod — only the owner may write there and
+  // stamping the container ACL requires Control, which only holds on one's own
+  // pod. Fallback to the central pod covers the legacy no-WebID case.
+  const podBase = ownerWebId ? podBaseFromWebId(ownerWebId) : `${SOLID_POD_BASE_URL}/`;
+
+  // Step 1: Convert files (backend only converts, doesn't upload). The
+  // doc_base_url becomes the EPCIS bizTransaction base, so captured events
+  // point back to the pod the data actually lives in. Der Company Prefix des
+  // Uploaders wandert in die erzeugten GS1-Idente; ohne ihn lehnt der
+  // Converter den Request ab.
+  const convertResult = await convertFilesOnly(
+    files,
+    traceIdOverride,
+    `${podBase}data`,
+    companyPrefix ?? undefined,
+    ifcEpc ?? undefined
+  );
 
   const results: Record<string, FileResult> = {};
   const errors: string[] = [];
+  // Preis-Metadaten: Datenpunktzahl je hochgeladener RDF-Datei (1 Datenpunkt
+  // = 1 Token), wird nach dem Upload als pricing.ttl im Container abgelegt.
+  const pricingEntries: PricingEntry[] = [];
+  const datapointCounts: Record<string, number> = {};
+
+  // Data goes into a per-product container under data/, which is WAC-protected
+  // (instead of the world-readable public/ folder). Raw files and RDF share the
+  // container so a single container-level ACL governs them.
+  const traceId = convertResult.trace_id;
+  const dataFolder = `data/${traceId}`;
 
   // Step 2: Upload each file to Solid Pod
   for (const fileData of convertResult.files) {
@@ -409,15 +491,17 @@ export async function convertAndUploadWithSession(
         rawView[i] = rawBytes.charCodeAt(i);
       }
 
-      // Upload raw file
+      // Upload raw file into the product's data container
       fileResult.raw_url = await uploadToSolidPod(
         authenticatedFetch,
         rawContent,
         fileData.filename,
-        fileData.raw_content_type
+        fileData.raw_content_type,
+        dataFolder,
+        podBase
       );
 
-      // Upload RDF if available
+      // Upload RDF if available (same container, governed by one ACL)
       if (fileData.rdf_content && fileData.rdf_filename) {
         const rdfBytes = atob(fileData.rdf_content);
         const rdfContent = new ArrayBuffer(rdfBytes.length);
@@ -430,9 +514,45 @@ export async function convertAndUploadWithSession(
           rdfContent,
           fileData.rdf_filename,
           'text/turtle',
-          'public' // RDF goes to public folder
+          dataFolder,
+          podBase
+        );
+
+        if (typeof fileData.triple_count === 'number' && fileData.triple_count > 0) {
+          datapointCounts[fileData.data_type] = fileData.triple_count;
+          if (ownerWebId) {
+            pricingEntries.push({
+              fileUrl: fileResult.rdf_url,
+              datapoints: fileData.triple_count,
+              recipientWebId: ownerWebId,
+            });
+          }
+        }
+      }
+
+      // JSON-Zwischendokument (ERP-Excel) neben Original und TTL ablegen —
+      // gleiche Ablage wie beim PDF-Pfad (Original + Extrakt + TTL).
+      if (fileData.json_content && fileData.json_filename) {
+        const jsonBytes = atob(fileData.json_content);
+        const jsonContent = new ArrayBuffer(jsonBytes.length);
+        const jsonView = new Uint8Array(jsonContent);
+        for (let i = 0; i < jsonBytes.length; i++) {
+          jsonView[i] = jsonBytes.charCodeAt(i);
+        }
+        await uploadToSolidPod(
+          authenticatedFetch,
+          jsonContent,
+          fileData.json_filename,
+          'application/json',
+          dataFolder,
+          podBase
         );
       }
+
+      // Eingebettete Idente (ERP-Excel) durchreichen, damit der Vorgang sie
+      // per attachProcessIdents an sich heften kann.
+      if (fileData.epcs?.length) fileResult.epcs = fileData.epcs;
+      if (fileData.input_epcs?.length) fileResult.input_epcs = fileData.input_epcs;
 
       results[fileData.data_type] = fileResult;
     } catch (err) {
@@ -443,45 +563,87 @@ export async function convertAndUploadWithSession(
 
   const success = Object.keys(results).length > 0 && errors.length === 0;
 
-  // Step 3: Register in catalog for each successfully uploaded file (only if catalogId is provided)
-  const catalogRegistrations: Record<string, string> = {};
-  if (catalogId) {
-    for (const fileData of convertResult.files) {
-      const fileResult = results[fileData.data_type];
-      if (fileResult?.rdf_url && fileData.data_type !== 'unknown') {
-        try {
-          // Determine mapping_id from data_type
-          const mappingIdMap: Record<string, string> = {
-            'forst': 'stanford_hpr',
-            'saegewerk': 'eldat_hba',
-            'bspwerk': 'vlex'
-          };
-          const mapping_id = mappingIdMap[fileData.data_type];
+  // Step 2b: Stamp the data container's WAC ACL — owner full control, plus Read
+  // for every role the owner currently allows (from their role-policy.ttl).
+  if (success && ownerWebId) {
+    try {
+      const containerUrl = `${podBase}${dataFolder}/`;
+      const pod = podBaseFromUrl(containerUrl);
+      const allowedRoles = await getAllowedRoles(pod);
+      await stampContainerAcl(containerUrl, ownerWebId, allowedRoles);
+      console.log(`[upload] Stamped ACL on ${containerUrl} for roles:`, allowedRoles);
 
-          if (mapping_id) {
-            const catalogResult = await registerInCatalog({
-              trace_id: convertResult.trace_id,
-              data_type: fileData.data_type,
-              mapping_id: mapping_id,
-              rdf_url: fileResult.rdf_url,
-              raw_url: fileResult.raw_url,
-              catalog_id: catalogId,
-              publisher: userName || undefined
-            });
+      // Mirror the same allowlist as EPCIS consent so events captured for this
+      // product are released only to the roles the owner permits.
+      await writeEpcisConsent(ownerWebId, allowedRoles);
+      console.log('[upload] Wrote EPCIS consent for roles:', allowedRoles);
+    } catch (err) {
+      console.warn('[upload] Failed to stamp container ACL:', err);
+      errors.push(
+        `ACL konnte nicht gesetzt werden: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`
+      );
+    }
 
-            if (catalogResult.success && catalogResult.identifier) {
-              catalogRegistrations[fileData.data_type] = catalogResult.identifier;
-              console.log(`Registered ${fileData.data_type} in catalog ${catalogId}: ${catalogResult.identifier}`);
-            } else {
-              console.warn(`Catalog registration failed for ${fileData.data_type}: ${catalogResult.message}`);
-            }
-          }
-        } catch (err) {
-          console.warn(`Catalog registration error for ${fileData.data_type}:`, err);
-        }
+    // Preis-Metadaten (Datenpunkte + Zahlungsempfänger) neben die Daten legen,
+    // damit Abrufende den Preis sehen können, ohne neu zählen zu müssen.
+    if (pricingEntries.length > 0) {
+      try {
+        const containerUrl = `${podBase}${dataFolder}/`;
+        await writePricingDoc(containerUrl, pricingEntries);
+        console.log('[upload] Wrote pricing.ttl:', pricingEntries);
+      } catch (err) {
+        console.warn('[upload] Failed to write pricing.ttl:', err);
       }
     }
   }
+
+  // Step 3: Katalogeintrag im EIGENEN Pod je hochgeladener Datei.
+  //
+  // Frueher lief das ueber das Converter-Backend (POST /api/datasets des
+  // Katalog-Dienstes). Dieser Weg braucht ein Service-Konto, das sich
+  // stellvertretend anmeldet -- und scheiterte ohne es mit HTTP 503. Noetig
+  // ist er nicht: der angemeldete Nutzer darf in seinem eigenen Pod schreiben,
+  // und genau dort erwartet der Katalog-Dienst die Eintraege (er LIEST
+  // <pod>/catalog/cat.ttl; seine Schreib-Endpunkte antworten "write
+  // operations are client side").
+  const catalogRegistrations: Record<string, string> = {};
+  const DATA_TYPE_LABELS: Record<string, { title: string; theme: string }> = {
+    forst: { title: 'Forstdaten (StanForD HPR)', theme: 'forstwirtschaft' },
+    saegewerk: { title: 'Sägewerksdaten (ELDAT)', theme: 'holzverarbeitung' },
+    bspwerk: { title: 'BSP-Plattendaten (VLEX)', theme: 'holzbau' },
+    herstellung: { title: 'Herstellungsdaten BSP (ERP)', theme: 'holzbau' },
+  };
+
+  if (ownerWebId) {
+    for (const fileData of convertResult.files) {
+      const fileResult = results[fileData.data_type];
+      if (!fileResult?.rdf_url || fileData.data_type === 'unknown') continue;
+
+      const info = DATA_TYPE_LABELS[fileData.data_type] ?? {
+        title: fileData.data_type,
+        theme: 'timber',
+      };
+      const entry = await registerDatasetInOwnPod(authenticatedFetch, {
+        ownerWebId,
+        title: `${info.title} - ${convertResult.trace_id}`,
+        description: `${info.title} (Trace-ID: ${convertResult.trace_id})`,
+        downloadUrl: fileResult.rdf_url,
+        rawUrl: fileResult.raw_url,
+        publisher: userName || undefined,
+        theme: info.theme,
+      });
+      if (entry.ok && entry.identifier) {
+        catalogRegistrations[fileData.data_type] = entry.identifier;
+        console.log(`[catalog] ${fileData.data_type} registriert: ${entry.identifier}`);
+      } else {
+        console.warn(`[catalog] ${fileData.data_type} nicht registriert: ${entry.error}`);
+      }
+    }
+  } else {
+    console.warn('[catalog] Keine WebID — Katalogeintrag übersprungen.');
+  }
+
+  const totalDatapoints = Object.values(datapointCounts).reduce((sum, n) => sum + n, 0);
 
   return {
     success,
@@ -490,6 +652,8 @@ export async function convertAndUploadWithSession(
     detection_warnings: [...convertResult.detection_warnings, ...errors],
     converted_at: convertResult.converted_at,
     message: errors.length > 0 ? errors.join('; ') : undefined,
+    datapoint_counts: Object.keys(datapointCounts).length > 0 ? datapointCounts : undefined,
+    total_datapoints: totalDatapoints > 0 ? totalDatapoints : undefined,
     catalog_registrations: Object.keys(catalogRegistrations).length > 0 ? catalogRegistrations : undefined
   } as AutoUploadResult & { catalog_registrations?: Record<string, string> };
 }
@@ -497,6 +661,19 @@ export async function convertAndUploadWithSession(
 /**
  * Register a dataset in the Semantic Data Catalog.
  * Called after successful upload to Solid Pod.
+ */
+/**
+ * VERALTET — nicht mehr im Einsatz.
+ *
+ * Ging ueber POST /api/datasets des Katalog-Dienstes und brauchte dort ein
+ * Service-Konto, das sich stellvertretend anmeldet; ohne dieses antwortete
+ * der Dienst mit HTTP 503, und der Katalogeintrag entstand nie (der Upload
+ * meldete trotzdem Erfolg).
+ *
+ * Ersetzt durch catalogWriteService.registerDatasetInOwnPod: der angemeldete
+ * Nutzer schreibt den Eintrag direkt in seinen eigenen Pod — dort, wo der
+ * Katalog-Dienst ihn ohnehin liest. Bleibt vorerst erhalten, weil der
+ * Backend-Endpunkt noch existiert.
  */
 export async function registerInCatalog(
   request: CatalogRegistrationRequest

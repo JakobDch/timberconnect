@@ -34,6 +34,24 @@
   --color-timber-light: #6B6B6B;
   --color-timber-bg: #FAFAFA;
 
+  /* Night Navy - Dark UI (neue Vorgabe) */
+  --color-night-950: #0B141E;
+  --color-night-900: #142230;
+  --color-night-800: #1B2C3D;
+  --color-night-700: #24374B;
+  --color-night-600: #31485F;
+  --color-night-400: #64809A;
+  --color-night-300: #8FA6BA;
+  --color-night-200: #B9C8D6;
+  --color-night-100: #DEE7EF;
+
+  /* Acid Lime - Akzent (neue Vorgabe) */
+  --color-acid-200: #F0F68F;
+  --color-acid-300: #E8F063;
+  --color-acid-400: #DFE94B;
+  --color-acid-500: #CBD639;
+  --color-acid-600: #A8B32C;
+
   /* Shadow utilities */
   --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-soft-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(45, 150, 96, 0.1);
@@ -84,12 +102,21 @@
   --timber-gray: #8C8C8C;
   --timber-light: #6B6B6B;
 
+  /* Night Navy + Acid Lime (neue UI-Vorgabe) */
+  --color-night-950: #0B141E;
+  --color-night-900: #142230;
+  --color-night-800: #1B2C3D;
+  --color-night-700: #24374B;
+  --color-night-600: #31485F;
+  --color-night-300: #8FA6BA;
+  --color-acid-400: #DFE94B;
+
   /* Typography */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--timber-dark);
-  background-color: var(--color-gray-50);
+  background-color: var(--color-night-900);
 
   /* Rendering */
   font-synthesis: none;
@@ -319,6 +346,46 @@ html {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   border-radius: 8px;
+}
+
+/* Acid Lime Button - Primaerbutton der neuen UI-Vorgabe */
+.btn-acid {
+  background: var(--color-acid-400);
+  color: var(--color-night-950);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.25),
+    0 6px 24px rgba(223, 233, 75, 0.25);
+}
+
+.btn-acid:hover {
+  background: var(--color-acid-300, #E8F063);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 32px rgba(223, 233, 75, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-acid:active {
+  transform: translateY(0);
+}
+
+.btn-acid:focus {
+  box-shadow: 0 0 0 3px rgba(223, 233, 75, 0.35);
+}
+
+/* Dunkler Sekundaerbutton auf Navy-Flaechen */
+.btn-night {
+  background: var(--color-night-700);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-night:hover {
+  background: var(--color-night-600);
+}
+
+.btn-night:focus {
+  box-shadow: 0 0 0 3px rgba(143, 166, 186, 0.25);
 }
 
 /* Icon Button */

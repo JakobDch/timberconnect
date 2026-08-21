@@ -1,24 +1,92 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Header, ForestBackground } from './components/Layout';
-import { ScannerView } from './components/Scanner';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Header, SideMenu } from './components/Layout';
+import { RoleSetup } from './components/Auth/RoleSetup';
+import { LandingView } from './components/Landing';
+import { ScanView } from './components/Scanner';
+import { UploadSheet } from './components/Upload/UploadSheet';
+import { FileBrowserSheet } from './components/Files';
 import { UseCaseGrid } from './components/UseCases';
 import { ProductPassView } from './components/ProductPass';
-import { fetchProductData, type SourceStatus } from './services/sparqlService';
+import { CO2BalanceView } from './components/CO2';
+import { OriginProofView } from './components/Origin';
+import { DeconstructionView } from './components/Deconstruction';
+import { DocumentationView } from './components/Documentation';
+import { LiabilityView } from './components/Liability';
+import { ChatView } from './components/Chat';
+import { findUseCase, isAvailable, type UseCaseDefinition } from './config/useCases';
+import { PartnerSheet } from './components/Partners';
+import {
+  fetchProductData,
+  type SourceStatus,
+  type ProductDataResult,
+} from './services/sparqlService';
 import { mapToProduct, mapToSupplyChain } from './services/productMapper';
+import { addRecentScan } from './services/recentActivity';
 import { initializeCatalog } from './config/solidPods';
+import {
+  collectExtractedDatapoints,
+  estimateExtractionCost,
+  commitPurchase,
+  type CostEstimate,
+} from './services/pricingService';
+import { WalletSheet, CostConfirmSheet } from './components/Wallet';
+import { MultiTagSheet } from './components/Scanner/MultiTagSheet';
+import { LoginModal } from './components/Auth/LoginModal';
+import { useAuth } from './auth/AuthContext';
+import { useWallet } from './wallet/WalletContext';
+import { useScanInput } from './hooks/useScanInput';
+import { describeProblem } from './services/identifiers';
+import type { ParsedIdentifier, ScanSource } from './services/identifiers';
 import type { AppView, Product, SupplyChainStep } from './types';
 import logoNrwMunv from '/logo-nrw-munv.png';
 import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
 
+/** Fertig gemappte Produktdaten, die auf die Kosten-Bestätigung warten. */
+interface PendingDisplay {
+  traceId: string;
+  product: Product;
+  supplyChain: SupplyChainStep[];
+  /** Rohdaten für Ansichten, die mehr brauchen als Product/SupplyChain
+      (Herkunftsnachweis: Transportaufträge, Zertifikate, EPCIS-Events). */
+  raw: ProductDataResult;
+}
+
 function App() {
-  const [currentView, setCurrentView] = useState<AppView>('scanner');
+  const { isLoggedIn, webId } = useAuth();
+  const { balance, pay } = useWallet();
+  const [currentView, setCurrentView] = useState<AppView>('landing');
   const [productId, setProductId] = useState<string>('');
   const [product, setProduct] = useState<Product | null>(null);
   const [supplyChain, setSupplyChain] = useState<SupplyChainStep[]>([]);
+  // Rohe Abfrageergebnisse: der Herkunftsnachweis braucht Felder, die beim
+  // Mappen auf Product/SupplyChain wegfallen. Wird immer zusammen mit
+  // setProduct gesetzt, damit es nie an der Bezahlschranke vorbeikommt.
+  const [productData, setProductData] = useState<ProductDataResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sourceStatus, setSourceStatus] = useState<SourceStatus[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [partnersOpen, setPartnersOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  // Zuerst gewaehlter Anwendungsfall, fuer den noch ein Produkt fehlt.
+  // Nach dem Scan wird direkt hierhin gesprungen -- die Auswahl steht ja schon.
+  const [pendingUseCase, setPendingUseCase] = useState<UseCaseDefinition | null>(null);
+  // Kostenpflichtige Anzeige: Daten sind geladen, warten aber auf Bestätigung
+  // + Token-Transfer, bevor sie sichtbar werden.
+  const [pendingDisplay, setPendingDisplay] = useState<PendingDisplay | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+  // Mehrere Tags aus einem RFID-Sweep, aus denen der Nutzer waehlt.
+  const [scanSession, setScanSession] = useState<ParsedIdentifier[] | null>(null);
+  // Woher die zuletzt verwendete ID kam -- fuer die Quellenanzeige.
+  const [scanSource, setScanSource] = useState<ScanSource | null>(null);
+  const scanInputRef = useRef<{ submit: (raw: string, source: ScanSource) => void } | null>(null);
+  // Ob die Erfassung offen ist — der globale Scan-Hook pausiert dann.
+  const [scanInputOpen, setScanInputOpen] = useState(false);
 
   // Initialize catalog on app startup (pre-fetch for better UX)
   useEffect(() => {
@@ -27,163 +95,598 @@ function App() {
     });
   }, []);
 
-  const loadProductData = useCallback(async (traceId: string) => {
-    setIsLoading(true);
-    setError(null);
-    setWarnings([]);
-    setSourceStatus([]);
+  /**
+   * Gemerkten Anwendungsfall einloesen, sobald ein Produkt vorliegt.
+   * Gibt true zurueck, wenn dadurch navigiert wurde.
+   */
+  const consumePendingUseCase = useCallback((): boolean => {
+    if (!pendingUseCase?.view) return false;
+    setCurrentView(pendingUseCase.view);
+    setPendingUseCase(null);
+    return true;
+  }, [pendingUseCase]);
 
-    try {
-      console.log('[App] Loading product data for traceId:', traceId);
+  const loadProductData = useCallback(
+    async (traceId: string): Promise<Product | null> => {
+      setIsLoading(true);
+      setError(null);
+      setWarnings([]);
+      setSourceStatus([]);
 
-      const data = await fetchProductData(traceId);
+      try {
+        console.log('[App] Loading product data for traceId:', traceId);
 
-      console.log('[App] Received data:', data);
+        const data = await fetchProductData(traceId);
 
-      // Store source status for UI display
-      setSourceStatus(data.sourceStatus);
+        console.log('[App] Received data:', data);
 
-      // Store any warnings (e.g., unavailable sources)
-      if (data.errors.length > 0) {
-        setWarnings(data.errors);
-      }
+        // Store source status for UI display
+        setSourceStatus(data.sourceStatus);
 
-      // Log source availability
-      const availableSources = data.sourceStatus.filter((s) => s.available);
-      const unavailableSources = data.sourceStatus.filter((s) => !s.available);
-      if (availableSources.length > 0) {
-        console.log(
-          '[App] Data loaded from pods:',
-          availableSources.map((s) => s.pod).join(', ')
+        // Surface the EPCIS retrieval summary (EPC-centric flow) + any warnings.
+        const infoLines: string[] = [];
+        if (data.epcisInfo) {
+          const i = data.epcisInfo;
+          infoLines.push(
+            `EPCIS: ${i.eventsReturned} Event(s) gefunden, ${i.epcsResolved} EPC(s) aufgelöst` +
+              (i.eventsFilteredOut > 0 ? ` (${i.eventsFilteredOut} per Consent gefiltert)` : ''),
+          );
+        }
+        if (infoLines.length > 0 || data.errors.length > 0) {
+          setWarnings([...infoLines, ...data.errors]);
+        }
+
+        // Log source availability
+        const availableSources = data.sourceStatus.filter((s) => s.available);
+        const unavailableSources = data.sourceStatus.filter((s) => !s.available);
+        if (availableSources.length > 0) {
+          console.log(
+            '[App] Data loaded from pods:',
+            availableSources.map((s) => s.pod).join(', ')
+          );
+        }
+        if (unavailableSources.length > 0) {
+          console.warn(
+            '[App] Unavailable pods:',
+            unavailableSources.map((s) => s.pod).join(', ')
+          );
+        }
+
+        // Map the SPARQL results to our UI types
+        const mapped = mapToProduct(
+          data.product,
+          data.stem,
+          data.forest,
+          data.bspWerk
         );
-      }
-      if (unavailableSources.length > 0) {
-        console.warn(
-          '[App] Unavailable pods:',
-          unavailableSources.map((s) => s.pod).join(', ')
+
+        // Die erfasste ID nachtragen: mapToProduct liest sie aus tc:traceId,
+        // das es nur im Trace-Id-Weg gibt. Beim EPC-Weg blieb die Produkt-ID
+        // deshalb leer und der Name stand als blosses "Holzprodukt" da.
+        const mappedProduct = mapped
+          ? { ...mapped, id: mapped.id || traceId }
+          : mapped;
+
+        const mappedSupplyChain = mapToSupplyChain(
+          data.forest,
+          data.sawmill,
+          data.bspWerk,
+          data.supplyChain,
+          data.businessPartners,
+          data.stem
         );
-      }
 
-      // Map the SPARQL results to our UI types
-      const mappedProduct = mapToProduct(
-        data.product,
-        data.stem,
-        data.forest,
-        data.bspWerk
-      );
+        if (mappedProduct) {
+          // Token-Bezahlschranke: Bezahlt wird nur, was TATSÄCHLICH extrahiert
+          // wurde (die eindeutigen Datenpunkte im Abfrageergebnis) und noch
+          // nicht früher gekauft war — nicht der Gesamtwert der Quelldateien.
+          // Eigene Daten sind kostenlos.
+          const availableUrls = data.sourceStatus
+            .filter((s) => s.available)
+            .map((s) => s.url);
+          const extractedKeys = collectExtractedDatapoints([
+            data.product,
+            data.stem,
+            data.forest,
+            data.sawmill,
+            data.bspWerk,
+            data.supplyChain,
+            data.businessPartners,
+          ]);
+          let estimate: CostEstimate | null = null;
+          try {
+            estimate = await estimateExtractionCost(extractedKeys, availableUrls, webId);
+          } catch (err) {
+            console.warn('[App] Kostenberechnung fehlgeschlagen:', err);
+          }
 
-      const mappedSupplyChain = mapToSupplyChain(
-        data.forest,
-        data.sawmill,
-        data.bspWerk,
-        data.supplyChain,
-        data.businessPartners,
-        data.stem
-      );
+          if (estimate && estimate.totalTokens > 0) {
+            console.log(
+              `[App] Kostenpflichtige Anzeige: ${estimate.totalTokens} Token ` +
+                `(${estimate.alreadyOwnedDatapoints} von ${estimate.totalDatapoints} ` +
+                `bereits gekauft) an`,
+              estimate.byRecipient.map((r) => r.recipientWebId),
+            );
+            setPendingDisplay({
+              traceId,
+              product: mappedProduct,
+              supplyChain: mappedSupplyChain,
+              raw: data,
+            });
+            setCostEstimate(estimate);
+            // Noch nichts anzeigen — erst nach Bestätigung + Transfer.
+            return null;
+          }
 
-      if (mappedProduct) {
-        setProduct(mappedProduct);
-        setSupplyChain(mappedSupplyChain);
-        return true;
-      } else {
-        // No data found in Solid Pod
-        console.log('[App] No product data found in Solid Pod');
-        setError('Keine Daten für dieses Produkt gefunden. Prüfen Sie, ob die Produkt-ID korrekt ist.');
+          setProduct(mappedProduct);
+          setSupplyChain(mappedSupplyChain);
+          setProductData(data);
+          return mappedProduct;
+        } else {
+          // Kein Treffer — der Grund steht in data.errors, sofern die Abfrage
+          // selbst gescheitert ist. Den echten Grund zeigen statt pauschal die
+          // ID zu verdaechtigen: eine fehlende Anmeldung sieht sonst aus wie
+          // eine falsche ID, und man sucht an der voellig falschen Stelle.
+          console.log('[App] No product data found in Solid Pod', data.errors);
+          const blocked = data.errors.find(
+            (e) => /nicht authentifiziert|anmeld|berechtigung|rolle/i.test(e),
+          );
+          setError(
+            blocked
+              ? `${blocked} Ohne Anmeldung liefert der EPCIS-Dienst keine Events.`
+              : data.errors[0] ||
+                  'Keine Daten für dieses Produkt gefunden. Prüfen Sie, ob die Produkt-ID korrekt ist.',
+          );
+          setProduct(null);
+          setSupplyChain([]);
+          setProductData(null);
+          return null;
+        }
+      } catch (err) {
+        console.error('[App] Error loading product data:', err);
+        setError(err instanceof Error ? err.message : 'Fehler beim Laden der Produktdaten');
         setProduct(null);
         setSupplyChain([]);
-        return false;
+        setProductData(null);
+        return null;
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error('[App] Error loading product data:', err);
-      setError(err instanceof Error ? err.message : 'Fehler beim Laden der Produktdaten');
-      setProduct(null);
-      setSupplyChain([]);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [webId]
+  );
 
-  const handleProductScanned = async (id: string) => {
-    setProductId(id);
-    await loadProductData(id);
-    setCurrentView('usecases');
+  // Kosten bestätigt: Token transferieren, dann die Daten anzeigen.
+  const handleConfirmCost = async () => {
+    if (!pendingDisplay || !costEstimate) return;
+    setIsPaying(true);
+    try {
+      const result = await pay(
+        costEstimate.byRecipient.map((r) => ({
+          recipientWebId: r.recipientWebId,
+          amount: r.tokens,
+          reason: `Datenabruf ${pendingDisplay.traceId}`,
+        })),
+      );
+      // Erst nach erfolgreicher Zahlung ins Kaufregister — ein WalletError
+      // (Guthaben reicht nicht) darf nie eine unbezahlte Berechtigung eintragen.
+      await commitPurchase(webId, costEstimate);
+      if (result.warnings.length > 0) {
+        setWarnings((prev) => [...prev, ...result.warnings]);
+      }
+      setProduct(pendingDisplay.product);
+      setSupplyChain(pendingDisplay.supplyChain);
+      setProductData(pendingDisplay.raw);
+      addRecentScan({ id: pendingDisplay.traceId, name: pendingDisplay.product.name });
+      setPendingDisplay(null);
+      setCostEstimate(null);
+      // Erst hier sind die Daten sichtbar -- also erst hier in den
+      // vorgewaehlten Anwendungsfall springen, sonst auf die Produktseite.
+      if (!consumePendingUseCase()) setCurrentView('usecases');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Token-Transfer fehlgeschlagen',
+      );
+    } finally {
+      setIsPaying(false);
+    }
   };
 
-  const handleSelectUseCase = (useCaseId: string) => {
-    if (useCaseId === 'dbpp') {
-      setCurrentView('productpass');
+  // Abgebrochen: geladene Daten verwerfen, nichts abbuchen.
+  const handleCancelCost = () => {
+    setPendingDisplay(null);
+    setCostEstimate(null);
+    setPendingUseCase(null);
+    setError('Anzeige abgebrochen — es wurden keine Token abgebucht.');
+  };
+
+  // Scan-Flow: nach einem Treffer geht es direkt auf die Produktseite mit den
+  // Anwendungsfaellen. Frueher erschien nur ein Sheet mit einem einzigen
+  // Weiter-Knopf zum Produktpass — die uebrigen Faelle waren von dort aus nicht
+  // erreichbar. War vorher schon ein Fall gewaehlt, wird dieser geoeffnet.
+  const handleProductScanned = async (id: string) => {
+    setProductId(id);
+    const mapped = await loadProductData(id);
+    if (mapped) {
+      addRecentScan({ id, name: mapped.name });
+      // loadProductData liefert null, solange die Bezahlschranke offen ist --
+      // dann uebernimmt handleConfirmCost den Sprung.
+      if (!consumePendingUseCase()) setCurrentView('usecases');
     }
+  };
+
+  /**
+   * Ein gedeuteter Scan (Hardware, Kamera, Eingabe) fuehrt zum Bauteil.
+   *
+   * Konnte keine ID bestimmt werden, wird der Grund konkret gemeldet statt
+   * eines allgemeinen "nicht gefunden" -- beim Einrichten der Geraete ist der
+   * Unterschied zwischen "falsch gelesen" und "korrekt gelesen, aber unbekannt"
+   * der wichtigste Hinweis ueberhaupt.
+   */
+  const handleParsedScan = useCallback(
+    (parsed: ParsedIdentifier) => {
+      setScanSource(parsed.source);
+      const id = parsed.urn ?? parsed.candidates?.[0] ?? null;
+
+      if (!id) {
+        setError(describeProblem(parsed) ?? `Scan nicht erkannt: ${parsed.raw}`);
+        setCurrentView('scanner');
+        return;
+      }
+
+      if (currentView !== 'scanner' && !product) setCurrentView('scanner');
+      void handleProductScanned(id);
+    },
+    // handleProductScanned ist bewusst nicht memoisiert; die Abhaengigkeiten
+    // hier decken alles ab, was sich auf das Verhalten auswirkt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentView, product],
+  );
+
+  const handleMultipleScans = useCallback((items: ParsedIdentifier[]) => {
+    setScanSession(items);
+  }, []);
+
+  /**
+   * Eingaben aus dem Scan-Screen (Kamera, manuelle Eingabe, Katalogliste).
+   *
+   * Alles laeuft durch den Uebersetzer, damit ein eingefuegter Elementstring
+   * oder ein Hex-EPC genauso funktioniert wie eine fertige URN. Bereits
+   * kanonische IDs reicht der Uebersetzer unveraendert durch, deshalb bleiben
+   * Katalog- und Verlaufseintraege unberuehrt.
+   */
+  const handleScanViewInput = useCallback(
+    (raw: string, source: ScanSource = 'manual') => {
+      scanInputRef.current?.submit(raw, source);
+    },
+    [],
+  );
+
+  // Der Hardware-Scanner wirkt global: bei einem Pistolengriff-Geraet soll der
+  // Auslöser aus jeder Ansicht heraus funktionieren. Nur wenn ein Dialog die
+  // Eingabe braucht, wird pausiert.
+  // Der globale Hardware-Scan wirkt aus jeder Ansicht heraus: bei einem
+  // Pistolengriff-Geraet soll der Auslöser immer greifen. Er pausiert, solange
+  // ein Dialog die Eingabe braucht — insbesondere die Erfassung selbst, die
+  // sonst denselben Scan ein zweites Mal verarbeiten wuerde.
+  const scanInput = useScanInput({
+    enabled:
+      !uploadOpen &&
+      !filesOpen &&
+      !walletOpen &&
+      !loginOpen &&
+      !pendingDisplay &&
+      !scanInputOpen,
+    onSingle: handleParsedScan,
+    onMultiple: handleMultipleScans,
+  });
+
+  // Ueber ein Ref erreichbar, damit handleScanViewInput oberhalb der
+  // Hook-Deklaration stehen kann, ohne bei jedem Render neu erzeugt zu werden.
+  useEffect(() => {
+    scanInputRef.current = scanInput;
+  }, [scanInput]);
+
+  // Upload-Flow: wie der Scan -- vorgewaehlter Fall gewinnt, sonst das Raster.
+  const handleUploadSuccess = async (traceId: string) => {
+    setUploadOpen(false);
+    setProductId(traceId);
+    const mapped = await loadProductData(traceId);
+    if (mapped) {
+      addRecentScan({ id: traceId, name: mapped.name });
+      if (!consumePendingUseCase()) setCurrentView('usecases');
+    } else if (!pendingUseCase) {
+      setCurrentView('usecases');
+    }
+  };
+
+  /**
+   * Anwendungsfall waehlen -- unabhaengig davon, ob schon ein Produkt da ist.
+   *
+   * Mit Produkt: direkt oeffnen. Ohne Produkt: Auswahl merken und sofort den
+   * Scanner oeffnen; nach dem Scan geht es von selbst in die Ansicht.
+   *
+   * Bewusst OHNE Sonderfall fuer standalone-Faelle: einen Anwendungsfall
+   * waehlt man, um ihn fuer ein Bauteil zu sehen. Wer ihn ohne Produkt
+   * oeffnete, landete nur im Leerzustand -- der Klick fuehlte sich folgenlos
+   * an. Fehlt das Produkt, ist der Scan der einzig sinnvolle naechste Schritt.
+   */
+  const openUseCase = useCallback(
+    (useCase: UseCaseDefinition) => {
+      if (!isAvailable(useCase) || !useCase.view) return;
+
+      if (product) {
+        setPendingUseCase(null);
+        setCurrentView(useCase.view);
+        return;
+      }
+
+      setPendingUseCase(useCase);
+      setCurrentView('scanner');
+    },
+    [product],
+  );
+
+  // Ziel kommt aus der Registry -- keine if-Kette, die beim naechsten
+  // Anwendungsfall wieder vergessen wird.
+  const handleSelectUseCase = (useCaseId: string) => {
+    const useCase = findUseCase(useCaseId);
+    if (useCase) openUseCase(useCase);
+  };
+
+  /** Kontext-Chip oben rechts im Header (PDF-Vorgabe). */
+  const contextChipFor = (view: AppView): string | undefined => {
+    if (view === 'co2') return 'CO₂ Bilanz';
+    if (view === 'origin') return 'Herkunft';
+    if (view === 'deconstruction') return 'Rückbaubarkeit';
+    if (view === 'documentation') return 'Dokumentation';
+    if (view === 'liability') return 'Haftungsnachweis';
+    if (view === 'chat') return 'Assistent';
+    return undefined;
+  };
+
+  const resetProduct = () => {
+    setProductId('');
+    setProduct(null);
+    setSupplyChain([]);
+    setProductData(null);
+    setError(null);
+    setPendingDisplay(null);
+    setCostEstimate(null);
+    setPendingUseCase(null);
   };
 
   const handleBackToScanner = () => {
     setCurrentView('scanner');
-    setProductId('');
-    setProduct(null);
-    setSupplyChain([]);
-    setError(null);
-  };
-
-  const handleBackToUseCases = () => {
-    setCurrentView('usecases');
+    resetProduct();
   };
 
   const handleLogoClick = () => {
-    handleBackToScanner();
+    setCurrentView('landing');
+    resetProduct();
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <ForestBackground />
-      <Header onLogoClick={handleLogoClick} />
+    <div className="min-h-screen flex flex-col bg-night-900">
+      <RoleSetup />
+      <Header
+        onLogoClick={handleLogoClick}
+        showScanReady={currentView === 'scanner'}
+        onWalletClick={() => setWalletOpen(true)}
+        onMenuClick={() => setMenuOpen(true)}
+        contextChip={contextChipFor(currentView)}
+      />
+
+      {/* Seitenfenstermenü (Drawer, PDF-Vorgabe) */}
+      <SideMenu
+        isOpen={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onScanClick={() => setCurrentView('scanner')}
+        onPartnersClick={() => setPartnersOpen(true)}
+        onFilesClick={() => setFilesOpen(true)}
+        onUseCaseClick={handleSelectUseCase}
+      />
 
       <main className="flex-1 flex flex-col relative">
+        {currentView === 'landing' && (
+          <LandingView
+            onScanClick={() => setCurrentView('scanner')}
+            onUploadClick={() => setUploadOpen(true)}
+            onPartnersClick={() => setPartnersOpen(true)}
+            onUseCaseClick={handleSelectUseCase}
+          />
+        )}
+
         {currentView === 'scanner' && (
-          <ScannerView
-            onProductScanned={handleProductScanned}
+          <ScanView
+            onProductScanned={handleScanViewInput}
             isLoading={isLoading}
+            error={error}
+            scannedProduct={product}
+            scanSource={scanSource}
+            targetUseCaseTitle={pendingUseCase?.title ?? null}
+            autoOpenInput={pendingUseCase !== null}
+            onDismissError={() => setError(null)}
+            onInputOpenChange={setScanInputOpen}
           />
         )}
 
         {currentView === 'usecases' && (
-          <UseCaseGrid
-            productId={productId}
+          <div className="flex-1 flex flex-col bg-night-900">
+            <UseCaseGrid
+              productId={productId}
+              product={product}
+              productData={productData}
+              supplyChain={supplyChain}
+              onSelectUseCase={handleSelectUseCase}
+              onBack={handleBackToScanner}
+              isLoading={isLoading}
+              error={error}
+              warnings={warnings}
+              sourcePods={sourceStatus.filter((s) => s.available).map((s) => s.pod)}
+            />
+          </div>
+        )}
+
+        {currentView === 'productpass' && (
+          <div className="flex-1 flex flex-col bg-night-900">
+            <ProductPassView
+              productId={productId}
+              product={product}
+              productData={productData}
+              supplyChain={supplyChain}
+              onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+              onScanClick={() => setCurrentView('scanner')}
+            />
+          </div>
+        )}
+
+        {currentView === 'co2' && (
+          <CO2BalanceView
+            productId={productId || undefined}
             product={product}
-            supplyChain={supplyChain}
-            onSelectUseCase={handleSelectUseCase}
-            onBack={handleBackToScanner}
-            isLoading={isLoading}
-            error={error}
-            warnings={warnings}
-            sourcePods={sourceStatus.filter((s) => s.available).map((s) => s.pod)}
+            productData={productData}
+            onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+            onAddProduct={() => setCurrentView('scanner')}
           />
         )}
 
-        {currentView === 'productpass' && product && (
-          <ProductPassView
-            productId={productId}
-            product={product}
-            supplyChain={supplyChain}
-            onBack={handleBackToUseCases}
-          />
+        {currentView === 'origin' && (
+          <div className="flex-1 flex flex-col bg-night-900">
+            <OriginProofView
+              productId={productId}
+              product={product}
+              supplyChain={supplyChain}
+              productData={productData}
+              onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+              onScanClick={() => setCurrentView('scanner')}
+            />
+          </div>
+        )}
+
+        {currentView === 'deconstruction' && (
+          <div className="flex-1 flex flex-col bg-night-900">
+            <DeconstructionView
+              productId={productId}
+              product={product}
+              productData={productData}
+              onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+              onScanClick={() => setCurrentView('scanner')}
+            />
+          </div>
+        )}
+
+        {currentView === 'documentation' && (
+          <div className="flex-1 flex flex-col bg-night-900">
+            <DocumentationView
+              productId={productId}
+              product={product}
+              productData={productData}
+              onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+              onScanClick={() => setCurrentView('scanner')}
+            />
+          </div>
+        )}
+
+        {currentView === 'liability' && (
+          <div className="flex-1 flex flex-col bg-night-900">
+            <LiabilityView
+              productId={productId}
+              product={product}
+              productData={productData}
+              onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+              onScanClick={() => setCurrentView('scanner')}
+            />
+          </div>
+        )}
+
+        {/* min-h-0 statt nur flex-1: der Chat scrollt in sich selbst, die
+            Seite darf nicht mitwachsen -- sonst rutscht die Eingabe raus. */}
+        {currentView === 'chat' && (
+          <div className="flex-1 flex flex-col min-h-0 bg-night-900">
+            <ChatView
+              productId={productId}
+              product={product}
+              supplyChain={supplyChain}
+              onBack={() => setCurrentView(product ? 'usecases' : 'landing')}
+              onScanClick={() => setCurrentView('scanner')}
+              onBuyTokens={() => setWalletOpen(true)}
+              onLogin={() => setLoginOpen(true)}
+            />
+          </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
-          <p className="text-sm text-timber-gray">TimberConnect - Transparenz in der Holzlieferkette</p>
-          <div className="flex items-center gap-4">
-            <img
-              src={logoNrwMunv}
-              alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-              className="h-24 object-contain"
-            />
-            <img
-              src={logoEuKofinanziert}
-              alt="Kofinanziert von der Europäischen Union"
-              className="h-16 object-contain"
-            />
+      {/* Upload Bottom-Sheet (Startseite "Daten hochladen") */}
+      <UploadSheet
+        isOpen={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onUploadSuccess={handleUploadSuccess}
+        isLoading={isLoading}
+      />
+
+      {/* Datei-Browser (Startseite "Dateien durchsuchen"): prüft erst die
+          Rollen-Berechtigungen, dann Suche/Filter/Extraktion der Originale */}
+      <FileBrowserSheet
+        isOpen={filesOpen}
+        onClose={() => setFilesOpen(false)}
+      />
+
+      {/* Wallet: Guthaben + Token kaufen (Demo-Zahlung) */}
+      <WalletSheet isOpen={walletOpen} onClose={() => setWalletOpen(false)} />
+
+      {/* Kosten-Bestätigung: Preis + Empfänger anzeigen, erst nach Bestätigung
+          werden die Token transferiert und die Daten sichtbar */}
+      <CostConfirmSheet
+        isOpen={pendingDisplay !== null && costEstimate !== null}
+        estimate={costEstimate}
+        balance={balance}
+        isLoggedIn={isLoggedIn}
+        isPaying={isPaying}
+        onConfirm={handleConfirmCost}
+        onCancel={handleCancelCost}
+        onBuyTokens={() => setWalletOpen(true)}
+        onLogin={() => setLoginOpen(true)}
+      />
+
+      <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} />
+
+      {/* Mehrere Tags aus einem RFID-Sweep: Auswahl statt Stapelabruf, weil
+          jede Abfrage Token kostet */}
+      <MultiTagSheet
+        items={scanSession}
+        onSelect={(id) => {
+          setScanSession(null);
+          void handleProductScanned(id);
+        }}
+        onClose={() => setScanSession(null)}
+      />
+
+      {/* Praxispartner (Startseite / Seitenmenü) */}
+      <PartnerSheet isOpen={partnersOpen} onClose={() => setPartnersOpen(false)} />
+
+      {/* Footer: EU-Logo | NRW-Logo kompakt nebeneinander (PDF-Vorgabe) */}
+      <footer className="bg-night-900 border-t border-white/5 py-4 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-sm text-night-300">
+            TimberConnect – Transparenz in der Holzlieferkette
+          </p>
+          <div className="flex items-center gap-3 sm:gap-4 max-w-full">
+            <div className="bg-white rounded-xl px-3 py-1.5">
+              <img
+                src={logoEuKofinanziert}
+                alt="Kofinanziert von der Europäischen Union"
+                className="h-10 sm:h-12 w-auto object-contain"
+              />
+            </div>
+            <div className="w-px h-10 sm:h-12 bg-white/15" />
+            <div className="bg-white rounded-xl px-3 py-1.5">
+              <img
+                src={logoNrwMunv}
+                alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
+                className="h-10 sm:h-12 w-auto object-contain"
+              />
+            </div>
           </div>
         </div>
       </footer>

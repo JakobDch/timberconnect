@@ -1,0 +1,1 @@
+export { DocumentationView } from './DocumentationView';
