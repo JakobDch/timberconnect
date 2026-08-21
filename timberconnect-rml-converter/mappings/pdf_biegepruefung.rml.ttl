@@ -1,0 +1,130 @@
+# RML-Mapping fuer PDF-Template: Biegeprüfung Schnittholz (pdf_biegepruefung)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_biegepruefung_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bendingtest/{__docId}" ;
+        rr:class tc:TestReport
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:printedAt ;
+        rr:objectMap [ rml:reference "druckdatum" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:businessName ;
+        rr:objectMap [ rml:reference "pruefstelle" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:orderNumber ;
+        rr:objectMap [ rml:reference "auftragsNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:samplingNote ;
+        rr:objectMap [ rml:reference "probenentnahme" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:preForce ;
+        rr:objectMap [ rml:reference "vorkraft" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:testSpeed ;
+        rr:objectMap [ rml:reference "pruefgeschwindigkeit" ;
+            rr:datatype xsd:decimal ]
+    ] .
+
+<#pdf_biegepruefung_proben>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.rows.proben[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bendingtest/{__docId}/probe/{__rowIndex}" ;
+        rr:class tc:BendingTest
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "__epc" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:sampleId ;
+        rr:objectMap [ rml:reference "probenNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:label ;
+        rr:objectMap [ rml:reference "probenbezeichnung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:sampleLength ;
+        rr:objectMap [ rml:reference "probenlaenge" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:sampleThickness ;
+        rr:objectMap [ rml:reference "probenstaerke" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:maxForce ;
+        rr:objectMap [ rml:reference "fmax" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:deformationAtMaxForce ;
+        rr:objectMap [ rml:reference "dlBeiFmax" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:testDuration ;
+        rr:objectMap [ rml:reference "tPruefung" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:dateTime ;
+        rr:objectMap [ rml:reference "datumUhrzeit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:comment ;
+        rr:objectMap [ rml:reference "anmerkung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:testerName ;
+        rr:objectMap [ rml:reference "pruefer" ]
+    ] .
+
+<#pdf_biegepruefung_proben_link>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.rows.proben[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bendingtest/{__docId}"
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hasTest ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bendingtest/{__docId}/probe/{__rowIndex}" ]
+    ] .

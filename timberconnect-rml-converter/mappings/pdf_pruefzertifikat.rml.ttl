@@ -1,0 +1,165 @@
+# RML-Mapping fuer PDF-Template: Prüfzertifikat Saatgut (KJZ) (pdf_pruefzertifikat)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_pruefzertifikat_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/testreport/{__docId}" ;
+        rr:class tc:TestReport
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:reportNumber ;
+        rr:objectMap [ rml:reference "pruefberichtNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:date ;
+        rr:objectMap [ rml:reference "datum" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:identifier ;
+        rr:objectMap [ rml:reference "kennNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:registrationNumber ;
+        rr:objectMap [ rml:reference "regNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:species ;
+        rr:objectMap [ rml:reference "artBotanisch" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:species ;
+        rr:objectMap [ rml:reference "artDeutsch" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:maturityYear ;
+        rr:objectMap [ rml:reference "reifejahr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:senderName ;
+        rr:objectMap [ rml:reference "einsender" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lotSize ;
+        rr:objectMap [ rml:reference "partiegroesse" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:origin ;
+        rr:objectMap [ rml:reference "herkunft" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:registerSign ;
+        rr:objectMap [ rml:reference "ezrNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:comment ;
+        rr:objectMap [ rml:reference "sonstiges" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:purity ;
+        rr:objectMap [ rml:reference "reinheit" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:otherSpeciesSeedPercentage ;
+        rr:objectMap [ rml:reference "samenAndererArten" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:impurityPercentage ;
+        rr:objectMap [ rml:reference "verunreinigungen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:thousandSeedWeight ;
+        rr:objectMap [ rml:reference "tkm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:moistureContent ;
+        rr:objectMap [ rml:reference "feuchtegehalt" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:germinationSpeed ;
+        rr:objectMap [ rml:reference "keimschnelligkeit" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:germinationSpeedWeeks ;
+        rr:objectMap [ rml:reference "keimschnelligkeitWochen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:germinationRate ;
+        rr:objectMap [ rml:reference "keimfaehigkeit" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:germinationRateWeeks ;
+        rr:objectMap [ rml:reference "keimfaehigkeitWochen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hardSeedPercentage ;
+        rr:objectMap [ rml:reference "harteSamen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:freshSeedPercentage ;
+        rr:objectMap [ rml:reference "frischeSamen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abnormalSeedPercentage ;
+        rr:objectMap [ rml:reference "anomaleSamen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rottenSeedPercentage ;
+        rr:objectMap [ rml:reference "fauleSamen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hollowSeedPercentage ;
+        rr:objectMap [ rml:reference "hohleSamen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:viableSeedsPerKg ;
+        rr:objectMap [ rml:reference "keimfaehigeSamenJeKg" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:description ;
+        rr:objectMap [ rml:reference "bemerkungen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:germinationCurve ;
+        rr:objectMap [ rml:reference "keimverlauf" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:signature ;
+        rr:objectMap [ rml:reference "unterschrift" ]
+    ] .

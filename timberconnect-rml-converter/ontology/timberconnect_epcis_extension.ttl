@@ -1,0 +1,172 @@
+# TimberConnect Ontology — EPCIS / GS1 Identifier Extension
+#
+# Additive module that adds the GS1 EPCIS identifier concepts the base
+# ontology (timberconnect_ontology_v6.ttl) lacks. These terms are written
+# into the materialised product RDF by the rml-converter's ident_injector
+# (machine data: StanForD HPR, ELDAT) and by the generated pdf_*.rml.ttl
+# mappings (manually transferred document data), so that lifecycle stages
+# (forest -> sawmill -> BSP) can be linked through a single identifier and
+# queried via SPARQL/Comunica.
+#
+# Load alongside the base ontology. Term URIs MUST stay in sync with
+# services/ident_injector.py and services/pdf_template_service.py in the
+# timberconnect-rml-converter.
+#
+# --- Leitprinzip: eine Property, unter der jeder Ident zu finden ist ---------
+#
+# tc:epc ist DIE Property, gegen die abgefragt wird. Alle spezifischeren
+# Ident-Properties sind Unter-Properties davon. Damit findet
+#
+#     ?s tc:epc <urn:epc:id:sgtin:...>
+#
+# jede Produktdateninstanz, die zu diesem Ident gehört — gleichgültig ob er
+# aus StanForD HPR (tc:sgtin), aus ELDAT (tc:lgtin), aus einem versteckten
+# PDF-Formularfeld (tc:documentEpc) oder aus der Materialauswahl im Viewer
+# (tc:materialEpc) stammt.
+#
+# Das ist der Grund für die subPropertyOf-Ketten unten. Ohne sie müsste jede
+# Abfrage alle Quellen einzeln aufzählen (UNION), und jede neu hinzukommende
+# Ident-Quelle würde bestehende Abfragen still unvollständig machen — der
+# Ident stünde im Graph, wäre aber nicht auffindbar.
+#
+# --- Warum ObjectProperty und nicht DatatypeProperty ------------------------
+#
+# EPCs werden durchgängig als IRI materialisiert, nicht als Literal:
+# ident_injector.py schreibt URIRef(epc), die generierten PDF-Mappings setzen
+# rr:termType rr:IRI, und die Viewer-Abfragen binden <urn:epc:...>. Die
+# frühere Deklaration als owl:DatatypeProperty widersprach dem — unter einem
+# Reasoner wären alle diese Tripel inkonsistent gewesen. Die Ontologie folgt
+# hier dem Code, weil dessen Form die richtige ist: ein EPC identifiziert ein
+# Ding, er ist keine Zeichenkette über einem Ding.
+
+@prefix tc:   <http://timberconnect.2050.de/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# === Classes =================================================================
+
+tc:EpcisDocument a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "EPCIS-Dokument"@de ;
+    rdfs:label "EPCIS Document"@en ;
+    rdfs:comment "Bündelt die für ein hochgeladenes Quelldokument erzeugten GS1-EPCIS-Idente (SGTIN/LGTIN) und den Verweis auf das EPCIS-Event (bizTransaction). Identifiziert über den kanonischen Dokument-Hash. Brücke zwischen EPCIS- und SOLID-Namensraum."@de .
+
+# Anmerkung zur Basis-Ontologie: v6 kennt tc:EPCISEvent (Großschreibung) für
+# ein Ereignis, dieses Modul tc:EpcisDocument für das Ident-Bündel eines
+# Dokuments. Zwei verwandte, aber verschiedene Konzepte — bewusst NICHT per
+# owl:equivalentClass gleichgesetzt. Die Verbindung läuft über
+# tc:hasEpcisEvent.
+
+# === Ident-Properties ========================================================
+#
+# Hierarchie:
+#     tc:identifier                     (v6, fachliche Kennungen als Literal)
+#       └── tc:gs1Epc                   (GS1-Ident als IRI — Abfrage-Einstieg)
+#             ├── tc:sgtin              (Einzelstück, StanForD HPR)
+#             ├── tc:lgtin              (Los mit Menge, ELDAT)
+#             ├── tc:documentEpc        (im PDF eingebettet, vom Aussteller)
+#             └── tc:materialEpc        (im Viewer gewählt, vom Uploader)
+#
+# tc:epc bleibt als geschriebene Property erhalten (der gesamte Bestand nutzt
+# sie) und ist mit tc:gs1Epc gleichgesetzt; siehe unten.
+
+tc:gs1Epc a owl:ObjectProperty ;
+    rdfs:label "GS1-Ident (EPC)"@de ;
+    rdfs:label "GS1 identifier (EPC)"@en ;
+    rdfs:comment "Beliebiger Electronic Product Code (SGTIN oder LGTIN) als URN-IRI. Oberbegriff aller GS1-Ident-Properties. Jede Produktdateninstanz, die zu einem Ident gehört, trägt ihn hierunter — das ist die Property, gegen die abgefragt wird."@de .
+
+# tc:epc ist der im gesamten Datenbestand tatsächlich geschriebene Term.
+# owl:equivalentProperty statt Umbenennung: bestehende Daten und Abfragen
+# bleiben gültig, und beide Namen finden dieselben Tripel.
+tc:epc a owl:ObjectProperty ;
+    owl:equivalentProperty tc:gs1Epc ;
+    rdfs:label "EPC"@de ;
+    rdfs:label "Electronic Product Code"@en ;
+    rdfs:comment "Electronic Product Code als URN-IRI. Gleichbedeutend mit tc:gs1Epc; dies ist der Term, den ident_injector.py und die PDF-Mappings schreiben. HINWEIS: Die Basis-Ontologie v6 deklariert tc:epc als owl:DatatypeProperty mit rdfs:range xsd:string. Diese Deklaration ist überholt und muss beim gemeinsamen Laden von dieser hier überschrieben werden — die materialisierten Daten führen EPCs durchgängig als IRI."@de .
+
+tc:sgtin a owl:ObjectProperty ;
+    rdfs:subPropertyOf tc:epc ;
+    rdfs:label "SGTIN"@de ;
+    rdfs:label "Serialized GTIN (SGTIN)"@en ;
+    rdfs:comment "GS1 SGTIN als EPC-URN (urn:epc:id:sgtin:<gcp>.<itemref>.<serial>) für ein serialisiertes Einzelstück (z.B. Stamm/Log aus StanForD HPR)."@de .
+
+tc:lgtin a owl:ObjectProperty ;
+    rdfs:subPropertyOf tc:epc ;
+    rdfs:label "LGTIN"@de ;
+    rdfs:label "Lot/batch GTIN (LGTIN)"@en ;
+    rdfs:comment "GS1 LGTIN als EPC-URN (urn:epc:class:lgtin:<gcp>.<itemref>.<lot>) für eine Losangabe mit Menge (z.B. Polter/Lieferschein aus ELDAT). Kanonische Form ist urn:epc:class:lgtin: — serial_import.py normalisiert urn:epc:id:lgtin: darauf."@de .
+
+tc:documentEpc a owl:ObjectProperty ;
+    rdfs:subPropertyOf tc:epc ;
+    rdfs:label "Ident laut Dokument"@de ;
+    rdfs:label "EPC embedded in the document"@en ;
+    rdfs:comment "GS1-Ident, den die ausstellende Stelle als verstecktes AcroForm-Feld (Feldname \"Identity\", Sichtbarkeit=Hidden, schreibgeschützt) in das PDF eingebettet hat. Als eigene Property festgehalten, weil die Herkunft eine andere ist als bei einer Auswahl im Viewer: hier hat der Aussteller den Bezug erklärt, nicht der Uploader. Als Unter-Property von tc:epc trotzdem über die normale Ident-Abfrage auffindbar."@de .
+
+tc:materialEpc a owl:ObjectProperty ;
+    rdfs:subPropertyOf tc:epc ;
+    rdfs:label "Bezieht sich auf (Materialbezug)"@de ;
+    rdfs:label "refers to material"@en ;
+    rdfs:comment "Der vom Uploader im Viewer gewählte Materialbezug eines Dokuments. Gegenstück zu tc:documentEpc — gleiche Aussage, andere Quelle und andere Verlässlichkeit. Wird derzeit von den PDF-Mappings unter tc:epc geschrieben; dieser Term steht für Abfragen bereit, die die Herkunft unterscheiden wollen."@de .
+
+# === Mengenangaben zu einem Los =============================================
+
+tc:gs1Quantity a owl:DatatypeProperty ;
+    rdfs:label "GS1-Menge"@de ;
+    rdfs:label "GS1 quantity"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Mengenangabe eines LGTIN-Loses (aus dem EPCIS quantityElement)."@de .
+
+tc:gs1Uom a owl:DatatypeProperty ;
+    rdfs:label "GS1-Maßeinheit"@de ;
+    rdfs:label "GS1 unit of measure"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Maßeinheit (UN/CEFACT-Code, z.B. G26) der GS1-Menge eines LGTIN-Loses."@de .
+
+# === Link-Properties ========================================================
+
+tc:bizTransaction a owl:ObjectProperty ;
+    rdfs:domain tc:EpcisDocument ;
+    rdfs:label "Business-Transaktion"@de ;
+    rdfs:comment "EPCIS bizTransaction-URL des Quelldokuments. Bildet den EPCIS- auf den SOLID-Namensraum ab (Verweis auf das Solid-Pod-Dokument). Der Wert ist eine IRI; die frühere Angabe rdfs:range xsd:anyURI war für eine ObjectProperty unzulässig und ist entfallen."@de .
+
+tc:hasEpcisEvent a owl:ObjectProperty ;
+    rdfs:range tc:EpcisDocument ;
+    rdfs:label "hat EPCIS-Event"@de ;
+    rdfs:label "has EPCIS event"@en ;
+    rdfs:comment "Verknüpft ein physisches Holzobjekt (Stamm/Log/Platte) mit dem EPCIS-Dokument, das seine GS1-Idente trägt."@de .
+
+# === Materialfluss: woraus ist etwas entstanden =============================
+
+tc:derivedFrom a owl:ObjectProperty ;
+    rdfs:label "hergestellt aus"@de ;
+    rdfs:label "derived from"@en ;
+    rdfs:comment "GS1-Ident des Vormaterials, aus dem das beschriebene Material entstanden ist (z.B. das Rundholz-Los, aus dem eine Schnittholz-Charge gesägt wurde). Der Aussteller hinterlegt ihn als verstecktes AcroForm-Feld \"IdentityInput\". Zusammen mit tc:epc beschreibt er eine Umwandlung und liefert die Angaben für ein EPCIS TransformationEvent: tc:derivedFrom -> inputEPCList/inputQuantityList, tc:epc -> outputEPCList/outputQuantityList."@de ;
+    rdfs:comment "BEWUSST KEINE Unter-Property von tc:epc: Input und Output sind entgegengesetzte Aussagen. Hinge tc:derivedFrom unter tc:epc, lieferte eine Abfrage nach dem Ident des Rundholzes auch das daraus erzeugte Schnittholz zurück -- die Richtung des Materialflusses ginge verloren."@de .
+
+tc:SawingProcess a owl:Class ;
+    rdfs:subClassOf tc:SupplyChainEntity ;
+    rdfs:label "Sägevorgang"@de ;
+    rdfs:label "Sawing process"@en ;
+    rdfs:comment "Ein einzelner Sägevorgang: aus einem oder mehreren Rundhölzern (tc:derivedFrom) entstehen mehrere Schnittholzlamellen (tc:epc). Entspricht genau einem EPCIS TransformationEvent. Format nach Absprache mit dem EECC (08/2026): Array \"sawings\" in der JSON-Zwischendatei der Leistungserklärung. Die Auflösung bestimmt der Aussteller — ein Vorgang je Rundholz erlaubt die Rückverfolgung jeder Lamelle auf ihr konkretes Rundholz, ein Vorgang je Charge nicht."@de .
+
+tc:hasSawingProcess a owl:ObjectProperty ;
+    rdfs:range tc:SawingProcess ;
+    rdfs:label "hat Sägevorgang"@de ;
+    rdfs:label "has sawing process"@en ;
+    rdfs:comment "Verknüpft eine Leistungserklärung mit den darin erfassten Sägevorgängen."@de .
+
+# Anmerkung Herstellungsvorgang (ERP-Exceldatei, 08/2026): Anders als bei der
+# Leistungserklärung (n Sägevorgänge je Dokument -> tc:SawingProcess) wurde
+# festgelegt, dass eine ERP-Datei genau EINE BSP-Platte beschreibt. Die
+# Transformation steht deshalb direkt am Panel-Knoten (tc:derivedFrom ->
+# inputEPCList, tc:epc -> outputEPCList des einen TransformationEvents) —
+# eine eigene Prozessklasse ist nicht nötig. Siehe services/erp_excel_service.py.
+
+# === Aus PDF-Formularen materialisierte Terme ===============================
+
+tc:plantingArea a owl:DatatypeProperty ;
+    rdfs:label "Pflanzfläche"@de ;
+    rdfs:label "planting area"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Die beim Pflanzvorgang auf der Karte gezeichnete Fläche als rohes GeoJSON-Polygon (Koordinaten in [lon, lat]). Erhält die Zeichnung verlustfrei. Die abfragbare Form steht daneben als geo:asWKT, der Schwerpunkt als wgs84:lat/long — siehe _planting_area_section in pdf_template_service.py."@de .

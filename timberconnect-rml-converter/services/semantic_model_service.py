@@ -32,6 +32,19 @@ class SemanticModelService:
         "stanford_hpr": "stanford_hpr.rml.ttl",
         "eldat_hba": "eldat_hba.rml.ttl",
         "vlex": "vlex.rml.ttl",
+        "erp_bsp": "erp_bsp.rml.ttl",
+        "ifc_planung": "ifc_planung.rml.ttl",
+        # PDF-Templates (manuelle Datenuebernahme)
+        "pdf_pruefzertifikat": "pdf_pruefzertifikat.rml.ttl",
+        "pdf_klebstoffdatenblatt": "pdf_klebstoffdatenblatt.rml.ttl",
+        "pdf_schnittbild": "pdf_schnittbild.rml.ttl",
+        "pdf_biegepruefung": "pdf_biegepruefung.rml.ttl",
+        "pdf_leistungserklaerung": "pdf_leistungserklaerung.rml.ttl",
+        "pdf_transportauftrag": "pdf_transportauftrag.rml.ttl",
+        "pdf_stammzertifikat": "pdf_stammzertifikat.rml.ttl",
+        "pdf_transportauftrag_rundholz": "pdf_transportauftrag_rundholz.rml.ttl",
+        "pdf_fertigungsauftrag_saege": "pdf_fertigungsauftrag_saege.rml.ttl",
+        "pdf_leistungserklaerung_bsp": "pdf_leistungserklaerung_bsp.rml.ttl",
     }
 
     # Human-readable descriptions for each mapping type
@@ -39,6 +52,18 @@ class SemanticModelService:
         "stanford_hpr": "StanForD HPR Forstdaten - Harvester-Produktionsdaten",
         "eldat_hba": "ELDAT HBA Saegewerksdaten - Holzbereitstellungsanzeige",
         "vlex": "VLEX BSP-Plattendaten - Brettsperrholz Produktion",
+        "erp_bsp": "ERP-BSP-Tabelle - Herstellungsvorgang Brettsperrholz",
+        "ifc_planung": "IFC-Ausfuehrungsplanung - Verortung der Bauteile im Gebaeude",
+        "pdf_pruefzertifikat": "Pruefzertifikat Saatgut (KJZ) - manuell aus PDF uebernommen",
+        "pdf_klebstoffdatenblatt": "Klebstoff-Datenblatt (LOCTITE BSP) - manuell aus PDF uebernommen",
+        "pdf_schnittbild": "Schnittbild Saegewerk - manuell aus PDF uebernommen",
+        "pdf_biegepruefung": "Biegepruefung Schnittholz - manuell aus PDF uebernommen",
+        "pdf_leistungserklaerung": "Leistungserklaerung Schnittholz - manuell aus PDF uebernommen",
+        "pdf_transportauftrag": "Transportauftrag Schnittholz - manuell aus PDF uebernommen",
+        "pdf_stammzertifikat": "Stammzertifikat Vermehrungsgut - manuell aus PDF uebernommen",
+        "pdf_transportauftrag_rundholz": "Transportauftrag Rundholz - manuell aus PDF uebernommen",
+        "pdf_fertigungsauftrag_saege": "Fertigungsauftrag Saege - manuell aus PDF uebernommen",
+        "pdf_leistungserklaerung_bsp": "Leistungserklaerung Brettsperrholz - manuell aus PDF uebernommen",
     }
 
     def __init__(self, mappings_dir: Optional[Path] = None):

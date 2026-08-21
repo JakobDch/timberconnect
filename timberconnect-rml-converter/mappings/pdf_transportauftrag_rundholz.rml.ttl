@@ -1,0 +1,209 @@
+# RML-Mapping fuer PDF-Template: Transportauftrag Rundholz (pdf_transportauftrag_rundholz)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_transportauftrag_rundholz_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/transportorderrundholz/{__docId}" ;
+        rr:class tc:TransportOrder
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kaufnummer ;
+        rr:objectMap [ rml:reference "kaufnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:los_Nr ;
+        rr:objectMap [ rml:reference "losNr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:datum ;
+        rr:objectMap [ rml:reference "datum" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abfuhrfrist ;
+        rr:objectMap [ rml:reference "abfuhrfrist" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gueltigkeit_von ;
+        rr:objectMap [ rml:reference "gueltigkeitVon" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gueltigkeit_bis ;
+        rr:objectMap [ rml:reference "gueltigkeitBis" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:firmenname ;
+        rr:objectMap [ rml:reference "firmenname" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:strasse ;
+        rr:objectMap [ rml:reference "strasse" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:pLZ ;
+        rr:objectMap [ rml:reference "plz" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:stadt ;
+        rr:objectMap [ rml:reference "stadt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:land ;
+        rr:objectMap [ rml:reference "land" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferant_Forstamt ;
+        rr:objectMap [ rml:reference "lieferantForstamt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferant_Reviername ;
+        rr:objectMap [ rml:reference "lieferantReviername" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferant_Revierleiter ;
+        rr:objectMap [ rml:reference "lieferantRevierleiter" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferant_Telefonnummer ;
+        rr:objectMap [ rml:reference "lieferantTelefon" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Firmenname ;
+        rr:objectMap [ rml:reference "spediteurFirmenname" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Strasse ;
+        rr:objectMap [ rml:reference "spediteurStrasse" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Postleitzahl ;
+        rr:objectMap [ rml:reference "spediteurPostleitzahl" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Stadt ;
+        rr:objectMap [ rml:reference "spediteurStadt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Ort ;
+        rr:objectMap [ rml:reference "spediteurOrt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Ansprechpartner_Vorname ;
+        rr:objectMap [ rml:reference "spediteurAnsprechVorname" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Ansprechpartner_Name ;
+        rr:objectMap [ rml:reference "spediteurAnsprechName" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Ansprechpartner_Telefonnummer ;
+        rr:objectMap [ rml:reference "spediteurAnsprechTelefon" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur_Ansprechpartner_Email_Adresse ;
+        rr:objectMap [ rml:reference "spediteurAnsprechEmail" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ladezone_Name ;
+        rr:objectMap [ rml:reference "ladezoneName" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ladezone_PLZ ;
+        rr:objectMap [ rml:reference "ladezonePlz" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ladezone_Stadt ;
+        rr:objectMap [ rml:reference "ladezoneStadt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ladezone_Distanz ;
+        rr:objectMap [ rml:reference "ladezoneDistanz" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abt ;
+        rr:objectMap [ rml:reference "abt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:n ;
+        rr:objectMap [ rml:reference "koordinateN" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:e ;
+        rr:objectMap [ rml:reference "koordinateE" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:polter_Nummer ;
+        rr:objectMap [ rml:reference "polterNummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:baumart ;
+        rr:objectMap [ rml:reference "baumart" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:de_Produktart ;
+        rr:objectMap [ rml:reference "produktart" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:guete ;
+        rr:objectMap [ rml:reference "guete" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:laenge ;
+        rr:objectMap [ rml:reference "laenge" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:menge_Festmeter ;
+        rr:objectMap [ rml:reference "mengeFestmeter" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:menge_Stueck ;
+        rr:objectMap [ rml:reference "mengeStueck" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:summe_Festmeter ;
+        rr:objectMap [ rml:reference "summeFestmeter" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:summer_Stueck ;
+        rr:objectMap [ rml:reference "summeStueck" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abfuhrscheinuebersicht_Stand ;
+        rr:objectMap [ rml:reference "abfuhrStand" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abfuhrscheinuebersicht_Kontigent ;
+        rr:objectMap [ rml:reference "abfuhrKontingent" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abfuhrscheinuebersicht_Gesamtzahl_Abfuhrscheine ;
+        rr:objectMap [ rml:reference "abfuhrGesamtzahl" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abfuhrscheinuebersicht_Genutzte_Abfuhrscheine ;
+        rr:objectMap [ rml:reference "abfuhrGenutzte" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abfuhrscheinuebersicht_offene_Abfuhrscheine ;
+        rr:objectMap [ rml:reference "abfuhrOffene" ]
+    ] .

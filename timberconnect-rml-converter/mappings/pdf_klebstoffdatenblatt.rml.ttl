@@ -1,0 +1,148 @@
+# RML-Mapping fuer PDF-Template: Klebstoff-Datenblatt (LOCTITE BSP) (pdf_klebstoffdatenblatt)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_klebstoffdatenblatt_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/adhesive/{__docId}" ;
+        rr:class tc:Adhesive
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:name ;
+        rr:objectMap [ rml:reference "produktname" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:technology ;
+        rr:objectMap [ rml:reference "technologie" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:type ;
+        rr:objectMap [ rml:reference "produkttyp" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:applicationMethod ;
+        rr:objectMap [ rml:reference "auftrag" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:components ;
+        rr:objectMap [ rml:reference "komponenten" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:baseMaterial ;
+        rr:objectMap [ rml:reference "basis" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:consistency ;
+        rr:objectMap [ rml:reference "beschaffenheit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:appearance ;
+        rr:objectMap [ rml:reference "aussehen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:curingType ;
+        rr:objectMap [ rml:reference "aushaertung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:intendedUse ;
+        rr:objectMap [ rml:reference "anwendungsbereich" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:description ;
+        rr:objectMap [ rml:reference "produkteigenschaft1" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:description ;
+        rr:objectMap [ rml:reference "produkteigenschaft2" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:description ;
+        rr:objectMap [ rml:reference "produkteigenschaft3" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:description ;
+        rr:objectMap [ rml:reference "produkteigenschaft4" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:description ;
+        rr:objectMap [ rml:reference "produkteigenschaft5" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:solidsContent ;
+        rr:objectMap [ rml:reference "feststoffgehalt" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:viscosity ;
+        rr:objectMap [ rml:reference "viskositaet" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:viscosityConditions ;
+        rr:objectMap [ rml:reference "messtemperatur" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:viscosityConditions ;
+        rr:objectMap [ rml:reference "messzeitpunkt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:density ;
+        rr:objectMap [ rml:reference "dichte" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:comment ;
+        rr:objectMap [ rml:reference "anmerkungen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:comment ;
+        rr:objectMap [ rml:reference "anmerkungenScherverhalten" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:processingNote ;
+        rr:objectMap [ rml:reference "verarbeitungshinweise" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:safetyNote ;
+        rr:objectMap [ rml:reference "sicherheitsmassnahmen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:cleaningNote ;
+        rr:objectMap [ rml:reference "reinigung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:storageConditions ;
+        rr:objectMap [ rml:reference "lagerbedingungen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:labeling ;
+        rr:objectMap [ rml:reference "kennzeichnung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:comment ;
+        rr:objectMap [ rml:reference "haftungsausschluss" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:date ;
+        rr:objectMap [ rml:reference "tdsDatum" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] .

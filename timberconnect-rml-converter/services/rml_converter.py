@@ -36,6 +36,23 @@ class RMLConverter:
         "stanford_hpr": "stanford_hpr.rml.ttl",
         "eldat_hba": "eldat_hba.rml.ttl",
         "vlex": "vlex.rml.ttl",
+        # Herstellungsvorgang: ERP-Exceldatei, vorab von erp_excel_service
+        # in ein JSON-Zwischendokument ueberfuehrt
+        "erp_bsp": "erp_bsp.rml.ttl",
+        # Ausfuehrungsplanung: IFC-Auszug, vorab von ifc_service in ein
+        # JSON-Zwischendokument ueberfuehrt
+        "ifc_planung": "ifc_planung.rml.ttl",
+        # PDF-Templates (manuelle Datenuebernahme, generate_pdf_mappings.py)
+        "pdf_pruefzertifikat": "pdf_pruefzertifikat.rml.ttl",
+        "pdf_klebstoffdatenblatt": "pdf_klebstoffdatenblatt.rml.ttl",
+        "pdf_schnittbild": "pdf_schnittbild.rml.ttl",
+        "pdf_biegepruefung": "pdf_biegepruefung.rml.ttl",
+        "pdf_leistungserklaerung": "pdf_leistungserklaerung.rml.ttl",
+        "pdf_transportauftrag": "pdf_transportauftrag.rml.ttl",
+        "pdf_stammzertifikat": "pdf_stammzertifikat.rml.ttl",
+        "pdf_transportauftrag_rundholz": "pdf_transportauftrag_rundholz.rml.ttl",
+        "pdf_fertigungsauftrag_saege": "pdf_fertigungsauftrag_saege.rml.ttl",
+        "pdf_leistungserklaerung_bsp": "pdf_leistungserklaerung_bsp.rml.ttl",
     }
 
     # Mapping type to expected file extension
@@ -43,6 +60,18 @@ class RMLConverter:
         "stanford_hpr": ".xml",
         "eldat_hba": ".json",
         "vlex": ".json",
+        "erp_bsp": ".json",
+        "ifc_planung": ".json",
+        "pdf_pruefzertifikat": ".json",
+        "pdf_klebstoffdatenblatt": ".json",
+        "pdf_schnittbild": ".json",
+        "pdf_biegepruefung": ".json",
+        "pdf_leistungserklaerung": ".json",
+        "pdf_transportauftrag": ".json",
+        "pdf_stammzertifikat": ".json",
+        "pdf_transportauftrag_rundholz": ".json",
+        "pdf_fertigungsauftrag_saege": ".json",
+        "pdf_leistungserklaerung_bsp": ".json",
     }
 
     def __init__(self, temp_dir: Optional[str] = None):
@@ -99,6 +128,30 @@ class RMLConverter:
         logger.info(f"Created mapping file: {output_mapping}")
         return output_mapping
 
+    @staticmethod
+    def _strip_default_xml_namespace(content: bytes) -> bytes:
+        """Remove default XML namespace declarations (xmlns="...") from XML.
+
+        RMLMapper's XPath engine cannot resolve elements that live in a default
+        namespace using plain element-name paths. Removing the default namespace
+        declaration (NOT prefixed xmlns:foo) lets the mapping's element paths
+        match. Prefixed namespaces are left untouched.
+        """
+        import re
+
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("latin-1")
+
+        # Drop only default-namespace declarations: xmlns="..."  (with optional
+        # surrounding whitespace), keep xmlns:prefix="..." intact.
+        stripped = re.sub(r'\s+xmlns="[^"]*"', "", text, count=0)
+
+        if stripped != text:
+            logger.info("Stripped default XML namespace for RMLMapper compatibility")
+        return stripped.encode("utf-8")
+
     def convert(
         self,
         source_content: bytes,
@@ -145,12 +198,20 @@ class RMLConverter:
             type_suffix = {
                 "forst": "Forst_StanForD_HPR",
                 "saegewerk": "Saegewerk_ELDAT_HBA",
-                "bspwerk": "BSPWerk_VLEX_Materialfluss"
+                "bspwerk": "BSPWerk_VLEX_Materialfluss",
+                "herstellung": "Herstellung_ERP_BSP"
             }.get(data_type, data_type)
 
             ext = self.MAPPING_EXTENSIONS.get(mapping_type, ".dat")
             work_source_filename = f"{trace_id}_{type_suffix}{ext}"
             output_ttl_filename = f"{trace_id}_{type_suffix}.ttl"
+
+            # RMLMapper's XPath engine is not namespace-aware: a default XML
+            # namespace (e.g. StanForD's urn:skogforsk:stanford2010) makes every
+            # plain XPath in the mapping match nothing. Strip default namespace
+            # declarations from XML sources so the mapping's element paths work.
+            if ext == ".xml":
+                source_content = self._strip_default_xml_namespace(source_content)
 
             # Write source file to work directory
             source_path = work_dir / work_source_filename
@@ -247,5 +308,19 @@ class RMLConverter:
                 "inputFormat": "JSON",
                 "description": "BSP-Plattenproduktion im VLEX-Materialfluss-Format",
                 "dataType": "bspwerk"
+            },
+            {
+                "id": "erp_bsp",
+                "name": "ERP-BSP-Tabelle - Herstellungsvorgang",
+                "inputFormat": "XLSX",
+                "description": "ERP-Export der BSP-Plattenherstellung inkl. Identifikations-Blatt",
+                "dataType": "herstellung"
+            },
+            {
+                "id": "ifc_planung",
+                "name": "IFC - Ausfuehrungsplanung Brettsperrholz",
+                "inputFormat": "IFC",
+                "description": "Bauteilbezogener Auszug eines Ausfuehrungsplanungsmodells (Verortung im Gebaeude)",
+                "dataType": "planung"
             }
         ]

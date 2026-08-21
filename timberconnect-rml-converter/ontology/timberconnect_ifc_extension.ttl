@@ -1,0 +1,114 @@
+# TimberConnect Ontology — Erweiterung Ausführungsplanung (IFC)
+#
+# Additives Modul nach dem Vorbild von timberconnect_dop_extension.ttl. Es
+# ergänzt die wenigen Begriffe, die der bauteilbezogene Auszug eines
+# Ausführungsplanungsmodells (IFC) braucht und die
+# timberconnect_ontology_v6.ttl (noch) nicht führt.
+#
+# Warum eine eigene Datei und kein Eingriff in v6:
+# ontology/timberconnect_ontology_v6.ttl ist eine Kopie aus dem Repo
+# TimberConnect_Ontology. Wird sie hier bearbeitet, läuft sie von ihrer
+# Quelle weg und der nächste Abgleich überschreibt die Änderung stillschweigend.
+# Ein additives Modul bleibt beim nächsten Update erhalten und macht zugleich
+# sichtbar, was der Basis-Ontologie fehlt — die Terme hier gehören
+# perspektivisch nach v6 zurückgeführt.
+#
+# --- Bewusst NUR sechs neue Begriffe ---------------------------------------
+#
+# Die Merkmale der Ausführungsplanung (Datenmodell TC, M-1168 bis M-1180)
+# sind in v6 zum grössten Teil BEREITS definiert — im Abschnitt
+# "IFC-spezifische Properties (aus PropertySets)" und in
+# "Abbund/Produktion (für Holzbau-IFC)":
+#
+#   M-1168 IFC_GlobalId          -> tc:ifcGlobalId
+#   M-1169 IFC_Typ               -> tc:ifcClass
+#   M-1170 Bezeichnung           -> tc:name
+#   M-1171 Material              -> tc:revitType
+#   M-1172 Einbau_&_Anlieferung  -> tc:deliveryPhase
+#   M-1174 Teilgruppe            -> tc:assemblyGroup
+#   M-1176 SKU                   -> tc:sku
+#   M-1177 Bauteil               -> tc:ifcObjectType
+#   M-1178 Abbund_BVN            -> tc:productionNumber
+#   M-1179 Bauabschnitt          -> tc:constructionPhase
+#   M-1180 Sichtqualität_S1      -> tc:surfaceQuality
+#
+# Diese werden im Mapping unverändert verwendet. Ein zweiter Satz eigener
+# Namen für dieselben Merkmale wäre für jede spätere Abfrage eine Falle:
+# wer nach tc:constructionPhase fragt, bekäme die Hälfte der Daten nicht.
+#
+# Es fehlten nur die folgenden Begriffe — das Geschoss (M-1173), die
+# Produktionslistennummer (M-1175) sowie die Projektangaben, die den
+# Planungsdatensatz dem Bauvorhaben zuordnen.
+
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# --- Verortung im Bauwerk ---------------------------------------------------
+
+# M-1173. Bewusst eine Textangabe und keine Referenz auf einen Geschossknoten:
+# der Bauteilauszug nennt das Geschoss als Namen ("Geschoss 1", "0.EG"), ein
+# eigener IfcBuildingStorey-Knoten trüge im Demonstrator keine weitere
+# Information.
+tc:buildingStorey a owl:DatatypeProperty ;
+    rdfs:label "Geschoss"@de ;
+    rdfs:label "Building Storey"@en ;
+    rdfs:comment "Geschoss, in dem das Bauteil verbaut ist (IfcBuildingStorey.Name)"@de ;
+    skos:notation "M-1173" ;
+    rdfs:domain tc:BuildingElement ;
+    rdfs:range xsd:string .
+
+# --- Fertigungssteuerung ----------------------------------------------------
+
+# M-1175. Nicht mit tc:productionNumber (Abbund/BVN, M-1178) zusammenlegen:
+# die Produktionsliste ist die Fertigungsreihenfolge im Werk, die BVN die
+# Nummer des Abbundprogramms. Zwei Nummern mit verschiedener Bedeutung unter
+# einem Begriff wären beim Rückfragen im Werk nicht mehr auseinanderzuhalten.
+tc:productionListNumber a owl:DatatypeProperty ;
+    rdfs:label "Nummer Produktionsliste"@de ;
+    rdfs:label "Production List Number"@en ;
+    rdfs:comment "Laufende Nummer des Bauteils in der Produktionsliste des Werks"@de ;
+    skos:notation "M-1175" ;
+    rdfs:domain tc:BuildingElement ;
+    rdfs:range xsd:string .
+
+# --- Bauvorhaben ------------------------------------------------------------
+#
+# tc:Project ist in v6 definiert ("Bauprojekt"), trug aber keine eigenen
+# Attribute. Die drei Angaben stammen aus IfcProject und ordnen den
+# Planungsdatensatz dem Bauvorhaben zu — im Anwendungsfall "Dokumentation"
+# die Verortung oberhalb des Geschosses.
+
+tc:projectNumber a owl:DatatypeProperty ;
+    rdfs:label "Projektnummer"@de ;
+    rdfs:label "Project Number"@en ;
+    rdfs:comment "Projektnummer des Bauvorhabens (IfcProject.Name)"@de ;
+    rdfs:domain tc:Project ;
+    rdfs:range xsd:string .
+
+tc:projectName a owl:DatatypeProperty ;
+    rdfs:label "Projektname"@de ;
+    rdfs:label "Project Name"@en ;
+    rdfs:comment "Bezeichnung des Bauvorhabens (IfcProject.LongName)"@de ;
+    rdfs:domain tc:Project ;
+    rdfs:range xsd:string .
+
+tc:projectPhase a owl:DatatypeProperty ;
+    rdfs:label "Projektphase"@de ;
+    rdfs:label "Project Phase"@en ;
+    rdfs:comment "Planungs- bzw. Bauphase des Projekts (IfcProject.Phase)"@de ;
+    rdfs:domain tc:Project ;
+    rdfs:range xsd:string .
+
+# --- Herkunft des Planungsdatensatzes ---------------------------------------
+
+# Die Schemaversion entscheidet darüber, wie ein Wert zu lesen ist (IFC2X3
+# und IFC4 benennen Property-Sets teils unterschiedlich). Ohne sie liesse
+# sich später nicht mehr beurteilen, wie verlässlich eine Angabe ist.
+tc:ifcSchema a owl:DatatypeProperty ;
+    rdfs:label "IFC-Schemaversion"@de ;
+    rdfs:label "IFC Schema Version"@en ;
+    rdfs:comment "Schemaversion der Quelldatei, z.B. IFC2X3 oder IFC4"@de ;
+    rdfs:range xsd:string .

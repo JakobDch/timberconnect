@@ -1,0 +1,255 @@
+# RML-Mapping fuer PDF-Template: Schnittbild (pdf_schnittbild)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_schnittbild_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/cuttingpattern/{__docId}" ;
+        rr:class tc:CuttingPattern
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:box ;
+        rr:objectMap [ rml:reference "box" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zopf ;
+        rr:objectMap [ rml:reference "zopf" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:mitte ;
+        rr:objectMap [ rml:reference "mitte" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:stock ;
+        rr:objectMap [ rml:reference "stock" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rH_Bedarf_Festmeter ;
+        rr:objectMap [ rml:reference "rhBedarfFestmeter" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rH_Bedarf_Stueck ;
+        rr:objectMap [ rml:reference "rhBedarfStueck" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:holzart ;
+        rr:objectMap [ rml:reference "holzart" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:laenge_v2 ;
+        rr:objectMap [ rml:reference "laenge" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:klasse ;
+        rr:objectMap [ rml:reference "klasse" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware ;
+        rr:objectMap [ rml:reference "hauptware" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware ;
+        rr:objectMap [ rml:reference "seitenware" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hW_Korrektur ;
+        rr:objectMap [ rml:reference "hwKorrektur" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gesamt ;
+        rr:objectMap [ rml:reference "gesamt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:restholz ;
+        rr:objectMap [ rml:reference "restholz" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:saegespaene ;
+        rr:objectMap [ rml:reference "saegespaene" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Vorschnitt ;
+        rr:objectMap [ rml:reference "fugenVorschnitt" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Nachschnitt ;
+        rr:objectMap [ rml:reference "fugenNachschnitt" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Vorschnitt_HW___Hw ;
+        rr:objectMap [ rml:reference "fugenVorschnittHwHw" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Nachschnitt_HW___Hw ;
+        rr:objectMap [ rml:reference "fugenNachschnittHwHw" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Vorschnitt_HW___SW1 ;
+        rr:objectMap [ rml:reference "fugenVorschnittHwSw1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Nachschnitt_HW___SW1 ;
+        rr:objectMap [ rml:reference "fugenNachschnittHwSw1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Vorschnitt_SW1___SWN ;
+        rr:objectMap [ rml:reference "fugenVorschnittSw1Swn" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Nachschnitt_SW1___SWN ;
+        rr:objectMap [ rml:reference "fugenNachschnittSw1Swn" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Vorschnitt_Saegeseg ;
+        rr:objectMap [ rml:reference "fugenVorschnittSaegeseg" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Nachschnitt_Saegeseg ;
+        rr:objectMap [ rml:reference "fugenNachschnittSaegeseg" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Vorschnitt_Putzsaege ;
+        rr:objectMap [ rml:reference "fugenVorschnittPutzsaege" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fugen_in_mm_Nachschnitt_Putzsaege ;
+        rr:objectMap [ rml:reference "fugenNachschnittPutzsaege" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Vorschnitt_Stueck ;
+        rr:objectMap [ rml:reference "hwVorschnittStk" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Vorschnitt_EM ;
+        rr:objectMap [ rml:reference "hwVorschnittEm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Vorschnitt_VM ;
+        rr:objectMap [ rml:reference "hwVorschnittVm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Vorschnitt_Schnittkl ;
+        rr:objectMap [ rml:reference "hwVorschnittSchnittkl" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Nachschnitt_Stueck ;
+        rr:objectMap [ rml:reference "hwNachschnittStk" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Nachschnitt_EM ;
+        rr:objectMap [ rml:reference "hwNachschnittEm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Nachschnitt_VM ;
+        rr:objectMap [ rml:reference "hwNachschnittVm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Nachschnitt_Schnittkl ;
+        rr:objectMap [ rml:reference "hwNachschnittSchnittkl" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Auftrennung_EM ;
+        rr:objectMap [ rml:reference "hwAuftrennungEm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Auftrennung_VM ;
+        rr:objectMap [ rml:reference "hwAuftrennungVm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Auftrennung_Fuge ;
+        rr:objectMap [ rml:reference "hwAuftrennungFuge" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Vorschnitt_Stueck ;
+        rr:objectMap [ rml:reference "swVorschnittStk" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Vorschnitt_EM ;
+        rr:objectMap [ rml:reference "swVorschnittEm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Vorschnitt_Schnittkl ;
+        rr:objectMap [ rml:reference "swVorschnittSchnittkl" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Vorschnitt_VM ;
+        rr:objectMap [ rml:reference "swVorschnittVm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Vorschnitt_Laenge ;
+        rr:objectMap [ rml:reference "swVorschnittLaenge" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Nachschnitt_Stueck ;
+        rr:objectMap [ rml:reference "swNachschnittStk" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Nachschnitt_EM ;
+        rr:objectMap [ rml:reference "swNachschnittEm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Nachschnitt_Schnittkl ;
+        rr:objectMap [ rml:reference "swNachschnittSchnittkl" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Nachschnitt_VM ;
+        rr:objectMap [ rml:reference "swNachschnittVm" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Nachschnitt_Laenge ;
+        rr:objectMap [ rml:reference "swNachschnittLaenge" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:derivedFrom ;
+        rr:objectMap [ rml:reference "materialInputEpc" ;
+            rr:termType rr:IRI ]
+    ] .

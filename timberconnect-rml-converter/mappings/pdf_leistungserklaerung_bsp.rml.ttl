@@ -1,0 +1,294 @@
+# RML-Mapping fuer PDF-Template: Leistungserklärung Brettsperrholz (pdf_leistungserklaerung_bsp)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_leistungserklaerung_bsp_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/dopbsp/{__docId}" ;
+        rr:class tc:DeclarationOfPerformance
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:identifier ;
+        rr:objectMap [ rml:reference "nr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:title ;
+        rr:objectMap [ rml:reference "titel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:typeNumber ;
+        rr:objectMap [ rml:reference "kenncode" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:intendedUse ;
+        rr:objectMap [ rml:reference "verwendungszweck" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:conformitySystem ;
+        rr:objectMap [ rml:reference "konformitaetssystem" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:structuralUsage ;
+        rr:objectMap [ rml:reference "mechanischeFestigkeit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturer ;
+        rr:objectMap [ rml:reference "hersteller" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturerAddress ;
+        rr:objectMap [ rml:reference "herstellerStrasse" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturerAddress ;
+        rr:objectMap [ rml:reference "herstellerPlz" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturerAddress ;
+        rr:objectMap [ rml:reference "herstellerStadt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturerAddress ;
+        rr:objectMap [ rml:reference "herstellerLand" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:phone ;
+        rr:objectMap [ rml:reference "herstellerTel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fax ;
+        rr:objectMap [ rml:reference "herstellerFax" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:contactInformation ;
+        rr:objectMap [ rml:reference "herstellerWebsite" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:authorizedPersonName ;
+        rr:objectMap [ rml:reference "bevollmaechtigter" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:notifiedBody ;
+        rr:objectMap [ rml:reference "notifizierteStelle" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:notifiedBody ;
+        rr:objectMap [ rml:reference "bewertungsstelle" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:standardReference ;
+        rr:objectMap [ rml:reference "bewertungsdokument" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:standardReference ;
+        rr:objectMap [ rml:reference "technischeBewertung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:layer ;
+        rr:objectMap [ rml:reference "anzahlLagen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:thickness ;
+        rr:objectMap [ rml:reference "dicke" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:breite ;
+        rr:objectMap [ rml:reference "breite" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:laenge ;
+        rr:objectMap [ rml:reference "laenge" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:holzart ;
+        rr:objectMap [ rml:reference "holzart" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:strengthClass ;
+        rr:objectMap [ rml:reference "festigkeitsklasse" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:thicknessTolerance ;
+        rr:objectMap [ rml:reference "toleranzenDicken" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:widthTolerance ;
+        rr:objectMap [ rml:reference "toleranzenBreitenLaengen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:moistureContent ;
+        rr:objectMap [ rml:reference "dimensionsstabilitaet" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:thermalExpansionCoefficient ;
+        rr:objectMap [ rml:reference "waermeausdehnung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:serviceClass ;
+        rr:objectMap [ rml:reference "nutzungsklasse" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:durabilityClass ;
+        rr:objectMap [ rml:reference "dauerhaftigkeitLamellen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:adhesiveType ;
+        rr:objectMap [ rml:reference "verwendeteKlebstoffe" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:delaminationResistance ;
+        rr:objectMap [ rml:reference "klebfugenintegritaet" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bendingStrengthFlatwise ;
+        rr:objectMap [ rml:reference "biegungSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:compressiveStrengthPerpendicular ;
+        rr:objectMap [ rml:reference "druckSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rollingShearStrength ;
+        rr:objectMap [ rml:reference "rollschubSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:elasticModulusFlatwise ;
+        rr:objectMap [ rml:reference "eModulParallelSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:elasticModulusPerpendicularToGrain ;
+        rr:objectMap [ rml:reference "eModulRechtwinkligSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:shearModulusFlatwise ;
+        rr:objectMap [ rml:reference "schubmodulParallelSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rollingShearModulus ;
+        rr:objectMap [ rml:reference "rollschubmodulSenkrecht" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bendingStrengthEdgewise ;
+        rr:objectMap [ rml:reference "biegungEbene" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:compressiveStrengthParallel ;
+        rr:objectMap [ rml:reference "druckParallel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:tensileStrengthParallel ;
+        rr:objectMap [ rml:reference "zugParallel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:tensileStrengthPerpendicular ;
+        rr:objectMap [ rml:reference "zugRechtwinklig" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:shearStrength ;
+        rr:objectMap [ rml:reference "schubBruttoquerschnitt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:elasticModulusEdgewise ;
+        rr:objectMap [ rml:reference "eModulParallelEbene" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:shearModulusEdgewise ;
+        rr:objectMap [ rml:reference "schubmodulParallelEbene" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rollingShearStrength ;
+        rr:objectMap [ rml:reference "rollschubfestigkeit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:meanShearModulus ;
+        rr:objectMap [ rml:reference "schubmodulMittel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:torsionalShearStrength ;
+        rr:objectMap [ rml:reference "torsionsschub" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rollingShearModulus ;
+        rr:objectMap [ rml:reference "rollschubmodulMittel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:embedmentStrength ;
+        rr:objectMap [ rml:reference "lochleibung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fireResistanceClass ;
+        rr:objectMap [ rml:reference "brandverhalten" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fireResistanceClassNational ;
+        rr:objectMap [ rml:reference "feuerwiderstand" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:charringRate ;
+        rr:objectMap [ rml:reference "abbrandrate" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:creepFactor ;
+        rr:objectMap [ rml:reference "kriechen" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hazardousSubstanceEmission ;
+        rr:objectMap [ rml:reference "formaldehyd" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:vapourDiffusionResistance ;
+        rr:objectMap [ rml:reference "wasserdampfdiffusion" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hazardousSubstanceEmission ;
+        rr:objectMap [ rml:reference "gefaehrlicheStoffe" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:impactResistance ;
+        rr:objectMap [ rml:reference "schlagfestigkeit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:airborneSoundInsulation ;
+        rr:objectMap [ rml:reference "luftschall" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:impactSoundInsulation ;
+        rr:objectMap [ rml:reference "trittschall" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:soundAbsorption ;
+        rr:objectMap [ rml:reference "schallabsorption" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:thermalTransmittance ;
+        rr:objectMap [ rml:reference "waermeleitfaehigkeit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:airPermeability ;
+        rr:objectMap [ rml:reference "luftdurchlaessigkeit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:thermalMass ;
+        rr:objectMap [ rml:reference "thermischeTraegheit" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] .

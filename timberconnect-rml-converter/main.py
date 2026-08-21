@@ -6,6 +6,7 @@ and storing them in a Solid Pod.
 """
 
 import os
+import re
 import logging
 from datetime import datetime
 from typing import Optional
@@ -16,9 +17,19 @@ from pydantic import BaseModel
 
 from services.rml_converter import RMLConverter, RMLConverterError
 from services.solid_client import SolidClient, SolidClientError
-from services.file_detector import detect_file_type, get_data_type_name, DetectionResult
+from services.file_detector import detect_file_type, get_data_type_name, DetectionResult, FileType
 from services.semantic_model_service import SemanticModelService, SemanticModelServiceError
 from services.catalog_client import CatalogClient, CatalogRegistration, CatalogClientError
+from services.epcis_client import EPCISClient, EPCISClientError
+from services.ident_injector import inject_idents
+from services.pdf_template_service import (
+    PDFTemplateError,
+    build_document_json,
+    get_template,
+    get_template_pdf_path,
+    get_templates_public,
+    pdf_fields_to_form_data,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -30,7 +41,7 @@ logger = logging.getLogger(__name__)
 # Configuration from environment
 SOLID_POD_URL = os.getenv(
     "SOLID_POD_URL",
-    "https://tmdt-solid-community-server.de/epcisrepository"
+    "https://solid-community-server.tmdt.info/epcisrepository"
 )
 
 # Initialize services
@@ -38,6 +49,11 @@ converter = RMLConverter()
 solid_client = SolidClient(SOLID_POD_URL)
 semantic_model_service = SemanticModelService()
 catalog_client = CatalogClient()
+epcis_client = EPCISClient()
+
+# Solid Pod folder where raw uploads land (used to build the EPCIS doc base URL,
+# i.e. the EPCIS<->SOLID namespace bridge that lands in the event bizTransaction).
+RAW_UPLOADS_BASE = f"{SOLID_POD_URL.rstrip('/')}/public/uploads"
 
 # FastAPI app
 app = FastAPI(
@@ -125,6 +141,17 @@ class ConvertedFileData(BaseModel):
     raw_content_type: str
     rdf_content: Optional[str] = None  # Base64 encoded TTL
     rdf_filename: Optional[str] = None
+    # Anzahl RDF-Triples (= Datenpunkte) — Preisgrundlage der Token-Währung.
+    triple_count: Optional[int] = None
+    # Maschinenlesbares JSON-Zwischendokument (ERP-Excel), Base64 — wird wie
+    # beim PDF-Pfad neben Original und TTL im Pod-Container abgelegt.
+    json_content: Optional[str] = None
+    json_filename: Optional[str] = None
+    # Im Dokument eingebettete GS1-Idente (ERP-Excel, Blatt "Identifikation"):
+    # epcs = Output (tc:epc), input_epcs = Vormaterial (tc:derivedFrom).
+    # Der Viewer heftet sie an den Vorgang (attachProcessIdents).
+    epcs: Optional[list[str]] = None
+    input_epcs: Optional[list[str]] = None
     error: Optional[str] = None
 
 
@@ -136,6 +163,22 @@ class ConvertOnlyResponse(BaseModel):
     detection_warnings: list[str]
     converted_at: str
     message: Optional[str] = None
+
+
+def count_triples(rdf_data: bytes) -> Optional[int]:
+    """Count the RDF triples (= Datenpunkte) in a Turtle document.
+
+    The count is computed once at conversion time and stored alongside the
+    data (pricing.ttl in the pod) so the viewer never has to re-count.
+    """
+    try:
+        from rdflib import Graph
+        g = Graph()
+        g.parse(data=rdf_data, format="turtle")
+        return len(g)
+    except Exception as e:
+        logger.warning(f"Triple counting failed: {e}")
+        return None
 
 
 # Endpoints
@@ -344,7 +387,32 @@ async def detect_files(
 @app.post("/api/converter/convert-only", response_model=ConvertOnlyResponse)
 async def convert_files_only(
     files: list[UploadFile] = File(..., description="Files to convert"),
-    trace_id_override: Optional[str] = Form(None, description="Override trace ID (optional)")
+    trace_id_override: Optional[str] = Form(None, description="Override trace ID (optional)"),
+    ifc_epc: Optional[str] = Form(
+        None,
+        description=(
+            "GS1-EPC des in der IFC-Datei geplanten Bauteils. Pflicht, sobald "
+            "eine IFC-Datei hochgeladen wird: Die Ausfuehrungsplanung kennt die "
+            "GS1-Serie des gefertigten Bauteils nicht, der Bezug muss deshalb "
+            "beim Upload hergestellt werden."
+        ),
+    ),
+    doc_base_url: Optional[str] = Form(
+        None,
+        description=(
+            "Base URL of the container the frontend will upload the raw document "
+            "to (e.g. the uploader's own pod data/ container). Used as the EPCIS "
+            "bizTransaction base so events link back to the owner's pod."
+        ),
+    ),
+    company_prefix: Optional[str] = Form(
+        None,
+        description=(
+            "GS1 Company Prefix des angemeldeten Uploaders (bei der Registrierung "
+            "festgelegt). Pflicht — Uploads ohne Login/Registrierung werden "
+            "abgelehnt. Die erzeugten SGTINs/LGTINs tragen diesen Prefix."
+        ),
+    ),
 ):
     """
     Convert files to RDF without uploading to Solid Pod.
@@ -359,20 +427,48 @@ async def convert_files_only(
     """
     import base64
 
+    # Upload ohne Login/Registrierung ist nicht erlaubt: Ohne den bei der
+    # Registrierung festgelegten Company Prefix duerfen keine GS1-Idente
+    # erzeugt werden (jeder Teilnehmer identifiziert sich ueber seinen GCP).
+    cleaned_prefix = (company_prefix or "").strip()
+    if not re.fullmatch(r"\d{4,12}", cleaned_prefix):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Upload erfordert eine Anmeldung mit abgeschlossener Registrierung: "
+                "Es wurde kein gültiger GS1 Company Prefix (4-12 Ziffern) übermittelt."
+            ),
+        )
+
     detection_warnings: list[str] = []
     converted_files: list[ConvertedFileData] = []
-    trace_ids_found: list[str] = []
+    doc_hashes: list[str] = []
+    failed_files: list[str] = []  # recognized files that failed RML or EPCIS
 
     for upload_file in files:
         content = await upload_file.read()
         filename = upload_file.filename or "unknown"
         detection = detect_file_type(content, filename)
 
-        if detection.trace_id:
-            trace_ids_found.append(detection.trace_id)
-
         # Determine content type for raw file
         raw_content_type = "application/xml" if filename.endswith(".xml") else "application/json"
+        source_ext = filename.split('.')[-1] if '.' in filename else "dat"
+
+        # PDF: nur als Original durchreichen (kein RML, kein EPCIS). Die
+        # Dokument-ID ist der SHA-256-Hash des PDFs; der Viewer legt das
+        # Original unter data/<hash>/ ab und kann die Daten anschliessend
+        # optional per Template in den Knowledge Graph uebertragen.
+        if detection.file_type == FileType.PDF:
+            import hashlib
+            doc_hash = hashlib.sha256(content).hexdigest()[:16]
+            doc_hashes.append(doc_hash)
+            converted_files.append(ConvertedFileData(
+                filename=f"{doc_hash}_dokument.pdf",
+                data_type="dokument",
+                raw_content=base64.b64encode(content).decode('utf-8'),
+                raw_content_type="application/pdf",
+            ))
+            continue
 
         if not detection.is_recognized:
             warning = f"Datei '{filename}' konnte nicht erkannt werden"
@@ -390,37 +486,203 @@ async def convert_files_only(
             ))
             continue
 
+        # ERP-Excel (Herstellungsvorgang): eigener Pfad. Die GS1-Idente kommen
+        # hier — anders als bei HPR/ELDAT — bereits AUS der Datei (Blatt
+        # "Identifikation", vom ERP aus der Auftragsnummer abgeleitet), darum
+        # keine Ident-GENERIERUNG. Excel -> JSON-Zwischendokument -> RML.
+        #
+        # Das EPCIS-CAPTURE findet trotzdem statt: Die Idente in der Datei
+        # benennen nur Platte und Lamellen, sie verknuepfen sie nicht. Diese
+        # Verknuepfung lebt ausschliesslich im TransformationEvent
+        # (identityInput -> inputEpcList, identity -> outputEpcList). Ohne
+        # Capture liegen die Daten zwar im Pod, aber ein Scan der Platte
+        # findet im EPCAT kein Event und damit keine Vorkette.
+        if detection.file_type == FileType.ERP_XLSX:
+            import hashlib
+            import json as json_lib
+            from services.erp_excel_service import parse_erp_excel, ERPExcelError
+
+            doc_hash = hashlib.sha256(content).hexdigest()[:16]
+            try:
+                document, erp_warnings = parse_erp_excel(content, doc_hash, filename)
+                detection_warnings.extend(f"{filename}: {w}" for w in erp_warnings)
+                json_bytes = json_lib.dumps(
+                    document, ensure_ascii=False, indent=2
+                ).encode("utf-8")
+                rdf_data, _ = converter.convert(
+                    json_bytes,
+                    f"{doc_hash}_herstellung.json",
+                    "erp_bsp",
+                    doc_hash,
+                    "herstellung",
+                )
+                # Capture des TransformationEvents. Uebergeben wird das
+                # JSON-Zwischendokument, NICHT die .xlsx: Der module-Treiber
+                # des EECC liest identification.identity/-Input und kann mit
+                # der Excel-Binaerdatei nichts anfangen — sie fuehrt zu
+                # "affords input EPCs or EPC class quantities" (exit 1).
+                try:
+                    await epcis_client.generate_and_capture(
+                        content=json_bytes,
+                        filename=f"{doc_hash}_herstellung.json",
+                        data_type="herstellung",
+                        doc_base_url=(doc_base_url or RAW_UPLOADS_BASE).rstrip("/"),
+                        doc_id=doc_hash,
+                        gcp=cleaned_prefix,
+                    )
+                except EPCISClientError as e:
+                    # Nicht blockierend: RDF und Original sind gueltig und
+                    # gehoeren in den Pod. Fehlt nur das Event, bleibt das
+                    # Produkt auffindbar — lediglich ohne Vorkette.
+                    detection_warnings.append(
+                        f"{filename}: EPCIS-Capture fehlgeschlagen — die "
+                        f"Verknuepfung zu den Lamellen fehlt: {str(e)}"
+                    )
+
+                doc_hashes.append(doc_hash)
+                converted_files.append(ConvertedFileData(
+                    filename=f"{doc_hash}_herstellung.xlsx",
+                    data_type="herstellung",
+                    raw_content=base64.b64encode(content).decode('utf-8'),
+                    raw_content_type=(
+                        "application/vnd.openxmlformats-officedocument"
+                        ".spreadsheetml.sheet"
+                    ),
+                    rdf_content=base64.b64encode(rdf_data).decode('utf-8'),
+                    rdf_filename=f"{doc_hash}_herstellung.ttl",
+                    triple_count=count_triples(rdf_data),
+                    json_content=base64.b64encode(json_bytes).decode('utf-8'),
+                    json_filename=f"{doc_hash}_herstellung.json",
+                    # identity ist eine Liste (Array-Notation fuer den
+                    # module-Treiber), enthaelt aber genau einen Eintrag.
+                    epcs=list(document["identification"]["identity"]),
+                    input_epcs=document["identification"]["identityInput"],
+                ))
+            except ERPExcelError as e:
+                error = f"ERP-Excel ungültig: {str(e)}"
+                detection_warnings.append(f"{filename}: {error}")
+                failed_files.append(f"{filename}: {error}")
+            except RMLConverterError as e:
+                error = f"Konvertierung fehlgeschlagen: {str(e)}"
+                detection_warnings.append(f"{filename}: {error}")
+                failed_files.append(f"{filename}: {error}")
+            continue
+
+        # IFC (Ausfuehrungsplanung): wie der ERP-Pfad ohne EPCIS-Identgenerierung.
+        # Der Ident kommt hier allerdings NICHT aus der Datei — die Planung kennt
+        # die GS1-Serie des gefertigten Bauteils nicht — sondern als Formularfeld
+        # ifc_epc vom Upload. IFC -> JSON-Zwischendokument -> RML.
+        if detection.file_type == FileType.IFC:
+            import hashlib
+            import json as json_lib
+            from services.ifc_service import parse_ifc, IFCError
+
+            doc_hash = hashlib.sha256(content).hexdigest()[:16]
+            try:
+                document, ifc_warnings = parse_ifc(
+                    content, doc_hash, (ifc_epc or "").strip(), filename
+                )
+                detection_warnings.extend(f"{filename}: {w}" for w in ifc_warnings)
+                json_bytes = json_lib.dumps(
+                    document, ensure_ascii=False, indent=2
+                ).encode("utf-8")
+                rdf_data, _ = converter.convert(
+                    json_bytes,
+                    f"{doc_hash}_planung.json",
+                    "ifc_planung",
+                    doc_hash,
+                    "planung",
+                )
+                doc_hashes.append(doc_hash)
+                converted_files.append(ConvertedFileData(
+                    filename=f"{doc_hash}_planung.ifc",
+                    data_type="planung",
+                    raw_content=base64.b64encode(content).decode('utf-8'),
+                    raw_content_type="application/x-step",
+                    rdf_content=base64.b64encode(rdf_data).decode('utf-8'),
+                    rdf_filename=f"{doc_hash}_planung.ttl",
+                    triple_count=count_triples(rdf_data),
+                    json_content=base64.b64encode(json_bytes).decode('utf-8'),
+                    json_filename=f"{doc_hash}_planung.json",
+                    # Kein neuer Ident: Die Planung beschreibt ein BESTEHENDES
+                    # Bauteil. Ein EPCIS-Event wuerde einen Vorgang behaupten,
+                    # den es nicht gab.
+                    epcs=list(document["identification"]["identity"]),
+                ))
+            except IFCError as e:
+                error = f"IFC-Datei ungültig: {str(e)}"
+                detection_warnings.append(f"{filename}: {error}")
+                failed_files.append(f"{filename}: {error}")
+            except RMLConverterError as e:
+                error = f"Konvertierung fehlgeschlagen: {str(e)}"
+                detection_warnings.append(f"{filename}: {error}")
+                failed_files.append(f"{filename}: {error}")
+            continue
+
         # Convert to RDF
         rdf_content = None
         rdf_filename = None
+        triple_count = None
+        # Filenames are derived from the canonical document hash returned by the
+        # EPCIS service (no trace id). Provisional names until the hash is known.
+        raw_filename = f"{detection.data_type}.{source_ext}"
         error = None
 
-        try:
-            # Determine trace ID for filename
-            file_trace_id = trace_id_override or detection.trace_id or "unknown"
+        # The -u/--url base for the EPCIS document is the container the frontend
+        # will upload to (the owner's pod); the EPCIS service appends the document
+        # hash to form the bizTransaction. Fallback: legacy central uploads folder.
+        effective_doc_base_url = (doc_base_url or RAW_UPLOADS_BASE).rstrip("/")
 
-            # Convert using RML
-            rdf_data, rdf_filename = converter.convert(
+        try:
+            # Convert using RML (internal id only; output is renamed by hash below)
+            rdf_data, _ = converter.convert(
                 content,
                 filename,
                 detection.mapping_id,
-                file_trace_id,
+                detection.data_type,
                 detection.data_type
             )
+
+            # Generate GS1 EPCIS identifiers and inject them into the RDF.
+            # MANDATORY: an EPCIS failure aborts the conversion of this file.
+            epcis_result = await epcis_client.generate_and_capture(
+                content=content,
+                filename=filename,
+                data_type=detection.data_type,
+                doc_base_url=effective_doc_base_url,
+                gcp=cleaned_prefix,
+            )
+            if epcis_result:  # None only when EPCIS_ENABLED=false (operator switch)
+                # Das Originaldokument mitgeben: aus ihm liest der Injector
+                # die Zuordnung Ident -> Stamm/Abschnitt (HPR). Ohne sie
+                # landen vorgegebene Idente samtlich auf der Dokumentebene.
+                rdf_data = inject_idents(rdf_data, epcis_result, content)
+                # Name raw + TTL files after the canonical document hash.
+                doc_hash = epcis_result.doc_hash or detection.data_type
+                doc_hashes.append(doc_hash)
+                raw_filename = f"{doc_hash}_{detection.data_type}.{source_ext}"
+                rdf_filename = f"{doc_hash}_{detection.data_type}.ttl"
+                if not epcis_result.captured and epcis_result.capture_message:
+                    detection_warnings.append(
+                        f"{filename}: EPCIS-Idente erzeugt, EPCAT-Capture: "
+                        f"{epcis_result.capture_message}"
+                    )
+            else:
+                rdf_filename = f"{detection.data_type}.ttl"
+
+            # Datenpunkte zählen (nach Ident-Injektion = finaler Stand).
+            triple_count = count_triples(rdf_data)
+
             rdf_content = base64.b64encode(rdf_data).decode('utf-8')
 
         except RMLConverterError as e:
             error = f"Konvertierung fehlgeschlagen: {str(e)}"
             detection_warnings.append(f"{filename}: {error}")
-
-        # Generate raw filename with trace ID
-        file_trace_id = trace_id_override or detection.trace_id or "unknown"
-        data_type_suffix = {
-            "forst": "Forst_StanForD_HPR",
-            "saegewerk": "Saegewerk_ELDAT_HBA",
-            "bspwerk": "BSPWerk_VLEX"
-        }.get(detection.data_type, detection.data_type)
-        raw_filename = f"{file_trace_id}_{data_type_suffix}.{filename.split('.')[-1]}"
+            failed_files.append(f"{filename}: {error}")
+        except EPCISClientError as e:
+            error = f"EPCIS-Identgenerierung fehlgeschlagen: {str(e)}"
+            detection_warnings.append(f"{filename}: {error}")
+            failed_files.append(f"{filename}: {error}")
 
         converted_files.append(ConvertedFileData(
             filename=raw_filename,
@@ -429,24 +691,22 @@ async def convert_files_only(
             raw_content_type=raw_content_type,
             rdf_content=rdf_content,
             rdf_filename=rdf_filename,
+            triple_count=triple_count,
             error=error
         ))
 
-    # Determine trace ID
-    if trace_id_override:
-        trace_id = trace_id_override
-    elif trace_ids_found:
-        from collections import Counter
-        trace_id = Counter(trace_ids_found).most_common(1)[0][0]
-    else:
+    # EPCIS identifiers are mandatory: if any recognized file failed conversion
+    # or EPCIS generation, abort the whole request — no partial pod upload.
+    if failed_files:
         raise HTTPException(
-            status_code=400,
-            detail="Keine Trace-ID in den Dateien gefunden. Bitte trace_id_override angeben."
+            status_code=502,
+            detail="Verarbeitung fehlgeschlagen (EPCIS-Idente sind verpflichtend): "
+            + "; ".join(failed_files)
         )
 
     return ConvertOnlyResponse(
         success=len([f for f in converted_files if f.rdf_content]) > 0,
-        trace_id=trace_id,
+        trace_id=doc_hashes[0] if doc_hashes else "unknown",
         files=converted_files,
         detection_warnings=detection_warnings,
         converted_at=datetime.utcnow().isoformat() + "Z"
@@ -488,7 +748,6 @@ async def convert_files_auto(
     detection_warnings: list[str] = []
     results: dict[str, FileResult] = {}
     errors: list[str] = []
-    trace_ids_found: list[str] = []
 
     # First pass: detect all files
     file_detections: list[tuple[UploadFile, bytes, DetectionResult]] = []
@@ -498,36 +757,42 @@ async def convert_files_auto(
         result = detect_file_type(content, upload_file.filename or "unknown")
         file_detections.append((upload_file, content, result))
 
-        if result.trace_id:
-            trace_ids_found.append(result.trace_id)
-
         if not result.is_recognized:
             warning = f"Datei '{upload_file.filename}' konnte nicht erkannt werden"
             if result.error:
                 warning += f": {result.error}"
             detection_warnings.append(warning)
 
-    # Determine trace ID to use
-    if trace_id_override:
-        trace_id = trace_id_override
-    elif trace_ids_found:
-        from collections import Counter
-        trace_id = Counter(trace_ids_found).most_common(1)[0][0]
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Keine Trace-ID in den Dateien gefunden. Bitte trace_id_override angeben."
-        )
+    # Files are identified solely by their canonical document hash (GS1 EPCIS),
+    # filled in per file during conversion below.
+    doc_hash_by_type: dict[str, str] = {}
 
     # Second pass: convert and upload files
     for upload_file, content, detection in file_detections:
         data_type = detection.data_type
 
+        # PDFs: nur das Original hochladen (kein RML, kein EPCIS)
+        if detection.file_type == FileType.PDF:
+            try:
+                import hashlib
+                doc_hash = hashlib.sha256(content).hexdigest()[:16]
+                raw_filename = f"{doc_hash}_dokument.pdf"
+                raw_url = await client.upload_file(
+                    content,
+                    raw_filename,
+                    folder="public/uploads"
+                )
+                results[raw_filename] = FileResult(raw_url=raw_url, rdf_url=None)
+                logger.info(f"Uploaded PDF document: {raw_filename}")
+            except SolidClientError as e:
+                errors.append(f"Upload fehlgeschlagen fuer '{upload_file.filename}': {str(e)}")
+            continue
+
         # For unrecognized files, still try to upload raw file
         if not detection.is_recognized:
             try:
                 # Upload raw file without conversion
-                raw_filename = f"{trace_id}_unbekannt_{upload_file.filename}"
+                raw_filename = f"unbekannt_{upload_file.filename}"
                 raw_url = await client.upload_file(
                     content,
                     raw_filename,
@@ -542,17 +807,87 @@ async def convert_files_auto(
                 errors.append(f"Upload fehlgeschlagen fuer '{upload_file.filename}': {str(e)}")
             continue
 
+        # ERP-Excel (Herstellungsvorgang): Idente stehen bereits in der Datei
+        # (Blatt "Identifikation") — keine Ident-GENERIERUNG, eigener Pfad.
+        # Das Capture des TransformationEvents findet dennoch statt, sonst
+        # bliebe die Platte ohne Verknuepfung zu ihren Lamellen (siehe den
+        # ausfuehrlichen Kommentar im ERP-Zweig von /convert-only).
+        if detection.file_type == FileType.ERP_XLSX:
+            import hashlib
+            import json as json_lib
+            from services.erp_excel_service import parse_erp_excel, ERPExcelError
+
+            doc_hash = hashlib.sha256(content).hexdigest()[:16]
+            try:
+                document, erp_warnings = parse_erp_excel(
+                    content, doc_hash, upload_file.filename or "herstellung.xlsx"
+                )
+                detection_warnings.extend(
+                    f"{upload_file.filename}: {w}" for w in erp_warnings
+                )
+                json_bytes = json_lib.dumps(
+                    document, ensure_ascii=False, indent=2
+                ).encode("utf-8")
+                rdf_content, _ = converter.convert(
+                    json_bytes,
+                    f"{doc_hash}_herstellung.json",
+                    "erp_bsp",
+                    doc_hash,
+                    "herstellung",
+                )
+                doc_hash_by_type[data_type] = doc_hash
+                raw_url = await client.upload_raw_file(
+                    content, f"{doc_hash}_herstellung.xlsx"
+                )
+                await client.upload_raw_file(
+                    json_bytes, f"{doc_hash}_herstellung.json"
+                )
+                rdf_url = await client.upload_rdf_file(
+                    rdf_content, f"{doc_hash}_herstellung.ttl"
+                )
+                results[data_type] = FileResult(raw_url=raw_url, rdf_url=rdf_url)
+
+                # Nach dem Pod-Upload: das JSON-Zwischendokument (nicht die
+                # .xlsx) an EPCIS geben. Erst danach, damit ein
+                # fehlgeschlagener Upload kein Event hinterlaesst, das auf ein
+                # nicht existierendes Dokument zeigt.
+                try:
+                    await epcis_client.generate_and_capture(
+                        content=json_bytes,
+                        filename=f"{doc_hash}_herstellung.json",
+                        data_type="herstellung",
+                        doc_base_url=RAW_UPLOADS_BASE,
+                        doc_id=doc_hash,
+                    )
+                except EPCISClientError as e:
+                    detection_warnings.append(
+                        f"{upload_file.filename}: EPCIS-Capture fehlgeschlagen "
+                        f"— die Verknuepfung zu den Lamellen fehlt: {str(e)}"
+                    )
+
+                logger.info(f"Successfully processed {data_type}")
+            except ERPExcelError as e:
+                errors.append(f"{data_type}: ERP-Excel ungültig - {str(e)}")
+                results[data_type] = FileResult()
+            except RMLConverterError as e:
+                errors.append(f"{data_type}: Konvertierung fehlgeschlagen - {str(e)}")
+                results[data_type] = FileResult()
+            except SolidClientError as e:
+                errors.append(f"{data_type}: Upload fehlgeschlagen - {str(e)}")
+                results[data_type] = FileResult()
+            continue
+
         # Convert recognized files
         try:
             logger.info(f"Processing {data_type} file: {upload_file.filename}")
 
-            # Convert to RDF
+            # Convert to RDF (internal id only; files are renamed by hash below)
             try:
-                rdf_content, rdf_filename = converter.convert(
+                rdf_content, _ = converter.convert(
                     source_content=content,
-                    source_filename=upload_file.filename or f"{trace_id}_{data_type}",
+                    source_filename=upload_file.filename or data_type,
                     mapping_type=detection.mapping_id,
-                    trace_id=trace_id,
+                    trace_id=data_type,
                     data_type=data_type
                 )
             except RMLConverterError as e:
@@ -561,14 +896,32 @@ async def convert_files_auto(
                 results[data_type] = FileResult()
                 continue
 
-            # Determine raw filename
             ext = ".xml" if detection.mapping_id == "stanford_hpr" else ".json"
-            type_suffix = {
-                "forst": "Forst_StanForD_HPR",
-                "saegewerk": "Saegewerk_ELDAT_HBA",
-                "bspwerk": "BSPWerk_VLEX_Materialfluss"
-            }.get(data_type, data_type)
-            raw_filename = f"{trace_id}_{type_suffix}{ext}"
+
+            # Generate GS1 EPCIS identifiers and inject them into the RDF.
+            # MANDATORY: an EPCIS failure raises and aborts upload of this file
+            # (caught by the outer handler — no raw/TTL is written to the pod).
+            epcis_result = await epcis_client.generate_and_capture(
+                content=content,
+                filename=upload_file.filename or f"{data_type}{ext}",
+                data_type=data_type,
+                doc_base_url=RAW_UPLOADS_BASE,
+            )
+            if epcis_result:  # None only when EPCIS_ENABLED=false (operator switch)
+                rdf_content = inject_idents(rdf_content, epcis_result, content)
+                doc_hash = epcis_result.doc_hash or data_type
+                if not epcis_result.captured and epcis_result.capture_message:
+                    detection_warnings.append(
+                        f"{data_type}: EPCIS-Idente erzeugt, EPCAT-Capture: "
+                        f"{epcis_result.capture_message}"
+                    )
+            else:
+                doc_hash = data_type
+            doc_hash_by_type[data_type] = doc_hash
+
+            # Filenames derived from the document hash.
+            raw_filename = f"{doc_hash}_{data_type}{ext}"
+            rdf_filename = f"{doc_hash}_{data_type}.ttl"
 
             # Upload to Solid Pod
             try:
@@ -583,6 +936,10 @@ async def convert_files_auto(
                 errors.append(f"{data_type}: Upload fehlgeschlagen - {str(e)}")
                 results[data_type] = FileResult()
 
+        except EPCISClientError as e:
+            logger.error(f"EPCIS error for {data_type}: {e}")
+            errors.append(f"{data_type}: EPCIS-Identgenerierung fehlgeschlagen - {str(e)}")
+            results[data_type] = FileResult()
         except Exception as e:
             logger.error(f"Unexpected error processing {data_type}: {e}")
             errors.append(f"{data_type}: Unerwarteter Fehler - {str(e)}")
@@ -621,7 +978,7 @@ async def convert_files_auto(
 
                     # Create registration data (use default catalog_id from env for backend uploads)
                     registration = CatalogRegistration(
-                        trace_id=trace_id,
+                        trace_id=doc_hash_by_type.get(data_type, data_type),
                         data_type=data_type,
                         rdf_url=file_result.rdf_url,
                         semantic_model_content=sm_content,
@@ -650,7 +1007,7 @@ async def convert_files_auto(
 
     return AutoConvertResponse(
         success=success,
-        trace_id=trace_id,
+        trace_id=next(iter(doc_hash_by_type.values()), "unknown"),
         files=results,
         detection_warnings=detection_warnings,
         converted_at=datetime.utcnow().isoformat() + "Z",
@@ -668,6 +1025,10 @@ class CatalogRegistrationRequest(BaseModel):
     raw_url: Optional[str] = None
     catalog_id: int  # ID of the catalog to register in
     publisher: Optional[str] = None  # Solid user name from authentication
+    # WebID des Pod-Eigentuemers. Pflichtfeld der Katalog-API
+    # (DatasetWriteRequest.ownerWebId) -- ohne sie laesst sich der Datensatz
+    # keinem Pod zuordnen und die Registrierung wird abgewiesen.
+    owner_webid: Optional[str] = None
 
 
 class CatalogRegistrationResponse(BaseModel):
@@ -725,7 +1086,7 @@ async def register_in_catalog(
             semantic_model_filename=sm_filename,
             mapping_id=request.mapping_id,
             catalog_id=request.catalog_id,
-            webid=None,
+            webid=request.owner_webid,
             raw_url=request.raw_url,
             publisher=request.publisher
         )
@@ -768,6 +1129,238 @@ async def register_in_catalog(
             success=False,
             message=error_msg
         )
+
+
+# ---------------------------------------------------------------------------
+# PDF-Templates: manuelle Datenuebernahme aus PDF-Dokumenten
+# ---------------------------------------------------------------------------
+
+class PdfTemplatesResponse(BaseModel):
+    """Verfuegbare PDF-Templates inkl. Formular-Schema."""
+    templates: list[dict]
+
+
+class PdfFormConvertRequest(BaseModel):
+    """Vom Viewer uebertragene Formulardaten eines PDF-Templates.
+
+    Entweder ``pdf_fields`` (rohes AcroForm-Abbild {feldname: wert}, wie es
+    PDF.js aus dem ausgefuellten Template liefert) oder ``form_data``
+    ({fields, rows} mit Registry-Keys).
+    """
+    template_id: str
+    # Dokument-ID = SHA-256-Hash (16 Hex-Zeichen) des Original-PDFs; verknuepft
+    # Original, JSON-Extrakt und materialisierte TTL im selben Pod-Container.
+    doc_id: str
+    form_data: Optional[dict] = None
+    pdf_fields: Optional[dict] = None
+    # Im Viewer erhobene Werte ohne AcroForm-Entsprechung, mit Registry-Keys:
+    # der EPC-Bezug und die auf der Karte gezeichnete Pflanzflaeche (GeoJSON).
+    extra_fields: Optional[dict] = None
+    # Herkunft des Idents: "document" (aus dem versteckten AcroForm-Feld des
+    # hochgeladenen PDFs gelesen) oder "user" (im Viewer ausgewaehlt). Landet
+    # als Metadatum im JSON, nicht als zweites Ident-Feld.
+    epc_source: Optional[str] = None
+    # Pod-Container, in dem Original, JSON und TTL dieses Dokuments liegen.
+    # Wird zur bizTransaction des EPCIS-Events: nur darueber findet der Viewer
+    # spaeter die Quelldaten zum Ident zurueck. Fehlt sie, faellt der Aufruf
+    # auf RAW_UPLOADS_BASE zurueck.
+    doc_base_url: Optional[str] = None
+
+
+class PdfFormConvertResponse(BaseModel):
+    success: bool
+    template_id: str
+    doc_id: str
+    data_type: str
+    json_content: str  # Base64: maschinenlesbares JSON (Extraktor-Ausgabe)
+    json_filename: str
+    rdf_content: str  # Base64: materialisierte TTL
+    rdf_filename: str
+    triple_count: Optional[int] = None
+    message: Optional[str] = None
+    # EPCIS-Ergebnis, nur bei Pflichtdokumenten gesetzt (siehe
+    # EPCIS_PDF_DATA_TYPES). Der Viewer zeigt eine Warnung, wenn Idente
+    # erzeugt, aber nicht ins EPCAT-Repository uebernommen wurden.
+    epcis_captured: Optional[bool] = None
+    epcis_message: Optional[str] = None
+    epcis_event_count: Optional[int] = None
+
+
+@app.get("/api/converter/pdf-templates", response_model=PdfTemplatesResponse)
+async def get_pdf_templates():
+    """
+    Liste der verfuegbaren PDF-Templates mit Formular-Schema.
+
+    Der Viewer rendert daraus das Uebertragungsformular (Original links,
+    Template rechts bzw. Tabs in der Mobilansicht).
+    """
+    return PdfTemplatesResponse(templates=get_templates_public())
+
+
+@app.get("/api/converter/pdf-templates/{template_id}/file")
+async def get_pdf_template_file(template_id: str):
+    """
+    Ausfuellbare Template-PDF (AcroForm) ausliefern.
+
+    Der Viewer rendert diese PDF interaktiv (PDF.js) neben dem Original,
+    der Nutzer traegt die Werte direkt in die Formularfelder ein.
+    """
+    from fastapi.responses import FileResponse
+
+    try:
+        path = get_template_pdf_path(template_id)
+    except PDFTemplateError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=f"{template_id}.pdf",
+    )
+
+
+# PDF-Templates, die ein EPCIS-Event ausloesen sollen -- Abbildung von der
+# Registry-``data_type`` auf den Datentyp des EPCIS-Dienstes (dort haengt der
+# timber-event-Treiber dran).
+#
+# BEWUSST NUR PFLICHTDOKUMENTE. Ein Event beschreibt einen Vorgang der
+# Lieferkette; Beidokumente (Biegepruefung, Schnittbild, Klebstoffdatenblatt)
+# beschreiben keinen, sie haengen ueber tc:epc am selben Material. Fuer sie
+# genuegt die Verknuepfung ueber den Ident, und ein zusaetzliches Event wuerde
+# denselben Vorgang mehrfach behaupten.
+#
+# Heute nur die Leistungserklaerung: sie traegt in ihren versteckten
+# AcroForm-Feldern (Identity_<n> / IdentityInput_<n>) die n:m-Zuordnung
+# Rundholz -> Lamellen und ist damit die einzige PDF-Quelle, aus der ein
+# TransformationEvent entstehen kann.
+EPCIS_PDF_DATA_TYPES = {
+    "pdf_leistungserklaerung": "leistungserklaerung",
+}
+
+
+@app.post("/api/converter/convert-pdf-form", response_model=PdfFormConvertResponse)
+async def convert_pdf_form(request: PdfFormConvertRequest):
+    """
+    Formulardaten eines PDF-Templates in RDF materialisieren.
+
+    Ablauf (Gegenstueck zu /convert-only fuer maschinenlesbare Dateien):
+    1. Extraktor: Formulardaten -> maschinenlesbares JSON-Dokument
+    2. RML-Mapping des Templates -> TTL (TimberConnect-Ontologie v6)
+    3. Rueckgabe Base64-codiert; der Viewer laedt JSON + TTL mit der
+       Solid-Session des Nutzers in den Container des Original-PDFs hoch.
+    """
+    try:
+        template = get_template(request.template_id)
+        form_data = request.form_data
+        if request.pdf_fields is not None:
+            form_data = pdf_fields_to_form_data(
+                request.template_id, request.pdf_fields, request.extra_fields
+            )
+        if form_data is None:
+            raise PDFTemplateError("Entweder 'pdf_fields' oder 'form_data' angeben")
+        document = build_document_json(
+            request.template_id, form_data, request.doc_id, request.epc_source
+        )
+    except PDFTemplateError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    import base64
+    import json as json_lib
+
+    json_bytes = json_lib.dumps(document, ensure_ascii=False, indent=2).encode("utf-8")
+    json_filename = f"{request.doc_id}_{request.template_id}.json"
+    rdf_filename = f"{request.doc_id}_{request.template_id}.ttl"
+
+    try:
+        rdf_data, _ = converter.convert(
+            source_content=json_bytes,
+            source_filename=json_filename,
+            mapping_type=request.template_id,
+            trace_id=request.doc_id,
+            data_type=template["data_type"],
+        )
+    except RMLConverterError as e:
+        logger.error(f"PDF-Form conversion error ({request.template_id}): {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"RML-Konvertierung fehlgeschlagen: {str(e)}"
+        )
+
+    triple_count = count_triples(rdf_data)
+    if not triple_count:
+        raise HTTPException(
+            status_code=502,
+            detail="RML-Konvertierung lieferte keine Datenpunkte (0 Triples)"
+        )
+
+    # --- EPCIS-Ereignis aus dem erzeugten JSON ------------------------------
+    #
+    # Das oben gebaute JSON ist bereits die Eingabe, die timber-event erwartet
+    # -- fuer die Leistungserklaerung enthaelt es die Saegevorgaenge
+    # (sawings[]) und damit input-/outputEPCList eines TransformationEvents.
+    #
+    # Dieser Schritt fehlte hier: die Funktion erzeugte JSON und TTL und warf
+    # die JSON als Ereignisgrundlage weg. Die Daten landeten im Pod, der
+    # Vorgang aber in keinem Event -- die Stufe blieb eine Insel, und im
+    # Herkunftsnachweis fehlten die Akteure, die nur dieses Dokument benennt.
+    epcis_captured: Optional[bool] = None
+    epcis_message: Optional[str] = None
+    epcis_event_count: Optional[int] = None
+
+    epcis_data_type = EPCIS_PDF_DATA_TYPES.get(template["data_type"])
+    if epcis_data_type:
+        try:
+            epcis_result = await epcis_client.generate_and_capture(
+                content=json_bytes,
+                filename=json_filename,
+                data_type=epcis_data_type,
+                # Der Container des Original-PDFs -- die bizTransaction muss
+                # dorthin zeigen, sonst findet der Viewer die Quelldaten nicht.
+                doc_base_url=request.doc_base_url or RAW_UPLOADS_BASE,
+                doc_id=request.doc_id,
+            )
+        except EPCISClientError as e:
+            # Nicht abbrechen: TTL und JSON sind gueltig und gehoeren in den
+            # Pod. Ohne Event fehlt nur die Verkettung -- das meldet der
+            # Viewer als Warnung, statt den ganzen Upload zu verwerfen.
+            logger.error(f"EPCIS error for {request.template_id}: {e}")
+            epcis_captured = False
+            epcis_message = str(e)
+        else:
+            if epcis_result:  # None nur bei EPCIS_ENABLED=false
+                rdf_data = inject_idents(rdf_data, epcis_result, json_bytes)
+                triple_count = count_triples(rdf_data) or triple_count
+                epcis_captured = epcis_result.captured
+                epcis_message = epcis_result.capture_message
+                epcis_event_count = len(
+                    (epcis_result.epcis_document or {})
+                    .get("epcisBody", {})
+                    .get("eventList", [])
+                )
+                logger.info(
+                    f"PDF-Form EPCIS: {request.template_id} doc={request.doc_id} "
+                    f"events={epcis_event_count} captured={epcis_captured}"
+                )
+
+    logger.info(
+        f"PDF-Form converted: {request.template_id} doc={request.doc_id} "
+        f"triples={triple_count}"
+    )
+
+    return PdfFormConvertResponse(
+        success=True,
+        template_id=request.template_id,
+        doc_id=request.doc_id,
+        data_type=template["data_type"],
+        json_content=base64.b64encode(json_bytes).decode("utf-8"),
+        json_filename=json_filename,
+        rdf_content=base64.b64encode(rdf_data).decode("utf-8"),
+        rdf_filename=rdf_filename,
+        triple_count=triple_count,
+        epcis_captured=epcis_captured,
+        epcis_message=epcis_message,
+        epcis_event_count=epcis_event_count,
+    )
 
 
 @app.get("/api/converter/products")

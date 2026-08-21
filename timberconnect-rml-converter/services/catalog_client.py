@@ -59,6 +59,65 @@ class CatalogClient:
             "description": "BSP-Plattenproduktion im VLEX-Format",
             "theme": "Holzbau",
         },
+        "herstellung": {
+            "title": "Herstellungsdaten BSP",
+            "description": "ERP-Auszug einer Brettsperrholz-Fertigung",
+            "theme": "Holzbau",
+        },
+        # PDF-Templates: manuell uebernommene Dokumentdaten. Ohne eigenen
+        # Eintrag griffe der Fallback ("Datensatz"/"Sonstiges") -- der Katalog
+        # wuerde die Dokumente zwar fuehren, aber nicht mehr unterscheidbar
+        # machen. Genau das Auffinden ist aber sein Zweck.
+        "pdf_pruefzertifikat": {
+            "title": "Pruefzertifikat Saatgut",
+            "description": "Untersuchungsergebnisse einer Saatgutpartie (KJZ)",
+            "theme": "Forstwirtschaft",
+        },
+        "pdf_stammzertifikat": {
+            "title": "Stammzertifikat",
+            "description": "Stammzertifikat fuer forstliches Vermehrungsgut",
+            "theme": "Forstwirtschaft",
+        },
+        "pdf_transportauftrag_rundholz": {
+            "title": "Transportauftrag Rundholz",
+            "description": "Abtransport von Rundholz vom Polter zum Saegewerk",
+            "theme": "Logistik",
+        },
+        "pdf_fertigungsauftrag_saege": {
+            "title": "Fertigungsauftrag Saege",
+            "description": "Auftrag fuer den Einschnitt im Saegewerk",
+            "theme": "Holzverarbeitung",
+        },
+        "pdf_schnittbild": {
+            "title": "Schnittbild",
+            "description": "Einschnittbild eines Rundholzstammes",
+            "theme": "Holzverarbeitung",
+        },
+        "pdf_biegepruefung": {
+            "title": "Biegepruefung Schnittholz",
+            "description": "Pruefprotokoll der Biegefestigkeit von Schnittholzproben",
+            "theme": "Holzverarbeitung",
+        },
+        "pdf_leistungserklaerung": {
+            "title": "Leistungserklaerung Schnittholz",
+            "description": "Leistungserklaerung nach EN 14081 mit Saegevorgaengen",
+            "theme": "Holzverarbeitung",
+        },
+        "pdf_transportauftrag": {
+            "title": "Transportauftrag Schnittholz",
+            "description": "Transportauftrag vom Saegewerk zum Verarbeiter",
+            "theme": "Logistik",
+        },
+        "pdf_leistungserklaerung_bsp": {
+            "title": "Leistungserklaerung Brettsperrholz",
+            "description": "Leistungserklaerung nach EN 16351 fuer BSP-Elemente",
+            "theme": "Holzbau",
+        },
+        "pdf_klebstoffdatenblatt": {
+            "title": "Klebstoff-Datenblatt",
+            "description": "Technisches Datenblatt eines Konstruktionsklebstoffs",
+            "theme": "Holzbau",
+        },
     }
 
     def __init__(
@@ -92,6 +151,12 @@ class CatalogClient:
             "CATALOG_DEFAULT_CONTACT",
             "timberconnect@2050.de"
         )
+        # Whether the DATA behind a catalog entry is world-readable. The catalog
+        # entry itself stays discoverable either way; this flag only describes the
+        # data's access policy. Now that uploads land in WAC-protected containers
+        # (not public/), this defaults to false and the entry is marked as
+        # access-controlled via dct:accessRights.
+        self.data_public = os.getenv("CATALOG_DATA_PUBLIC", "false").lower() == "true"
         self.timeout = timeout
 
         logger.info(
@@ -129,7 +194,10 @@ class CatalogClient:
             "modified": now.isoformat() + "Z",
             "publisher": registration.publisher or self.default_publisher,
             "contact_point": self.default_contact,
-            "is_public": "true",
+            # Catalog entry stays discoverable; is_public reflects the DATA's
+            # access policy. Default false now that data sits behind WAC.
+            "is_public": "true" if self.data_public else "false",
+            "access_rights": "public" if self.data_public else "restricted",
             "access_url_dataset": registration.rdf_url,
             "file_format": "text/turtle",
             "theme": info["theme"],
@@ -163,33 +231,51 @@ class CatalogClient:
         logger.debug(f"Catalog API URL: {url}")
         logger.debug(f"Metadata: {metadata}")
 
+        # Die Katalog-API erwartet application/json (Schema
+        # DatasetWriteRequest), NICHT multipart/form-data. Ein Multipart-Body
+        # kommt dort als eine einzige Zeichenkette an und wird mit HTTP 422
+        # abgewiesen ("Input should be a valid dictionary") -- der Upload gilt
+        # dann trotzdem als erfolgreich, die Daten sind aber nirgends
+        # registriert und damit fuer jede Abfrage unsichtbar.
+        #
+        # Pflichtfelder laut Schema: ownerWebId, title, access_url_dataset.
+        # "catalog_id" und "access_rights" kennt die API nicht mehr; das
+        # semantische Modell wird nicht mehr als Datei hochgeladen, sondern
+        # per URL referenziert (access_url_semantic_model).
+        if not registration.webid:
+            raise CatalogClientError(
+                "ownerWebId fehlt: Die Katalog-API verlangt die WebID des "
+                "Pod-Eigentuemers. Ohne sie kann der Datensatz keinem Pod "
+                "zugeordnet werden."
+            )
+
+        # "identifier" wird BEWUSST nicht gesetzt: die API verlangt dort eine
+        # UUID und vergibt sie selbst ("identifier must be a UUID. Omit it to
+        # generate one."). Unser sprechender Schluessel <hash>_<data_type>
+        # steckt statt dessen im Titel und in der access_url.
+        payload = {
+            "ownerWebId": registration.webid,
+            "title": metadata["title"],
+            "description": metadata["description"],
+            "issued": metadata["issued"],
+            "modified": metadata["modified"],
+            "publisher": metadata["publisher"],
+            "contact_point": metadata["contact_point"],
+            # metadata["is_public"] ist ein STRING ("true"/"false", Altlast des
+            # frueheren Multipart-Wegs). bool("false") waere True -- damit
+            # waeren alle Datensaetze faelschlich oeffentlich.
+            "is_public": str(metadata["is_public"]).lower() == "true",
+            "access_url_dataset": metadata["access_url_dataset"],
+            "file_format": metadata["file_format"],
+            "theme": metadata["theme"],
+            # Bestehenden Eintrag ersetzen statt zu duplizieren: dieselbe
+            # Datei zweimal hochzuladen soll einen Eintrag ergeben, nicht zwei.
+            "overwrite": True,
+        }
+        if registration.raw_url:
+            payload["access_url_semantic_model"] = registration.raw_url
+
         try:
-            # Prepare multipart form data
-            files = {
-                "semantic_model_file": (
-                    registration.semantic_model_filename,
-                    registration.semantic_model_content,
-                    "text/turtle"
-                )
-            }
-
-            # Form data (all string values for multipart form)
-            data = {
-                "title": metadata["title"],
-                "description": metadata["description"],
-                "identifier": metadata["identifier"],
-                "issued": metadata["issued"],
-                "modified": metadata["modified"],
-                "publisher": metadata["publisher"],
-                "contact_point": metadata["contact_point"],
-                "is_public": metadata["is_public"],
-                "access_url_dataset": metadata["access_url_dataset"],
-                "file_format": metadata["file_format"],
-                "theme": metadata["theme"],
-                "catalog_id": metadata["catalog_id"],
-                "webid": metadata["webid"],
-            }
-
             headers = {}
             if authorization:
                 headers["Authorization"] = authorization
@@ -197,8 +283,7 @@ class CatalogClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     url,
-                    data=data,
-                    files=files,
+                    json=payload,
                     headers=headers
                 )
 

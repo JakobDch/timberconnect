@@ -1,0 +1,270 @@
+# TimberConnect Ontology — Erweiterung Leistungserklärung / Bauprodukt-Kennwerte
+#
+# Additives Modul nach dem Vorbild von timberconnect_epcis_extension.ttl. Es
+# ergänzt die Begriffe, die eine Leistungserklärung für Brettsperrholz nach
+# EN 16351 braucht und die timberconnect_ontology_v6.ttl (noch) nicht führt.
+#
+# Warum eine eigene Datei und kein Eingriff in v6:
+# ontology/timberconnect_ontology_v6.ttl ist eine Kopie aus dem Repo
+# TimberConnect_Ontology. Wird sie hier bearbeitet, läuft sie von ihrer
+# Quelle weg und der nächste Abgleich überschreibt die Änderung stillschweigend.
+# Ein additives Modul bleibt beim nächsten Update erhalten und macht zugleich
+# sichtbar, was der Basis-Ontologie fehlt — die Terme hier gehören
+# perspektivisch nach v6 zurückgeführt.
+#
+# Zusammen laden mit der Basis-Ontologie. Die Term-URIs müssen mit
+# services/pdf_template_service.py übereinstimmen (geprüft von
+# tests/test_ontology_terms.py).
+#
+# --- Warum diese Begriffe nicht auf vorhandene abgebildet werden ------------
+#
+# Die naheliegende Abkürzung wäre gewesen, den Schubmodul unter
+# tc:elasticModulus zu führen und die Schalldämmwerte unter einem
+# allgemeinen tc:description. Beides wäre fachlich falsch: der Schubmodul G
+# ist eine andere Grösse als der Elastizitätsmodul E (er beschreibt die
+# Gestalt-, nicht die Längenänderung), und ein Statiker, der nach E fragt
+# und G zurückbekommt, rechnet mit dem falschen Wert. Ein Begriff, der zwei
+# Grössen zusammenwirft, ist schlechter als ein neuer Begriff.
+#
+# Aus demselben Grund sind Rollschub und Torsionsschub eigene Unter-
+# Properties von tc:shearStrength und nicht bloss weitere Werte darunter:
+# eine BSP-Leistungserklärung nennt bis zu vier Schubfestigkeiten
+# nebeneinander. Stünden alle unter derselben Property, wäre im Graph nicht
+# mehr erkennbar, welcher Wert welcher ist — die Angabe wäre vorhanden und
+# trotzdem unbrauchbar.
+
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc:   <http://timberconnect.2050.de/ontology#> .
+
+<http://timberconnect.2050.de/ontology/dop-extension>
+    a owl:Ontology ;
+    rdfs:label "TimberConnect — Erweiterung Bauprodukt-Kennwerte"@de ;
+    rdfs:comment """Ergaenzt die Kennwerte einer Leistungserklaerung fuer
+        Brettsperrholz (EN 16351): Schubmoduln, Rollschub, Bauphysik und
+        Klebstoffangaben. Additiv zur Basis-Ontologie v6."""@de .
+
+
+# =============================================================================
+# Klassen
+# =============================================================================
+
+tc:ProductionOrder a owl:Class ;
+    rdfs:label "Produktionsauftrag"@de ;
+    rdfs:comment """Auftrag zur Fertigung, z.B. der Fertigungsauftrag, mit dem
+        das Saegewerk einen Einschnitt fahrt. Abgegrenzt von tc:DeliveryOrder
+        (Lieferung) und tc:TransportOrder (Befoerderung): der
+        Produktionsauftrag beschreibt die Herstellung selbst."""@de .
+
+
+# =============================================================================
+# Mechanik: Schubmodul
+# =============================================================================
+#
+# Der Schubmodul G fehlt in v6 vollstaendig, obwohl er fuer die Bemessung von
+# Brettsperrholz zentral ist -- gerade der Rollschubmodul bestimmt bei
+# Deckenplatten die Durchbiegung massgeblich mit.
+
+tc:shearModulus a owl:DatatypeProperty ;
+    rdfs:label "Schubmodul"@de ;
+    rdfs:comment """Schubmodul G in N/mm2. NICHT mit tc:elasticModulus (E)
+        verwechseln: E beschreibt die Laengenaenderung unter Normalspannung,
+        G die Gestaltaenderung unter Schubspannung."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:rollingShearModulus a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:shearModulus ;
+    rdfs:label "Rollschubmodul"@de ;
+    rdfs:comment """Schubmodul rechtwinklig zur Faserrichtung der Bretter
+        (Rollschub). Bei Brettsperrholz der kleinste der Schubmoduln und
+        deshalb oft bemessungsbestimmend."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:rollingShearStrength a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:shearStrength ;
+    rdfs:label "Rollschubfestigkeit"@de ;
+    rdfs:comment """Schubfestigkeit rechtwinklig zur Faserrichtung der
+        Bretter."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:torsionalShearStrength a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:shearStrength ;
+    rdfs:label "Torsionsschubfestigkeit"@de ;
+    rdfs:comment """Torsionsschubfestigkeit der Kreuzungsflaechen zwischen
+        zwei Lagen."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:embedmentStrength a owl:DatatypeProperty ;
+    rdfs:label "Lochleibungsfestigkeit"@de ;
+    rdfs:comment """Lochleibungsfestigkeit fuer stiftfoermige
+        Verbindungsmittel nach EN 1995-1-1."""@de ;
+    rdfs:range xsd:decimal .
+
+
+# =============================================================================
+# Richtungsabhaengige Kennwerte: senkrecht zur Platte vs. in Plattenebene
+# =============================================================================
+#
+# Brettsperrholz ist ein Kreuzlagenholz: seine Kennwerte haengen davon ab, in
+# welcher Ebene belastet wird. Eine Leistungserklaerung nennt deshalb Biege-
+# festigkeit und Elastizitaetsmodul JE ZWEIMAL -- einmal fuer Beanspruchung
+# senkrecht zur Plattenebene (Platte als Decke), einmal fuer Beanspruchung in
+# der Plattenebene (Platte als Scheibe/Wand).
+#
+# Ohne getrennte Properties gingen diese Angaben verloren: stehen beide unter
+# tc:bendingStrength und sind zufaellig zahlengleich, verschmelzen sie im RDF
+# zu EINEM Tripel -- der zweite Wert waere spurlos weg, und niemand koennte
+# der Datei ansehen, dass etwas fehlt. Genau das macht den Unterschied
+# zwischen "mehrere Werte unter einer Property" (zulaessig) und "zwei
+# verschiedene Aussagen unter einer Property" (Datenverlust).
+
+tc:bendingStrengthEdgewise a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:bendingStrength ;
+    rdfs:label "Biegefestigkeit in Plattenebene"@de ;
+    rdfs:comment """Charakteristische Biegefestigkeit bei Beanspruchung in
+        der Plattenebene (Scheibenbeanspruchung, z.B. Wandelement)."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:bendingStrengthFlatwise a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:bendingStrength ;
+    rdfs:label "Biegefestigkeit senkrecht zur Plattenebene"@de ;
+    rdfs:comment """Charakteristische Biegefestigkeit bei Beanspruchung
+        senkrecht zur Plattenebene (Plattenbeanspruchung, z.B. Decke)."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:elasticModulusPerpendicularToGrain a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:elasticModulus ;
+    rdfs:label "Elastizitaetsmodul rechtwinklig zur Faserrichtung"@de ;
+    rdfs:range xsd:decimal .
+
+tc:elasticModulusFlatwise a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:elasticModulus ;
+    rdfs:label "Elastizitaetsmodul senkrecht zur Plattenebene"@de ;
+    rdfs:comment """E-Modul parallel zur Faserrichtung der Bretter bei
+        Plattenbeanspruchung (senkrecht zur Plattenebene)."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:elasticModulusEdgewise a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:elasticModulus ;
+    rdfs:label "Elastizitaetsmodul in Plattenebene"@de ;
+    rdfs:comment """E-Modul parallel zur Faserrichtung der Bretter bei
+        Scheibenbeanspruchung (in der Plattenebene)."""@de ;
+    rdfs:range xsd:decimal .
+
+tc:shearModulusFlatwise a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:shearModulus ;
+    rdfs:label "Schubmodul senkrecht zur Plattenebene"@de ;
+    rdfs:range xsd:decimal .
+
+tc:shearModulusEdgewise a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:shearModulus ;
+    rdfs:label "Schubmodul in Plattenebene"@de ;
+    rdfs:range xsd:decimal .
+
+tc:meanShearModulus a owl:DatatypeProperty ;
+    rdfs:subPropertyOf tc:shearModulus ;
+    rdfs:label "Mittelwert des Schubmoduls"@de ;
+    rdfs:range xsd:decimal .
+
+
+# =============================================================================
+# Aufbau, Klebstoff, Nutzung
+# =============================================================================
+
+tc:strengthClass a owl:DatatypeProperty ;
+    rdfs:label "Festigkeitsklasse"@de ;
+    rdfs:comment """Festigkeitsklasse des verwendeten Holzes, z.B. C24 nach
+        EN 338. Abgegrenzt von tc:grade (Sortierklasse des Rundholzes)."""@de ;
+    rdfs:range xsd:string .
+
+tc:serviceClass a owl:DatatypeProperty ;
+    rdfs:label "Nutzungsklasse"@de ;
+    rdfs:comment """Nutzungsklasse nach EN 1995-1-1 (1, 2 oder 3), abgeleitet
+        aus der zu erwartenden Umgebungsfeuchte."""@de ;
+    rdfs:range xsd:string .
+
+tc:adhesiveType a owl:DatatypeProperty ;
+    rdfs:label "Verwendeter Klebstoff"@de ;
+    rdfs:comment """Bezeichnung des zur Verklebung eingesetzten Klebstoffs.
+        Die Eigenschaften des Klebstoffs selbst stehen an einer Instanz von
+        tc:Adhesive; hier steht die Angabe der Leistungserklaerung."""@de ;
+    rdfs:range xsd:string .
+
+tc:delaminationResistance a owl:DatatypeProperty ;
+    rdfs:label "Klebfugenintegritaet"@de ;
+    rdfs:comment """Ergebnis der Delaminierungspruefung nach EN 16351 --
+        der Nachweis, dass die Klebfugen unter Feuchtewechsel halten."""@de ;
+    rdfs:range xsd:string .
+
+tc:creepFactor a owl:DatatypeProperty ;
+    rdfs:label "Kriech- und Modifikationsbeiwerte"@de ;
+    rdfs:comment """Beiwerte kmod und kdef nach EN 1995-1-1 fuer Kriechen und
+        Lasteinwirkungsdauer."""@de ;
+    rdfs:range xsd:string .
+
+
+# =============================================================================
+# Brandverhalten
+# =============================================================================
+
+tc:charringRate a owl:DatatypeProperty ;
+    rdfs:label "Abbrandrate"@de ;
+    rdfs:comment """Abbrandrate in mm/min. Grundlage der Bemessung im
+        Brandfall: aus ihr folgt der Restquerschnitt nach der geforderten
+        Feuerwiderstandsdauer."""@de ;
+    rdfs:range xsd:decimal .
+
+
+# =============================================================================
+# Bauphysik
+# =============================================================================
+
+tc:airborneSoundInsulation a owl:DatatypeProperty ;
+    rdfs:label "Luftschalldaemmung"@de ;
+    rdfs:comment "Bewertetes Schalldaemm-Mass Rw in dB."@de ;
+    rdfs:range xsd:string .
+
+tc:impactSoundInsulation a owl:DatatypeProperty ;
+    rdfs:label "Trittschalldaemmung"@de ;
+    rdfs:comment "Bewerteter Norm-Trittschallpegel Ln,w in dB."@de ;
+    rdfs:range xsd:string .
+
+tc:soundAbsorption a owl:DatatypeProperty ;
+    rdfs:label "Schallabsorption"@de ;
+    rdfs:comment "Schallabsorptionsgrad der Oberflaeche."@de ;
+    rdfs:range xsd:string .
+
+tc:impactResistance a owl:DatatypeProperty ;
+    rdfs:label "Schlagfestigkeit"@de ;
+    rdfs:comment """Widerstand gegen Stossbeanspruchung durch einen weichen
+        Koerper."""@de ;
+    rdfs:range xsd:string .
+
+tc:airPermeability a owl:DatatypeProperty ;
+    rdfs:label "Luftdurchlaessigkeit"@de ;
+    rdfs:range xsd:string .
+
+tc:vapourDiffusionResistance a owl:DatatypeProperty ;
+    rdfs:label "Wasserdampfdiffusionswiderstandszahl"@de ;
+    rdfs:comment """Diffusionswiderstandszahl my des Bauteils."""@de ;
+    rdfs:range xsd:string .
+
+tc:thermalExpansionCoefficient a owl:DatatypeProperty ;
+    rdfs:label "Waermeausdehnungskoeffizient"@de ;
+    rdfs:comment """Laengenaenderung je Kelvin. Abgegrenzt von
+        tc:thermalTransmittance (Waermedurchgang) und tc:thermalMass
+        (Waermespeicherung)."""@de ;
+    rdfs:range xsd:string .
+
+
+# =============================================================================
+# Fertigungsauftrag: Freifelder
+# =============================================================================
+
+tc:leer a owl:DatatypeProperty ;
+    rdfs:label "Freifeld"@de ;
+    rdfs:comment """Unbeschriftete Spalte des Fertigungsauftrags. Sie traegt
+        im Formular keine feste Bedeutung; der Wert wird uebernommen, damit
+        keine Eingabe des Nutzers verlorengeht."""@de ;
+    rdfs:range xsd:string .

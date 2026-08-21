@@ -1,0 +1,193 @@
+# RML-Mapping: Ausfuehrungsplanung Brettsperrholz (IFC)
+#
+# Quelle ist NICHT die IFC-Datei selbst, sondern das von
+# services/ifc_service.py erzeugte JSON-Zwischendokument — wie beim ERP-Pfad
+# (erp_bsp.rml.ttl).
+#
+# Ontologie: TimberConnect v6. Das Vokabular fuer IFC-Daten ist dort BEREITS
+# vorhanden (Abschnitt "IFC-spezifische Properties (aus PropertySets)" sowie
+# "Abbund/Produktion (fuer Holzbau-IFC)") — tc:ifcGlobalId, tc:ifcClass,
+# tc:constructionPhase, tc:surfaceQuality, tc:deliveryPhase, tc:assemblyGroup,
+# tc:productionNumber und tc:sku decken die Merkmale M-1168..M-1180 ab. Dieses
+# Mapping verwendet konsequent diese Begriffe, statt eigene einzufuehren:
+# zwei Namen fuer dasselbe Merkmal waeren fuer jede spaetere Abfrage eine
+# Falle. Nur tc:buildingStorey, tc:projectNumber und tc:projectName fehlten;
+# sie stehen in ontology/timberconnect_ifc_extension.ttl.
+#
+# Das geplante Bauteil ist ein tc:BuildingElement ("Eingebautes Element (Wand,
+# Decke, etc.)") und bekommt einen EIGENEN Knoten neben tc:Panel: Planung und
+# Fertigung sind zwei Aussagen ueber dasselbe Bauteil aus verschiedenen
+# Quellen. Lagen sie auf einem Subjekt, waeren "geplant 4,05 m³" und
+# "gefertigt 4,02 m³" nicht mehr auseinanderzuhalten. Die Verknuepfung stellt
+# der gemeinsame Ident tc:epc her — genau wie bei Leistungserklaerung und
+# Klebstoffdatenblatt.
+#
+# Ident: Die Planung kennt die GS1-Serie des gefertigten Bauteils nicht, der
+# EPC wird deshalb beim Upload mitgegeben (ifc_service.parse_ifc) und steht
+# unter identification.identity. tc:epc ist der Abfrage-Einstieg.
+#
+# {{SOURCE_FILE}} wird zur Laufzeit durch den JSON-Dateinamen ersetzt.
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+
+# =============================================================================
+# BUILDING ELEMENT — das geplante Bauteil aus der Ausfuehrungsplanung
+# =============================================================================
+
+<#BuildingElement>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/buildingElement/{__docId}" ;
+        rr:class tc:BuildingElement
+    ] ;
+
+    # --- Ident: Abfrage-Einstieg --------------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "identification.identity" ;
+            rr:termType rr:IRI ]
+    ] ;
+
+    # --- Bauteilkennung (M-1168, M-1169, M-1170, M-1171, M-1177) ------------
+    rr:predicateObjectMap [
+        rr:predicate tc:ifcGlobalId ;
+        rr:objectMap [ rml:reference "planning.ifcGlobalId" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ifcClass ;
+        rr:objectMap [ rml:reference "planning.ifcTyp" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:name ;
+        rr:objectMap [ rml:reference "planning.bezeichnung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:revitType ;
+        rr:objectMap [ rml:reference "planning.material" ]
+    ] ;
+    # Bauteilart ("Boden", "Wand") — im IFC-Sinn der ObjectType des Elements.
+    rr:predicateObjectMap [
+        rr:predicate tc:ifcObjectType ;
+        rr:objectMap [ rml:reference "planning.bauteil" ]
+    ] ;
+
+    # --- Verortung im Gebaeude (M-1173, M-1179, M-1174) ---------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:buildingStorey ;
+        rr:objectMap [ rml:reference "planning.geschoss" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:constructionPhase ;
+        rr:objectMap [ rml:reference "planning.bauabschnitt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:assemblyGroup ;
+        rr:objectMap [ rml:reference "planning.teilgruppe" ]
+    ] ;
+
+    # --- Fertigung und Einbau (M-1172, M-1175, M-1176, M-1178, M-1180) ------
+    rr:predicateObjectMap [
+        rr:predicate tc:deliveryPhase ;
+        rr:objectMap [ rml:reference "planning.einbauUndAnlieferung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:productionListNumber ;
+        rr:objectMap [ rml:reference "planning.noProductionList" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:sku ;
+        rr:objectMap [ rml:reference "planning.sku" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:productionNumber ;
+        rr:objectMap [ rml:reference "planning.abbundBvn" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:surfaceQuality ;
+        rr:objectMap [ rml:reference "planning.sichtqualitaet" ]
+    ] ;
+
+    # --- Geplante Geometrie --------------------------------------------------
+    # Kein Merkmal der Informationsbedarfstiefe, aber die einzige Quelle fuer
+    # den Soll-Ist-Abgleich gegen die gefertigte Platte (tc:Panel).
+    rr:predicateObjectMap [
+        rr:predicate tc:area ;
+        rr:objectMap [ rml:reference "geometry.nettoflaeche" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:volume ;
+        rr:objectMap [ rml:reference "geometry.nettovolumen" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:height ;
+        rr:objectMap [ rml:reference "geometry.hoehe" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:width ;
+        rr:objectMap [ rml:reference "geometry.breite" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:length ;
+        rr:objectMap [ rml:reference "geometry.laenge" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+
+    # --- Herkunft des Datensatzes -------------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:ifcSchema ;
+        rr:objectMap [ rml:reference "timberconnect_ifc.schema" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fileName ;
+        rr:objectMap [ rml:reference "timberconnect_ifc.source_file" ]
+    ] ;
+
+    # --- Verknuepfung zum Bauvorhaben ----------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:belongsToProject ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/buildingElement/{__docId}/projekt" ]
+    ] .
+
+
+# =============================================================================
+# PROJECT — das Bauvorhaben (Verortung oberhalb des Geschosses)
+# =============================================================================
+
+<#Project>
+    # Iterator "$" wie bei allen Nebenknoten des ERP-Mappings: nur auf der
+    # Wurzel ist __docId sichtbar, und ohne den Dokument-Hash im Subjekt
+    # trafen die Projektknoten mehrerer Dateien aufeinander.
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/buildingElement/{__docId}/projekt" ;
+        rr:class tc:Project
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:projectNumber ;
+        rr:objectMap [ rml:reference "project.projektnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:projectName ;
+        rr:objectMap [ rml:reference "project.projektname" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:projectPhase ;
+        rr:objectMap [ rml:reference "project.projektphase" ]
+    ] .

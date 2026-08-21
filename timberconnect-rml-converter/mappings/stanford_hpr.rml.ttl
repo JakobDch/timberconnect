@@ -18,7 +18,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem"
+        rml:iterator "/HarvestedProduction/Machine/Stem"
     ] ;
 
     rr:subjectMap [
@@ -45,6 +45,22 @@
     rr:predicateObjectMap [
         rr:predicate tc:speciesGroupKey ;
         rr:objectMap [ rml:reference "SpeciesGroupKey" ]
+    ] ;
+
+    # Verknuepfung zur SpeciesGroupDefinition (loest den Key in einen Namen auf)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasSpeciesGroup ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/speciesGroup/{SpeciesGroupKey}"
+        ]
+    ] ;
+
+    # Verknuepfung zur verarbeitenden Maschine
+    rr:predicateObjectMap [
+        rr:predicate tc:hasMachine ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/machine/{../MachineKey}"
+        ]
     ] ;
 
     rr:predicateObjectMap [
@@ -263,7 +279,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/BoomPositioning"
+        rml:iterator "/HarvestedProduction/Machine/Stem/BoomPositioning"
     ] ;
 
     rr:subjectMap [
@@ -315,7 +331,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/StemCoordinates[@receiverPosition='Base machine position']"
+        rml:iterator "/HarvestedProduction/Machine/Stem/StemCoordinates[@receiverPosition='Base machine position']"
     ] ;
 
     rr:subjectMap [
@@ -372,7 +388,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/StemCoordinates[contains(@receiverPosition, 'Crane tip')]"
+        rml:iterator "/HarvestedProduction/Machine/Stem/StemCoordinates[contains(@receiverPosition, 'Crane tip')]"
     ] ;
 
     rr:subjectMap [
@@ -419,7 +435,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/SingleTreeProcessedStem/Log"
+        rml:iterator "/HarvestedProduction/Machine/Stem/SingleTreeProcessedStem/Log"
     ] ;
 
     rr:subjectMap [
@@ -436,6 +452,14 @@
     rr:predicateObjectMap [
         rr:predicate tc:productKey ;
         rr:objectMap [ rml:reference "ProductKey" ]
+    ] ;
+
+    # Verknuepfung zur ProductDefinition (loest ProductKey -> Sortiment-Name)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasProductDefinition ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/product/{ProductKey}"
+        ]
     ] ;
 
     # Volumen (m3 price)
@@ -585,7 +609,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/SingleTreeProcessedStem/Log/Extension/LogCoordinates"
+        rml:iterator "/HarvestedProduction/Machine/Stem/SingleTreeProcessedStem/Log/Extension/LogCoordinates"
     ] ;
 
     rr:subjectMap [
@@ -662,7 +686,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/Extension/DiameterDrop"
+        rml:iterator "/HarvestedProduction/Machine/Stem/Extension/DiameterDrop"
     ] ;
 
     rr:subjectMap [
@@ -709,7 +733,7 @@
     rml:logicalSource [
         rml:source "{{SOURCE_FILE}}" ;
         rml:referenceFormulation ql:XPath ;
-        rml:iterator "/Stem/SingleTreeProcessedStem/StemGrade/GradeValue"
+        rml:iterator "/HarvestedProduction/Machine/Stem/SingleTreeProcessedStem/StemGrade/GradeValue"
     ] ;
 
     rr:subjectMap [
@@ -739,3 +763,202 @@
             rr:template "http://timberconnect.2050.de/resource/stem/{../../../StemKey}"
         ]
     ] .
+
+# =============================================================================
+# SPECIES GROUP MAPPING - loest SpeciesGroupKey -> Name (FURU/GRAN/LAUV ...)
+# Die Definition steht pro Datei unter Machine; der Stem verweist per Key.
+# =============================================================================
+
+<#SpeciesGroupMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/HarvestedProduction/Machine/SpeciesGroupDefinition"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/speciesGroup/{SpeciesGroupKey}" ;
+        rr:class tc:SpeciesGroup
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:speciesGroupKey ;
+        rr:objectMap [ rml:reference "SpeciesGroupKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:speciesGroupName ;
+        rr:objectMap [ rml:reference "SpeciesGroupName" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:speciesGroupUserId ;
+        rr:objectMap [ rml:reference "SpeciesGroupUserID" ]
+    ] .
+
+# =============================================================================
+# MACHINE MAPPING (B2b) - Harvester-Maschine (Singleton pro Datei)
+# =============================================================================
+
+<#MachineMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/HarvestedProduction/Machine"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/machine/{MachineKey}" ;
+        rr:class tc:Machine
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:machineKey ;
+        rr:objectMap [ rml:reference "MachineKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:machineCategory ;
+        rr:objectMap [ rml:reference "@machineCategory" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:machineUserId ;
+        rr:objectMap [ rml:reference "MachineUserID" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturer ;
+        rr:objectMap [ rml:reference "MachineManufacturer" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:model ;
+        rr:objectMap [ rml:reference "MachineModel" ]
+    ] ;
+
+    # Verknuepfung zum Aggregat (Kopf)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasMachineHead ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/machine/{MachineKey}/head"
+        ]
+    ] ;
+
+    # Verknuepfung zum Maschinenbesitzer (Akteur)
+    rr:predicateObjectMap [
+        rr:predicate tc:hasMachineOwner ;
+        rr:objectMap [
+            rr:template "http://timberconnect.2050.de/resource/machine/{MachineKey}/owner"
+        ]
+    ] .
+
+# =============================================================================
+# MACHINE HEAD MAPPING (B2b) - Aggregat/Kopf (aus Extension)
+# =============================================================================
+
+<#MachineHeadMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/HarvestedProduction/Machine"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/machine/{MachineKey}/head" ;
+        rr:class tc:MachineHead
+    ] ;
+
+    # MachineHeadManufacturer/Model liegen direkt unter Machine (nicht Extension).
+    rr:predicateObjectMap [
+        rr:predicate tc:manufacturer ;
+        rr:objectMap [ rml:reference "MachineHeadManufacturer" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:model ;
+        rr:objectMap [ rml:reference "MachineHeadModel" ]
+    ] .
+
+# =============================================================================
+# STEM TYPE DEFINITION MAPPING (B2b) - Stammtyp (Code -> Name)
+# =============================================================================
+
+<#StemTypeMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/HarvestedProduction/Machine/SpeciesGroupDefinition/StemTypeDefinition"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/stemType/{StemTypeCode}" ;
+        rr:class tc:StemTypeDefinition
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:stemTypeCode ;
+        rr:objectMap [ rml:reference "StemTypeCode" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:stemTypeName ;
+        rr:objectMap [ rml:reference "StemTypeName" ]
+    ] .
+
+# =============================================================================
+# PRODUCT DEFINITION MAPPING (B2c) - Sortiment (ProductKey -> Name)
+# =============================================================================
+
+<#ProductDefinitionMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/HarvestedProduction/Machine/ProductDefinition"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/product/{ProductKey}" ;
+        rr:class tc:ProductDefinition
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:productKey ;
+        rr:objectMap [ rml:reference "ProductKey" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:productName ;
+        rr:objectMap [ rml:reference "ClassifiedProductDefinition/ProductName" ]
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate tc:productGroupName ;
+        rr:objectMap [ rml:reference "ClassifiedProductDefinition/ProductGroupDefinition/ProductGroupName" ]
+    ] .
+
+# =============================================================================
+# MACHINE OWNER MAPPING (B2d) - Maschinenbesitzer (Akteur, Singleton)
+# =============================================================================
+
+<#MachineOwnerMapping>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:XPath ;
+        rml:iterator "/HarvestedProduction/Machine/MachineOwner"
+    ] ;
+
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/machine/{../MachineKey}/owner" ;
+        rr:class tc:MachineOwner
+    ] ;
+
+    rr:predicateObjectMap [ rr:predicate tc:businessName ; rr:objectMap [ rml:reference "BusinessName" ] ] ;
+    rr:predicateObjectMap [ rr:predicate tc:businessId ;   rr:objectMap [ rml:reference "BusinessID" ] ] ;
+    rr:predicateObjectMap [ rr:predicate tc:email ;        rr:objectMap [ rml:reference "Email" ] ] ;
+    rr:predicateObjectMap [ rr:predicate tc:city ;         rr:objectMap [ rml:reference "Address/City" ] ] ;
+    rr:predicateObjectMap [ rr:predicate tc:country ;      rr:objectMap [ rml:reference "Address/Country" ] ] .
+
+# Hinweis: LoggingOrganisation liegt in dieser StanForD-Variante tief verschachtelt
+# (innerhalb ProductBuyer) und ist in der nibio-Datei anonymisiert. Wird bei Bedarf
+# an echten, nicht-anonymisierten Dateien ergaenzt.

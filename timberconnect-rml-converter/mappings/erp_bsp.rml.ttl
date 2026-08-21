@@ -1,0 +1,756 @@
+# RML-Mapping: ERP-BSP-Eingabetabelle (Herstellungsvorgang, XLSX)
+#
+# Quelle ist NICHT die Exceldatei selbst, sondern das von
+# services/erp_excel_service.py erzeugte JSON-Zwischendokument — die jsonKeys
+# dort sind die lokalen Namen der Ontologie-Properties (tc:<key>), sodass
+# dieses Mapping und die Ontologie ohne Uebersetzungstabelle nebeneinander
+# lesbar sind.
+#
+# Ontologie: TimberConnect v6 — die ERP-Properties (skos:notation M-913 bis
+# M-1045) sind dort bereits fuer genau diese Tabelle definiert; die Zuordnung
+# der Felder zu den Knoten folgt den deklarierten rdfs:domain-Angaben
+# (tc:Panel als zentraler Produktknoten, daneben tc:Article, tc:DeliveryOrder,
+# tc:Warehouse, tc:Carrier, tc:DeliveryCondition, tc:Invoice).
+# Ausnahme: tc:lieferant (M-1006, domain tc:ForestOwner) steht auf dem
+# Panel-Knoten — die Domain der Ontologie passt fachlich nicht zum
+# Transportauftrag eines BSP-Werks.
+#
+# Idente (Blatt "Identifikation") — Erweiterungsmodul
+# timberconnect_epcis_extension.ttl:
+#   tc:epc          Identity        Output: die hergestellte BSP-Platte (IRI)
+#   tc:derivedFrom  IdentityInput   Input: Lamellen/Lose aus dem Aufsaegevorgang
+# Eine Datei = eine Platte = ein EPCIS TransformationEvent.
+#
+# {{SOURCE_FILE}} wird zur Laufzeit durch den JSON-Dateinamen ersetzt.
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+
+# =============================================================================
+# PANEL — die hergestellte BSP-Platte (zentraler Knoten)
+# =============================================================================
+
+<#Panel>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}" ;
+        rr:class tc:Panel
+    ] ;
+
+    # --- Idente: Abfrage-Einstieg tc:epc, Materialfluss tc:derivedFrom -------
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "identification.identity" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:derivedFrom ;
+        rr:objectMap [ rml:reference "identification.identityInput" ;
+            rr:termType rr:IRI ]
+    ] ;
+
+    # --- Verknuepfungen zu den Nebenknoten -----------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:hasArticle ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/artikel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hasDeliveryOrder ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/lieferauftrag" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hasWarehouse ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/lager" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hasCarrier ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/spediteur" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hasDeliveryCondition ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/lieferbedingung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hasInvoice ;
+        rr:objectMap [ rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/rechnung" ]
+    ] ;
+
+    # --- Vertriebsauftrag (Panel-Domain) -------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:bezug ;
+        rr:objectMap [ rml:reference "salesOrder.bezug" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:liefertermin ;
+        rr:objectMap [ rml:reference "salesOrder.liefertermin" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:versandtermin ;
+        rr:objectMap [ rml:reference "salesOrder.versandtermin" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:wiedervorlagetermin ;
+        rr:objectMap [ rml:reference "salesOrder.wiedervorlagetermin" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:transportavis_erforderlich ;
+        rr:objectMap [ rml:reference "salesOrder.transportavis_erforderlich" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gemaess_statischer_Berechnung ;
+        rr:objectMap [ rml:reference "salesOrder.gemaess_statischer_Berechnung" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+
+    # --- Artikelkonfiguration (Panel-Domain) ---------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:konfigurationsregel ;
+        rr:objectMap [ rml:reference "product.konfigurationsregel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gesamtmenge ;
+        rr:objectMap [ rml:reference "product.gesamtmenge" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:typ_der_BSP_Platte ;
+        rr:objectMap [ rml:reference "product.typ_der_BSP_Platte" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:konstruktionsnummer ;
+        rr:objectMap [ rml:reference "product.konstruktionsnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:nettovolumen_Produkt ;
+        rr:objectMap [ rml:reference "product.nettovolumen_Produkt" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bruttovolumen_Produkt ;
+        rr:objectMap [ rml:reference "product.bruttovolumen_Produkt" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:cNC_Abbund ;
+        rr:objectMap [ rml:reference "product.cNC_Abbund" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zusatzabbund ;
+        rr:objectMap [ rml:reference "product.zusatzabbund" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:cNC_Maschiene ;
+        rr:objectMap [ rml:reference "product.cNC_Maschiene" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:deckelage_BSP ;
+        rr:objectMap [ rml:reference "product.deckelage_BSP" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:optik_Seite_1 ;
+        rr:objectMap [ rml:reference "product.optik_Seite_1" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:optik_Seite_2 ;
+        rr:objectMap [ rml:reference "product.optik_Seite_2" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:optik_Seite_3 ;
+        rr:objectMap [ rml:reference "product.optik_Seite_3" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:optik_Seite_4 ;
+        rr:objectMap [ rml:reference "product.optik_Seite_4" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:optik_Seite_5 ;
+        rr:objectMap [ rml:reference "product.optik_Seite_5" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:optik_Seite_6 ;
+        rr:objectMap [ rml:reference "product.optik_Seite_6" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hoehe__Staerke ;
+        rr:objectMap [ rml:reference "product.hoehe__Staerke" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:breite ;
+        rr:objectMap [ rml:reference "product.breite" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:laenge_v3 ;
+        rr:objectMap [ rml:reference "product.laenge_v3" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:anzahl_der_Schichten_innerhalb_einer_BSP_Platte ;
+        rr:objectMap [ rml:reference "product.anzahl_der_Schichten_innerhalb_einer_BSP_Platte" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschreibung_Freitext ;
+        rr:objectMap [ rml:reference "product.beschreibung_Freitext" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bauteil_Sonderform ;
+        rr:objectMap [ rml:reference "product.bauteil_Sonderform" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:produktnorm ;
+        rr:objectMap [ rml:reference "product.produktnorm" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:festigkeit__Material_Produkt ;
+        rr:objectMap [ rml:reference "product.festigkeit__Material_Produkt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:brandschutzklasse_Produkt ;
+        rr:objectMap [ rml:reference "product.brandschutzklasse_Produkt" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:holzart_v3 ;
+        rr:objectMap [ rml:reference "product.holzart_v3" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Seite_1_BxL ;
+        rr:objectMap [ rml:reference "product.beschichtung_Seite_1_BxL" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Seite_2_HxL ;
+        rr:objectMap [ rml:reference "product.beschichtung_Seite_2_HxL" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Seite_3_BxH ;
+        rr:objectMap [ rml:reference "product.beschichtung_Seite_3_BxH" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Seite_4_BxH ;
+        rr:objectMap [ rml:reference "product.beschichtung_Seite_4_BxH" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Seite_5_HxL ;
+        rr:objectMap [ rml:reference "product.beschichtung_Seite_5_HxL" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Seite_6_BxL ;
+        rr:objectMap [ rml:reference "product.beschichtung_Seite_6_BxL" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Anzahl_Lagen_Seite_1 ;
+        rr:objectMap [ rml:reference "product.beschichtung_Anzahl_Lagen_Seite_1" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Anzahl_Lagen_Seite_2 ;
+        rr:objectMap [ rml:reference "product.beschichtung_Anzahl_Lagen_Seite_2" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Anzahl_Lagen_Seite_3 ;
+        rr:objectMap [ rml:reference "product.beschichtung_Anzahl_Lagen_Seite_3" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Anzahl_Lagen_Seite_4 ;
+        rr:objectMap [ rml:reference "product.beschichtung_Anzahl_Lagen_Seite_4" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Anzahl_Lagen_Seite_5 ;
+        rr:objectMap [ rml:reference "product.beschichtung_Anzahl_Lagen_Seite_5" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschichtung_Anzahl_Lagen_Seite_6 ;
+        rr:objectMap [ rml:reference "product.beschichtung_Anzahl_Lagen_Seite_6" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:oberflaeche_einer_Plattenseite ;
+        rr:objectMap [ rml:reference "product.oberflaeche_einer_Plattenseite" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:quadratmeter_aller_6_Plattenseiten ;
+        rr:objectMap [ rml:reference "product.quadratmeter_aller_6_Plattenseiten" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:pA_Gruppe ;
+        rr:objectMap [ rml:reference "product.pA_Gruppe" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beschaffungsweg_Eigenfertigung_Zukauf ;
+        rr:objectMap [ rml:reference "product.beschaffungsweg_Eigenfertigung_Zukauf" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:pEFC ;
+        rr:objectMap [ rml:reference "product.pEFC" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:merkmal_ob_aus_Cadwork_importiert ;
+        rr:objectMap [ rml:reference "product.merkmal_ob_aus_Cadwork_importiert" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:eckausbildung ;
+        rr:objectMap [ rml:reference "product.eckausbildung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:produktionsstandort ;
+        rr:objectMap [ rml:reference "product.produktionsstandort" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:vertriebsauftragsnummer ;
+        rr:objectMap [ rml:reference "product.vertriebsauftragsnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:organisation ;
+        rr:objectMap [ rml:reference "product.organisation" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:verpackung ;
+        rr:objectMap [ rml:reference "product.verpackung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kennzeichnung_der_Ware_Label ;
+        rr:objectMap [ rml:reference "product.kennzeichnung_der_Ware_Label" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bauteilstatus_Produktion ;
+        rr:objectMap [ rml:reference "product.bauteilstatus_Produktion" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:plattencode_BSP ;
+        rr:objectMap [ rml:reference "product.plattencode_BSP" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:meter ;
+        rr:objectMap [ rml:reference "product.meter" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kubikmeter ;
+        rr:objectMap [ rml:reference "product.kubikmeter" ]
+    ] ;
+
+    # --- Produktionsauftrag (Panel-Domain) -----------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:produktionslagerort ;
+        rr:objectMap [ rml:reference "productionOrder.produktionslagerort" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lagerlogistikorganisation ;
+        rr:objectMap [ rml:reference "productionOrder.lagerlogistikorganisation" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:vertriebs_Aufttagsposition ;
+        rr:objectMap [ rml:reference "productionOrder.vertriebs_Aufttagsposition" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:soll_Menge ;
+        rr:objectMap [ rml:reference "productionOrder.soll_Menge" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ist_Menge ;
+        rr:objectMap [ rml:reference "productionOrder.ist_Menge" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ausschussmenge ;
+        rr:objectMap [ rml:reference "productionOrder.ausschussmenge" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zugangslagerort ;
+        rr:objectMap [ rml:reference "productionOrder.zugangslagerort" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zustaendiger_Mitarbeiter ;
+        rr:objectMap [ rml:reference "productionOrder.zustaendiger_Mitarbeiter" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:beladungsplan_Position ;
+        rr:objectMap [ rml:reference "productionOrder.beladungsplan_Position" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:soll_Beginndatum ;
+        rr:objectMap [ rml:reference "productionOrder.soll_Beginndatum" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ist_Beginndatum ;
+        rr:objectMap [ rml:reference "productionOrder.ist_Beginndatum" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:soll_Ruestzeit ;
+        rr:objectMap [ rml:reference "productionOrder.soll_Ruestzeit" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:ist_Ruestzeit ;
+        rr:objectMap [ rml:reference "productionOrder.ist_Ruestzeit" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+
+    # --- Lieferauftrag (Panel-Domain) ----------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferauftragsnummer ;
+        rr:objectMap [ rml:reference "deliveryOrder.lieferauftragsnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lademittel ;
+        rr:objectMap [ rml:reference "deliveryOrder.lademittel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:nettogewicht ;
+        rr:objectMap [ rml:reference "deliveryOrder.nettogewicht" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bestandseigentuemer ;
+        rr:objectMap [ rml:reference "deliveryOrder.bestandseigentuemer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:auspraegungstyp ;
+        rr:objectMap [ rml:reference "deliveryOrder.auspraegungstyp" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zu_liefernde_Menge_Stk ;
+        rr:objectMap [ rml:reference "deliveryOrder.zu_liefernde_Menge_Stk" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zu_liefernde_Menge_m ;
+        rr:objectMap [ rml:reference "deliveryOrder.zu_liefernde_Menge_m" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gelieferte_rueckgemeldete_Menge_Stk ;
+        rr:objectMap [ rml:reference "deliveryOrder.gelieferte_rueckgemeldete_Menge_Stk" ;
+            rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:gelieferte_rueckgemeldete_Menge_m ;
+        rr:objectMap [ rml:reference "deliveryOrder.gelieferte_rueckgemeldete_Menge_m" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+
+    # --- Kommission (Panel-Domain) -------------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferempfaenger ;
+        rr:objectMap [ rml:reference "commission.lieferempfaenger" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lagerlogistikorgansiation ;
+        rr:objectMap [ rml:reference "commission.lagerlogistikorgansiation" ]
+    ] ;
+
+    # --- Transportauftrag (Panel-Domain) -------------------------------------
+    # tc:lieferant: Domain-Ausnahme, siehe Kopfkommentar.
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferant ;
+        rr:objectMap [ rml:reference "transportOrder.lieferant" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:route ;
+        rr:objectMap [ rml:reference "transportOrder.route" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:startdatum ;
+        rr:objectMap [ rml:reference "transportOrder.startdatum" ;
+            rr:datatype xsd:dateTime ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferdatum ;
+        rr:objectMap [ rml:reference "transportOrder.lieferdatum" ;
+            rr:datatype xsd:dateTime ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:status_Avisierung ;
+        rr:objectMap [ rml:reference "transportOrder.status_Avisierung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:erfasst_von ;
+        rr:objectMap [ rml:reference "transportOrder.erfasst_von" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:erfasst_um ;
+        rr:objectMap [ rml:reference "transportOrder.erfasst_um" ;
+            rr:datatype xsd:dateTime ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:belegdatum ;
+        rr:objectMap [ rml:reference "transportOrder.belegdatum" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:transportmittel ;
+        rr:objectMap [ rml:reference "transportOrder.transportmittel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:entladeeinrichtung ;
+        rr:objectMap [ rml:reference "transportOrder.entladeeinrichtung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:info_VA ;
+        rr:objectMap [ rml:reference "transportOrder.info_VA" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zustaendiger_Mitarbeiter_v2 ;
+        rr:objectMap [ rml:reference "transportOrder.zustaendiger_Mitarbeiter_v2" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zuletzt_geaendert_von ;
+        rr:objectMap [ rml:reference "transportOrder.zuletzt_geaendert_von" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zuletzt_geaendert_um ;
+        rr:objectMap [ rml:reference "transportOrder.zuletzt_geaendert_um" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:termin_fix ;
+        rr:objectMap [ rml:reference "transportOrder.termin_fix" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:versandstelle ;
+        rr:objectMap [ rml:reference "transportOrder.versandstelle" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:status_AV ;
+        rr:objectMap [ rml:reference "transportOrder.status_AV" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:genehmigung_erforderlich ;
+        rr:objectMap [ rml:reference "transportOrder.genehmigung_erforderlich" ;
+            rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:vA_Nr ;
+        rr:objectMap [ rml:reference "transportOrder.vA_Nr" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lT_Kennung ;
+        rr:objectMap [ rml:reference "transportOrder.lT_Kennung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:qS_Kontrolle ;
+        rr:objectMap [ rml:reference "transportOrder.qS_Kontrolle" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hinweis_intern ;
+        rr:objectMap [ rml:reference "transportOrder.hinweis_intern" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abholung_Termin ;
+        rr:objectMap [ rml:reference "transportOrder.abholung_Termin" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abholung_Uhrzeit ;
+        rr:objectMap [ rml:reference "transportOrder.abholung_Uhrzeit" ;
+            rr:datatype xsd:time ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abholung_PLZ ;
+        rr:objectMap [ rml:reference "transportOrder.abholung_PLZ" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:abholung_Ort ;
+        rr:objectMap [ rml:reference "transportOrder.abholung_Ort" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferung_Termin ;
+        rr:objectMap [ rml:reference "transportOrder.lieferung_Termin" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferung_Uhrzeit ;
+        rr:objectMap [ rml:reference "transportOrder.lieferung_Uhrzeit" ;
+            rr:datatype xsd:time ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferung_PLZ ;
+        rr:objectMap [ rml:reference "transportOrder.lieferung_PLZ" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferung_Ort ;
+        rr:objectMap [ rml:reference "transportOrder.lieferung_Ort" ]
+    ] ;
+
+    # --- Ausgangsrechnung (Panel-Domain) -------------------------------------
+    rr:predicateObjectMap [
+        rr:predicate tc:belegdatum_v2 ;
+        rr:objectMap [ rml:reference "invoice.belegdatum_v2" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:leistungsdatum ;
+        rr:objectMap [ rml:reference "invoice.leistungsdatum" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:buchungsdatum ;
+        rr:objectMap [ rml:reference "invoice.buchungsdatum" ;
+            rr:datatype xsd:date ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:steuerschluessel ;
+        rr:objectMap [ rml:reference "invoice.steuerschluessel" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:artikelpreis_Klassifikation ;
+        rr:objectMap [ rml:reference "invoice.artikelpreis_Klassifikation" ;
+            rr:datatype xsd:decimal ]
+    ] .
+
+# =============================================================================
+# NEBENKNOTEN entsprechend der rdfs:domain-Angaben der Ontologie
+# =============================================================================
+
+<#Article>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/artikel" ;
+        rr:class tc:Article
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:artikel ;
+        rr:objectMap [ rml:reference "salesOrder.artikel" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kontraktposition ;
+        rr:objectMap [ rml:reference "salesOrder.kontraktposition" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:pack_Gruppe ;
+        rr:objectMap [ rml:reference "salesOrder.pack_Gruppe" ]
+    ] .
+
+<#DeliveryOrder>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/lieferauftrag" ;
+        rr:class tc:DeliveryOrder
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:auftrag ;
+        rr:objectMap [ rml:reference "product.auftrag" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferauftrag ;
+        rr:objectMap [ rml:reference "commission.lieferauftrag" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:bV_Kunde ;
+        rr:objectMap [ rml:reference "transportOrder.bV_Kunde" ]
+    ] .
+
+<#Warehouse>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/lager" ;
+        rr:class tc:Warehouse
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lagerort ;
+        rr:objectMap [ rml:reference "deliveryOrder.lagerort" ]
+    ] .
+
+<#Carrier>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/spediteur" ;
+        rr:class tc:Carrier
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:spediteur ;
+        rr:objectMap [ rml:reference "commission.spediteur" ]
+    ] .
+
+<#DeliveryCondition>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/lieferbedingung" ;
+        rr:class tc:DeliveryCondition
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferbedingung ;
+        rr:objectMap [ rml:reference "commission.lieferbedingung" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:versandbedingung ;
+        rr:objectMap [ rml:reference "commission.versandbedingung" ]
+    ] .
+
+<#Invoice>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/bspPanel/{__docId}/rechnung" ;
+        rr:class tc:Invoice
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rechnungsempfaenger ;
+        rr:objectMap [ rml:reference "invoice.rechnungsempfaenger" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rechnungsempfaenger_Name ;
+        rr:objectMap [ rml:reference "invoice.rechnungsempfaenger_Name" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:rechnungsempfaenger_Adresse ;
+        rr:objectMap [ rml:reference "invoice.rechnungsempfaenger_Adresse" ]
+    ] .
+
+# Kein eigener Herstellungsvorgangs-Knoten: eine ERP-Datei beschreibt genau
+# EINE BSP-Platte, damit steckt die Transformation vollstaendig im
+# Panel-Knoten selbst (tc:derivedFrom -> inputEPCList, tc:epc ->
+# outputEPCList des einen EPCIS TransformationEvents).

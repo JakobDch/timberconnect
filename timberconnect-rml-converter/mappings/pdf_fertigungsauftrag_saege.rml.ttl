@@ -1,0 +1,295 @@
+# RML-Mapping fuer PDF-Template: Fertigungsauftrag Säge (pdf_fertigungsauftrag_saege)
+# GENERIERT aus services/pdf_template_service.py — nicht von Hand editieren;
+# Aenderungen in der Registry vornehmen und generate_pdf_mappings.py ausfuehren.
+# Ontologie: TimberConnect v6 (+ PDF-Erweiterung 07/2026)
+
+@base <http://timberconnect.2050.de/mapping/> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tc: <http://timberconnect.2050.de/ontology#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix wgs84: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+
+<#pdf_fertigungsauftrag_saege_main>
+    rml:logicalSource [
+        rml:source "{{SOURCE_FILE}}" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.fields"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://timberconnect.2050.de/resource/productionorder/{__docId}" ;
+        rr:class tc:ProductionOrder
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:epc ;
+        rr:objectMap [ rml:reference "materialEpc" ;
+            rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:vorgangsnummer ;
+        rr:objectMap [ rml:reference "vorgangsnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:arbeitsplatz ;
+        rr:objectMap [ rml:reference "arbeitsplatz" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:datum ;
+        rr:objectMap [ rml:reference "datum" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kaufnummer ;
+        rr:objectMap [ rml:reference "kaufnummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:box_Sortiment ;
+        rr:objectMap [ rml:reference "boxSortiment" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fertigungshinweise_Saege ;
+        rr:objectMap [ rml:reference "fertigungshinweis" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kundennummer ;
+        rr:objectMap [ rml:reference "kundennummer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:kundenbez ;
+        rr:objectMap [ rml:reference "kundenbez" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lieferanschrift ;
+        rr:objectMap [ rml:reference "lieferanschrift" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:produktionsstart ;
+        rr:objectMap [ rml:reference "produktionsstart" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:produktionsende ;
+        rr:objectMap [ rml:reference "produktionsende" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:einschnittdauer ;
+        rr:objectMap [ rml:reference "einschnittdauer" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zopf_min ;
+        rr:objectMap [ rml:reference "zopfMin" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:zopf_max ;
+        rr:objectMap [ rml:reference "zopfMax" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:laenge_min ;
+        rr:objectMap [ rml:reference "laengeMin" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:laenge_max ;
+        rr:objectMap [ rml:reference "laengeMax" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:box ;
+        rr:objectMap [ rml:reference "box1" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:box_v2 ;
+        rr:objectMap [ rml:reference "box2" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:box_v2 ;
+        rr:objectMap [ rml:reference "box3" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lager ;
+        rr:objectMap [ rml:reference "lager1" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lager ;
+        rr:objectMap [ rml:reference "lager2" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:lager ;
+        rr:objectMap [ rml:reference "lager3" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:stueck ;
+        rr:objectMap [ rml:reference "stueck1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:stueck ;
+        rr:objectMap [ rml:reference "stueck2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:stueck ;
+        rr:objectMap [ rml:reference "stueck3" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fM ;
+        rr:objectMap [ rml:reference "fm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fM ;
+        rr:objectMap [ rml:reference "fm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:fM ;
+        rr:objectMap [ rml:reference "fm3" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:leer ;
+        rr:objectMap [ rml:reference "leer1" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:leer ;
+        rr:objectMap [ rml:reference "leer3" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Stueck ;
+        rr:objectMap [ rml:reference "hauptwareStueck1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Stueck ;
+        rr:objectMap [ rml:reference "hauptwareStueck2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Staerke_EM ;
+        rr:objectMap [ rml:reference "hauptwareStaerkeEm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Staerke_EM ;
+        rr:objectMap [ rml:reference "hauptwareStaerkeEm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Staerke_VM ;
+        rr:objectMap [ rml:reference "hauptwareStaerkeVm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Staerke_VM ;
+        rr:objectMap [ rml:reference "hauptwareStaerkeVm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Breite_EM ;
+        rr:objectMap [ rml:reference "hauptwareBreiteEm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Breite_EM ;
+        rr:objectMap [ rml:reference "hauptwareBreiteEm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Breite_VM ;
+        rr:objectMap [ rml:reference "hauptwareBreiteVm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Breite_VM ;
+        rr:objectMap [ rml:reference "hauptwareBreiteVm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Soll_m3 ;
+        rr:objectMap [ rml:reference "hauptwareSollM31" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Soll_m3 ;
+        rr:objectMap [ rml:reference "hauptwareSollM32" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Soll_Pakete ;
+        rr:objectMap [ rml:reference "hauptwareSollPakete1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:hauptware_Soll_Pakete ;
+        rr:objectMap [ rml:reference "hauptwareSollPakete2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Stueck ;
+        rr:objectMap [ rml:reference "seitenwareStueck1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Stueck ;
+        rr:objectMap [ rml:reference "seitenwareStueck2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Staerke_EM ;
+        rr:objectMap [ rml:reference "seitenwareStaerkeEm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Staerke_EM ;
+        rr:objectMap [ rml:reference "seitenwareStaerkeEm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Staerke_VM ;
+        rr:objectMap [ rml:reference "seitenwareStaerkeVm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Staerke_VM ;
+        rr:objectMap [ rml:reference "seitenwareStaerkeVm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Breite_EM ;
+        rr:objectMap [ rml:reference "seitenwareBreiteEm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Breite_EM ;
+        rr:objectMap [ rml:reference "seitenwareBreiteEm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Breite_VM ;
+        rr:objectMap [ rml:reference "seitenwareBreiteVm1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Breite_VM ;
+        rr:objectMap [ rml:reference "seitenwareBreiteVm2" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Soll_m3 ;
+        rr:objectMap [ rml:reference "seitenwareSollM31" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Soll_m3 ;
+        rr:objectMap [ rml:reference "seitenwareSollM32" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Soll_Pakete ;
+        rr:objectMap [ rml:reference "seitenwareSollPakete1" ;
+            rr:datatype xsd:decimal ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate tc:seitenware_Soll_Pakete ;
+        rr:objectMap [ rml:reference "seitenwareSollPakete2" ;
+            rr:datatype xsd:decimal ]
+    ] .
