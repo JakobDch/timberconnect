@@ -21,9 +21,9 @@ Diese Anleitung beschreibt die Schritte, um TimberConnect auf dem Server `solid-
                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Docker Hub                                                     │
-│  jakobdch/timberconnect-viewer                                 │
-│  jakobdch/timberconnect-rml-converter                          │
-│  jakobdch/timberconnect-epcis                                  │
+│  deich302/timberconnect-viewer                                 │
+│  deich302/timberconnect-rml-converter                          │
+│  deich302/timberconnect-epcis                                  │
 └────────────────┬────────────────────────────────────────────────┘
                  │ Pull Images
                  ▼
@@ -40,7 +40,7 @@ Diese Anleitung beschreibt die Schritte, um TimberConnect auf dem Server `solid-
 1. Gehe zu: https://github.com/JakobDch/timberconnect/settings/secrets/actions
 
 2. Füge diese Secrets hinzu:
-   - `DOCKER_USERNAME`: Dein Docker Hub Benutzername (z.B. `jakobdch`)
+   - `DOCKER_USERNAME`: Dein Docker Hub Benutzername (hier: `deich302`)
    - `DOCKER_TOKEN`: Docker Hub Access Token (siehe unten)
 
 ### Docker Hub Access Token erstellen:
@@ -92,7 +92,7 @@ nano .env
 
 Inhalt:
 ```
-DOCKER_USERNAME=jakobdch
+DOCKER_USERNAME=deich302
 SOLID_ACCESS_TOKEN=
 CATALOG_DEFAULT_CONTACT=timberconnect@2050.de
 CATALOG_REGISTRATION_ENABLED=true

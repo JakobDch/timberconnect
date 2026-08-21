@@ -4,14 +4,14 @@
 
 services:
   timberconnect-viewer:
-    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-viewer:latest
+    image: ${DOCKER_USERNAME:-deich302}/timberconnect-viewer:latest
     restart: unless-stopped
     expose: ["80"]
     networks:
       - solid-dataspace
 
   timberconnect-rml-converter:
-    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-rml-converter:latest
+    image: ${DOCKER_USERNAME:-deich302}/timberconnect-rml-converter:latest
     restart: unless-stopped
     environment:
       SOLID_POD_URL: https://solid-community-server.tmdt.info/epcisrepository
@@ -26,7 +26,7 @@ services:
       - solid-dataspace
 
   timberconnect-epcis:
-    image: ${DOCKER_USERNAME:-jakobdch}/timberconnect-epcis:latest
+    image: ${DOCKER_USERNAME:-deich302}/timberconnect-epcis:latest
     restart: unless-stopped
     environment:
       # GS1 identifiers — defaults from the EECC sample documents.
