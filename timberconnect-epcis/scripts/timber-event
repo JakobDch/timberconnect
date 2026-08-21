@@ -1,0 +1,1003 @@
+#! /bin/bash
+
+
+
+message () {
+  local CODE="${?}"
+  local FILE=( )
+  local TELLING=tell
+  local MODE=exit
+  while [ -n "${1+1}" ]
+  do
+    case "${1}" in
+    '-f' )  [ -z "${2+1}" ] || {
+              FILE="${2}"
+              shift 2
+              set -- -f "${@}"
+            };;
+    '-f'* ) FILE="${1:2}";;
+    '-n' )  [ -z "${2+1}" ] || {
+              CODE="${2}"
+              shift 2
+              set -- -n "${@}"
+            };;
+    '-n'* ) CODE="${1:2}";;
+    '-p'* ) CODE=0;;
+    '-s'* ) TELLING=;;
+    '-r'* ) MODE=return;;
+    '--' )  shift
+            break;;
+    * )     break;;
+    esac
+    case "${1}" in
+    '-'[fn]* )
+            shift;;
+    '-'? )  shift;;
+    '-'* )  eval 'set -- "${1:0:1}${1:2}"'"$(shift; [ -z "${1+1}" ] || printf ' %q' "${@}"; echo)";;
+    esac
+  done
+  if [ -n "${TELLING:+1}" ]
+  then
+    local MY_NM="${0##*/}"
+    printf '%s' "${MY_NM%.sh}"
+    [ -z "${1+1}" ] ||
+      printf ': %s' "${@}"
+    printf '\n'
+  fi >&2
+  if [ -n "${FILE+1}" ] && [ 0 -lt "${CODE:-0}" ]
+  then
+    printf '%s\n' "${CODE}" >> "${FILE}"
+  fi
+  eval "${MODE}"' "${CODE}"'
+}
+
+
+
+as_sed_pattern () {
+  printf '%s\n' "${*}" |
+    sed 's/[][\^$.*/\\]/\\&/g'
+}
+
+
+
+as_sed_replacement () {
+  printf '%s\n' "${*}" |
+    sed 's/[\\&/]/\\&/g'
+}
+
+
+
+handle_tilde_files () {
+  local FILE_NAME="${1}"
+  case "${FILE_NAME}" in
+  '~'* ) local FILE_PREF="${FILE_NAME}"
+         FILE_NAME="${FILE_NAME#*/}"
+         [ "${#FILE_PREF}" -ne "${#FILE_NAME}" ] ||
+           FILE_NAME=
+         FILE_PREF="${FILE_PREF:0:${#FILE_PREF} - ${#FILE_NAME}}"
+         eval 'printf '\''%s\n'\'' '"${FILE_PREF}${FILE_NAME@Q}";;
+  * )    printf '%s\n' "${FILE_NAME}";;
+  esac
+}
+
+
+
+read_file () {
+  while true
+  do
+    [ -z "${1+1}" ] ||
+      case "${1}" in
+      '-' ) ;;
+      * )   [ -f "${1}" ] ||
+              message -n1 -- "${1}" 'no such file'
+      esac
+    {
+      cat ${1+"${1}"}
+      echo
+    } |
+      tr -d $'\r' |
+      sed 's/^/ /
+           $s/^ $//
+           /^$/d
+           s/^ //'
+    [ -n "${2+1}" ] ||
+       break
+    shift
+  done
+}
+
+
+
+buffer_stdin () {
+  local BUFFER_FILE="${1}"
+  cat > "${BUFFER_FILE}"
+  cat "${BUFFER_FILE}"
+}
+
+
+
+encode_for_json_normalization () {
+  sed 's/\r$//
+       s/@/@a/g
+       s/#/@h/g
+       s/!/@x/g
+       t reeval
+       : reeval
+       s/\(![^]["\\:.+,{}-]*\){/\1@l/
+       s/\(![^]["\\:.+,{}-]*\)}/\1@r/
+       s/\(![^]["\\:.+,{}-]*\)\[/\1@L/
+       s/\(![^]["\\:.+,{}-]*\)\]/\1@R/
+       s/\(![^]["\\:.+,{}-]*\),/\1@o/
+       s/\(![^]["\\:.+,{}-]*\)-/\1@m/
+       s/\(![^]["\\:.+,{}-]*\)+/\1@p/
+       s/\(![^]["\\:.+,{}-]*\)\./\1@d/
+       s/\(![^]["\\:.+,{}-]*\):/\1@c/
+       s/\(![^]["\\:.+,{}-]*\)\\\\/\1@b@b/
+       s/\(![^]["\\:.+,{}-]*\)\\"/\1@b@q/
+       s/\(![^]["\\:.+,{}-]*\)\\\([/bfnrtu]\)/\1@b\2/
+       s/!\([^]["\\:.+,{}-]*\)"/@Q\1@Q/
+       t reeval
+       s/"/!/
+       t reeval
+       s/@Q/"/g
+       t split
+       : split
+       s/\([[,{]\)[ \t]*\([^ \t\n]\)/\1\n\2/
+       s/\([^ \t\n]\)[ \t]*\([],}]\)/\1\n\2/
+       t split'
+}
+
+
+
+decode_from_json_normalization () {
+  sed 's/@R/]/g
+       s/@L/[/g
+       s/@r/}/g
+       s/@l/{/g
+       s/@o/,/g
+       s/@p/+/g
+       s/@m/-/g
+       s/@d/./g
+       s/@c/:/g
+       s/@b/\\/g
+       s/@[Qq]/"/g
+       s/@x/!/g
+       s/@h/#/g
+       s/@a/@/g'
+}
+
+
+
+normalize_nested_json () {
+  sed '1{
+         h
+         s/^.*$//
+         x
+       }
+       /{[ \t]*$/{
+         G
+         s/\(\n.*\)$/\1+/
+         s/\("[^"]*"\)[ \t]*:[ \t]*{[ \t]*\n\(.*\)+$/\n\2\1./
+         s/^[^\n]*\n//
+         h
+         d
+       }
+       /\[[ \t]*$/{
+         G
+         s/\("[^"]*"\)[ \t]*:[ \t]*\[[ \t]*\n\(.*\)$/\n\2\1-/
+         s/^[^\n]*\n//
+         s/$/0: /
+         h
+         d
+       }
+       /}[ \t]*$/{
+         g
+         s/"[^"]*"\.$//
+         s/+$//
+         h
+         d
+       }
+       /\][ \t]*$/{
+         g
+         s/[0-9]*:[ \t]*$//
+         s/"[^"]*"-$//
+         h
+         d
+       }
+       /,/{
+         g
+         s/:[ \t]*$/!&/
+         t carry
+         : carry
+         s/9!/!0/
+         s/\([^0-9]\)!/\11/
+         t carry
+         s/8!/9/
+         s/7!/8/
+         s/6!/7/
+         s/5!/6/
+         s/4!/5/
+         s/3!/4/
+         s/2!/3/
+         s/1!/2/
+         s/0!/1/
+         h
+         d
+       }
+       /[^ \t,]/{
+         G
+         s/^\([^\n]*\)\n\(.*\)$/\2\n\1/
+         s/\n[ \t]*\([^ \t]\)/\1/
+         s/++*//g
+       }
+       /^[ \t]*$/d
+       s/^[ \t][ \t]*//'
+}
+
+
+
+detect_import_type () {
+  local IMPORT_NM="${1-}"
+  [ -n "${IMPORT_NM:+1}" ] ||
+    return 1
+  IMPORT_NM="${IMPORT_NM##*/}"
+  local STEM_NM="${IMPORT_NM%.*}"
+  IMPORT_NM="${IMPORT_NM:${#STEM_NM}}"
+  printf '%s\n' "${IMPORT_NM#.}"
+}
+
+
+
+detect_command () {
+  local INTENDED="${1-}"
+  local DEFAULTED="${2-}"
+  [ -n "${INTENDED:+1}" ] ||
+    return 1
+  case "$(type -t "${INTENDED}")" in
+  'alias' | 'keyword' | 'function' | 'builtin' | \
+  'file' ) printf '%s\n' "${INTENDED}"
+           return 0;;
+  esac
+  [ -n "${DEFAULTED:+1}" ] ||
+    return 1
+  case "$(type -t "${DEFAULTED}")" in
+  'alias' | 'keyword' | 'function' | 'builtin' | \
+  'file' ) printf '%s\n' "${DEFAULTED}"
+           return 0;;
+  esac
+  return 1
+}
+
+
+
+fetch_property () {
+  local PROP_NM="${1-}"
+  [ -f "${PROPERTY_PATH}" ] ||
+    return 1
+  {
+    cat "${PROPERTY_PATH}"
+    echo
+  } |
+    sed -n 's/^/ /
+            $s/^ $//
+            /^$/d
+            s/^[ \t]*//
+            s/[ \t]*$//
+            /^#/d
+            s/'"$(as_sed_pattern "${PROP_NM}")"'[ \t]*=[ \t]*//p'
+}
+
+
+
+shasum_hash () {
+  shasum |
+    sed 's/[ \t].*$//'
+}
+
+
+
+format_epcis_document () {
+  local QUOTE="${1}"
+  local DOC_ID="${2}"
+  local TIME_STAMP="$(date +'%Y-%m-%dT%H:%M:%S.%N%:z')"
+  TIME_STAMP="$(sed 's/\(\.[0-9][0-9][0-9]\)[0-9]*\([+-][0-9:]*\)$/\1\2/
+                     s/\(\.[0-9][0-9][0-9]\)[0-9]*\(Z\)$/\1\2/' <<< "${TIME_STAMP}")"
+  printf '{\n'
+  printf '  '"${QUOTE}"'%s'"${QUOTE}"': [' '@context'
+  local DELIM= LINE
+  printf "${QUOTE}"'%s'"${QUOTE}"'\n' 'https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld' |
+    while read LINE
+    do
+      printf '%s\n    %s' "${DELIM}" "${LINE}"
+      DELIM=','
+    done
+  printf '\n  ]\n'
+  printf '  '"${QUOTE}"'%s'"${QUOTE}"': '"${QUOTE}"'%s'"${QUOTE}"',\n' \
+         ${DOC_ID:+'id'} ${DOC_ID:+"${DOC_ID}"} \
+         'type' 'EPCISDocument' \
+         'schemaVersion' '2.0' \
+         'creationDate' "${TIME_STAMP}"
+  sed 's/^/  /'
+  printf '\n}'
+}
+
+
+
+format_epcis_body () {
+  local QUOTE="${1}"
+  printf "${QUOTE}"'%s'"${QUOTE}"': {\n' 'epcisBody'
+  sed 's/^/  /'
+  printf '\n}'
+}
+
+
+
+format_event_list () {
+  local QUOTE="${1}"
+  printf "${QUOTE}"'%s'"${QUOTE}"': [\n' 'eventList'
+  sed 's/^/  /'
+  printf '\n]'
+}
+
+
+
+document_hash () {
+  local CANON_CMD="${1}"
+  local HASH_CMD="${2}"
+  local JOURNAL="${3}"
+  eval "${CANON_CMD}"' "${JOURNAL}"' |
+    eval "${HASH_CMD}"
+}
+
+
+
+doc_transaction_name () {
+  local CANON_CMD="${1}"
+  local HASH_CMD="${2}"
+  local IDPATTERN="${3}"
+  local JOURNAL="${4}"
+  local JOURNALSUFF="${JOURNAL##*/}"
+  local JOURNALNM="${JOURNALSUFF%.*}"
+  JOURNALSUFF="${JOURNALSUFF:${#JOURNALNM}}"
+  JOURNALSUFF="${JOURNALSUFF#.}"
+  local TRANSACT_ID="$(document_hash "${CANON_CMD}" "${HASH_CMD}" "${JOURNAL}")"
+  printf '%s\n%s\n' "${IDPATTERN}" "${JOURNALNM}" "${JOURNALSUFF}" "${TRANSACT_ID}" |
+    sed '1{
+           # %n
+           N
+           s/@/@a/g
+           s/%/@p/g
+           s/\\/@b/g
+           s/@b@b/@B@B/g
+           s/@b@p/@B@P/g
+           t locaten
+           : locaten
+           s/^\([^\n]*\)@pn/\1%/
+           t locaten
+           : insertn
+           s/^\([^%\n]*\)%\([^\n]*\)\(\n\)\(.*\)$/\1\4\2\3\4/
+           t insertn
+           s/\n.*$//
+           s/\(@p\)@b\(n\)/\1\2/g
+           s/@[bB]/\\/g
+           s/@[pP]/%/g
+           s/@a/@/g
+           # %s
+           N
+           s/@/@a/g
+           s/%/@p/g
+           s/\\/@b/g
+           s/@b@b/@B@B/g
+           s/@b@p/@B@P/g
+           t locates
+           : locates
+           s/^\([^\n]*\)@ps/\1%/
+           t locates
+           : inserts
+           s/^\([^%\n]*\)%\([^\n]*\)\(\n\)\(.*\)$/\1\4\2\3\4/
+           t inserts
+           s/\n.*$//
+           s/\(@p\)@b\(s\)/\1\2/g
+           s/@[bB]/\\/g
+           s/@[pP]/%/g
+           s/@a/@/g
+           # %
+           s/@/@a/g
+           s/%/@p/g
+           s/\\/@b/g
+           s/@b@b/@B/g
+           s/@b@p/@P/g
+           s/@p/%/
+           s/$/\n/
+           s/^[^%\n]*\(\n\)/\1/
+           s/^\([^%\n]*\)%\([^\n]*\)\(\n\)$/\1\3\2/
+           s/@[bB]/\\/g
+           s/@[pP]/%/g
+           s/@a/@/g
+           N
+           s/^\([^\n]*\)\n\([^\n]*\)\n\(.*\)$/\1\3\2/
+         }'
+}
+
+
+
+doc_transaction_id () {
+  local CANON_CMD="${1}"
+  local HASH_CMD="${2}"
+  local URL_BASE="${3}"
+  local IDPATTERN="${4}"
+  local JOURNAL="${5}"
+  local TRANSACT_ID="$(doc_transaction_name "${CANON_CMD}" "${HASH_CMD}" "${IDPATTERN}" "${JOURNAL}")"
+  printf '%s\n' "${TRANSACT_ID:+${URL_BASE%/}${URL_BASE:+/}${TRANSACT_ID}}"
+}
+
+
+
+format_parent_epc () {
+  local QUOTE="${1}"
+  local ELEMENT="${2}"
+  local DANGL=
+  local EPC
+  while read EPC
+  do
+    [ -z "${DANGL:+1}" ] ||
+      continue
+    printf "${QUOTE}"'%s'"${QUOTE}"':'"${QUOTE}"'%s'"${QUOTE}" "${ELEMENT}" "${EPC}"
+    DANGL=dangling
+  done
+}
+
+
+
+format_epc_list () {
+  local QUOTE="${1}"
+  local ELEMENT="${2}"
+  local DELIM='' TERM_DELIM=''
+  printf "${QUOTE}"'%s'"${QUOTE}"': [' "${ELEMENT}"
+  local EPC
+  while read EPC
+  do
+    printf '%s\n  '"${QUOTE}"'%s'"${QUOTE}" "${DELIM}" "${EPC}"
+    DELIM=','
+    TERM_DELIM=$'\n'
+  done
+  printf '%s]' "${TERM_DELIM}"
+}
+
+
+
+format_epc_class_quant_element () {
+  local QUOTE="${1}"
+  local CLASS="${2-}"
+  local QUANT=( ${3+"${3-}"} )
+  local UOM=( ${4+"${4-}"} )
+  local DELIM=
+  printf '{'
+  [ -z "${CLASS:+1}" ] ||
+    printf '%s\n  '"${QUOTE}"'%s'"${QUOTE}"': '"${QUOTE}"'%s'"${QUOTE}"'' "${DELIM}" 'epcClass' "${CLASS}"
+  DELIM="${DELIM:-${CLASS:+,}}"
+  [ -z "${QUANT:+1}" ] ||
+    printf '%s\n  '"${QUOTE}"'%s'"${QUOTE}"': %s' "${DELIM}" 'quantity' "${QUANT}"
+  DELIM="${DELIM:-${QUANT:+,}}"
+  [ -z "${UOM:+1}" ] ||
+    printf '%s\n  '"${QUOTE}"'%s'"${QUOTE}"': '"${QUOTE}"'%s'"${QUOTE}"'' "${DELIM}" 'uom' "${UOM}"
+  DELIM="${DELIM:-${UOM:+,}}"
+  printf '\n}\n'
+}
+
+
+
+enlist_lgtin_quants () {
+  local QUOTE="${1}"
+  local CLASS=( )
+  local QUANT=( )
+  local UOM=( )
+  local PROP DANGL=
+  while read PROP
+  do
+    case "${PROP}" in
+    'C'* ) if [ -n "${CLASS:+1}" ]
+           then
+             format_epc_class_quant_element "${QUOTE}" "${CLASS}" "${QUANT}" "${UOM}"
+             CLASS=( )
+             QUANT=( )
+             UOM=( )
+           fi
+           CLASS="${PROP:1}";;
+    'Q'* ) if [ -n "${CLASS:+${QUANT:+1}}" ]
+           then
+             format_epc_class_quant_element "${QUOTE}" "${CLASS}" "${QUANT}" "${UOM}"
+             CLASS=( )
+             QUANT=( )
+             UOM=( )
+           elif [ -n "${QUANT:+1}" ]
+           then
+             message -n1 -- "${QUANT}"' <-> '"${PROP:1}" 'multiple quantities without EPC class'
+           fi
+           QUANT="${PROP:1}";;
+    'U'* ) if [ -n "${CLASS:+${QUANT:+${UOM:+1}}}" ]
+           then
+             format_epc_class_quant_element "${QUOTE}" "${CLASS}" "${QUANT}" "${UOM}"
+             CLASS=( )
+             QUANT=( )
+             UOM=( )
+           elif [ -n "${UOM:+1}" ]
+           then
+             message -n1 -- "${UOM}"' <-> '"${PROP:1}" 'multiple units of measurement without quantity or EPC class'
+           fi
+           UOM="${PROP:1}";;
+    esac
+    if [ -n "${CLASS:+${QUANT:+${UOM:+1}}}" ]
+    then
+      format_epc_class_quant_element "${QUOTE}" "${CLASS}" "${QUANT}" "${UOM}"
+      CLASS=( )
+      QUANT=( )
+      UOM=( )
+    fi
+  done
+  if [ -n "${CLASS:+1}" ]
+  then
+    format_epc_class_quant_element "${QUOTE}" "${CLASS}" "${QUANT}" "${UOM}"
+    CLASS=( )
+    QUANT=( )
+    UOM=( )
+  elif [ -n "${QUANT:+1}${UOM:+1}" ]
+  then
+    message -n1 -- "${QUANT}${QUANT:+${UOM:+ }}${UOM}" 'dangling quantity or unit of measurement without EPC class'
+  fi
+}
+
+
+
+format_epc_class_quant_list () {
+  local QUOTE="${1}"
+  local ELEMENT="${2}"
+  printf "${QUOTE}"'%s'"${QUOTE}"': [' "${ELEMENT}"
+  sed 's/^/  /
+       1s/^/\n/
+       s/}$/&,/
+       $s/\(}\),/\1/'
+  printf ']'
+}
+
+
+
+format_epc_enlistings () {
+  local PARENT_LIST="${1}"
+  local INPUT_LIST="${2}"
+  local IN_QUANT_LIST="${3}"
+  local ITEM_LIST="${4}"
+  local QUANT_LIST="${5}"
+  local TRASH_LIST="${6}"
+  local EVENT_TYPE="${7}"
+  local QUOTE="${8}"
+  local LAZY_MSG=( ${9:+"${9}"} )
+  local PARENT_ELEM='parentEpc'
+  local INPUT_ELEM=
+  local IN_QUANT_ELEM=
+  local ITEM_ELEM='epcList'
+  local QUANT_ELEM='quantityList'
+  case "${EVENT_TYPE}" in
+  'objectEvent' )         PARENT_ELEM=;;
+  'transformationEvent' ) PARENT_ELEM=
+                          INPUT_ELEM='inputEpcList'
+                          IN_QUANT_ELEM='inputQuantityList'
+                          ITEM_ELEM='outputEpcList'
+                          QUANT_ELEM='outputQuantityList';;
+  * )                     ;;
+  esac
+  [ -n "${PARENT_ELEM:+1}" ] || [ ! -s "${PARENT_LIST}" ] ||
+    message -n1 -- "${EVENT_TYPE}" 'event type does not permit a paren EPC'
+  [ -n "${INPUT_ELEM:+1}" ] || [ ! -s "${INPUT_LIST}" ] ||
+    message -n1 -- "${EVENT_TYPE}" 'event type does not permit a input EPCs'
+  [ -n "${IN_QUANT_ELEM:+1}" ] || [ ! -s "${IN_QUANT_LIST}" ] ||
+    message -n1 -- "${EVENT_TYPE}" 'event type does not permit a input EPC class quantities'
+  [ ! -s "${TRASH_LIST}" ] ||
+    message -n1 -- "${EVENT_TYPE}" 'document types do not permit combied evaluation'
+  case "${EVENT_TYPE}" in
+  'AggregationEvent' | \
+  'AssociationEvent' )    [ -s "${PARENT_LIST}" ] || [ -n "${LAZY_MSG+1}" ] ||
+                            message -n1 -- "${EVENT_TYPE}" 'affords a paren EPC';;
+  'transformationEvent' ) [ -s "${INPUT_LIST}" ] || [ -s "${IN_QUANT_LIST}" ] || [ -n "${LAZY_MSG+1}" ] ||
+                            message -n1 -- "${EVENT_TYPE}" 'affords input EPCs or EPC class quantities';;
+  esac
+  [ -s "${ITEM_LIST}" ] || [ -s "${QUANT_LIST}" ] || [ -n "${LAZY_MSG+1}" ] ||
+    message -n1 -- "${EVENT_TYPE}" 'affords EPCs or EPC class quantities'
+  local DELIM=''
+  if [ -s "${PARENT_LIST}" ] && [ -n "${PARENT_ELEM:+1}" ]
+  then
+    printf '%s' "${DELIM}"
+    DELIM=','$'\n'
+    cat "${PARENT_LIST}" |
+      format_parent_epc "${QUOTE}" "${PARENT_ELEM}"
+  fi
+  if [ -s "${INPUT_LIST}" ] && [ -n "${INPUT_ELEM:+1}" ]
+  then
+    printf '%s' "${DELIM}"
+    DELIM=','$'\n'
+    cat "${INPUT_LIST}" |
+      format_epc_list "${QUOTE}" "${INPUT_ELEM}"
+  fi
+  if [ -s "${IN_QUANT_LIST}" ] && [ -n "${IN_QUANT_ELEM:+1}" ]
+  then
+    printf '%s' "${DELIM}"
+    DELIM=','$'\n'
+    cat "${IN_QUANT_LIST}" |
+      {
+        (
+          enlist_lgtin_quants "${QUOTE}"
+        )
+        message -sf"${OWN_TMP_LOC}"fail.journal
+      } |
+      format_epc_class_quant_list "${QUOTE}" "${IN_QUANT_ELEM}"
+  fi
+  if [ -s "${ITEM_LIST}" ]
+  then
+    printf '%s' "${DELIM}"
+    DELIM=','$'\n'
+    cat "${ITEM_LIST}" |
+      format_epc_list "${QUOTE}" "${ITEM_ELEM}"
+  fi
+  if [ -s "${QUANT_LIST}" ]
+  then
+    printf '%s' "${DELIM}"
+    DELIM=','$'\n'
+    cat "${QUANT_LIST}" |
+      {
+        (
+          enlist_lgtin_quants "${QUOTE}"
+        )
+        message -sf"${OWN_TMP_LOC}"fail.journal
+      } |
+      format_epc_class_quant_list "${QUOTE}" "${QUANT_ELEM}"
+  fi
+}
+
+
+
+format_event () {
+  local QUOTE="${1}"
+  local CANON_CMD="${2}"
+  local HASH_CMD="${3}"
+  local URL_BASE="${4}"
+  local TIME_STAMP="${5}"
+  local IDPATTERN="${6}"
+  local EVENTTYPE="${7}"
+  local ACTION="${8}"
+  local BIZSTEP="${9}"
+  local DISPOSITION="${10}"
+  local JOURNAL="${11}"
+  TIME_STAMP="${TIME_STAMP:-$(date +'%Y-%m-%dT%H:%M:%S.%N%:z')}"
+  TIME_STAMP="$(sed 's/\(\.[0-9][0-9][0-9]\)[0-9]*\([+-][0-9:]*\)$/\1\2/
+                     s/\(\.[0-9][0-9][0-9]\)[0-9]*\(Z\)$/\1\2/' <<< "${TIME_STAMP}")"
+  local TIME_ZONE="$(sed -n 's/^.*\([+-][0-9][0-9]:\{0,1\}[0-9][0-9]\)$/\1/p' <<< "${TIME_STAMP}")"
+  [ -n "${TIME_ZONE:+1}" ] ||
+    TIME_ZONE="$(date +'%:z')"
+  local EVENTID="$(uuidgen 2> /dev/null)"
+  case "${EVENTTYPE:-ObjectEvent}" in
+  'TransformationEvent' ) ACTION=( );;
+  *  )                    ACTION="${ACTION:-OBSERVE}"
+  esac
+  printf '{\n'
+  printf '  '"${QUOTE}"'%s'"${QUOTE}"': '"${QUOTE}"'%s'"${QUOTE}"',\n' \
+         'type' "${EVENTTYPE:-ObjectEvent}" \
+         'eventTime' "${TIME_STAMP}" \
+         'eventTimeZoneOffset' "${TIME_ZONE}" \
+         ${EVENTID:+'eventID' 'urn:uuid:'"${EVENTID}"} \
+         ${ACTION:+'action' "${ACTION}"} \
+         ${BIZSTEP:+'bizStep' "${BIZSTEP}"} \
+         ${DISPOSITION:+'disposition' "${DISPOSITION}"}
+  sed 's/^/  /'
+  if [ -n "${URL_BASE:+1}" ] && [ -n "${JOURNAL:+1}" ]
+  then
+    local TRANSACT_URL="$(doc_transaction_id "${CANON_CMD}" "${HASH_CMD}" "${URL_BASE}" "${IDPATTERN}" \
+                                             "${JOURNAL}")"
+    if [ -n "${TRANSACT_URL:+1}" ]
+    then
+      printf ',\n  '"${QUOTE}"'%s'"${QUOTE}"': [\n    {'                    'bizTransactionList'
+      printf '\n      '"${QUOTE}"'%s'"${QUOTE}"': '"${QUOTE}"'%s'"${QUOTE}" 'bizTransaction' "${TRANSACT_URL}"
+      printf '\n    }\n  ]'
+    fi
+  fi
+  printf '\n}'
+}
+
+
+
+(
+  while [ -n "${1+1}" ]
+  do
+    case "${1}" in
+    '-h'* )    exit 1;;
+    '--help' ) exit 1;;
+    '--' )     shift
+               break;;
+    '-'* )     ;;
+    * )        break;;
+    esac
+    case "${1}" in
+    '--'* ) shift;;
+    '-'[dfFgiqru]* )
+            shift;;
+    '-'? )  shift;;
+    '-'* )  eval 'set -- "${1:0:1}${1:2}"'"$(shift; [ -z "${1+1}" ] || printf ' %q' "${@}"; echo)";;
+    esac
+  done
+) || {
+  printf '%s\n' \
+         "$(basename "${0}" .sh)"'  -  Utility to derive an EPCIS event from a file.' \
+         '' \
+         '  '"$(basename "${0}" .sh)"' <options> <file-name>' \
+         '' \
+         'Description:' \
+         '  The utility reads the input file and derives an EPCIS event from its contents.' \
+         '  It writes the eevnt to stdout.' \
+         '' \
+         'Options:' \
+         '' \
+         '  -b  --bare' \
+         '        Write just the bare event without event list, document body or event document.' \
+         '        This is appropriate for use as upload filter with timber-capture.' \
+         '' \
+         '  -d<document-id>  --doc=<document-id>' \
+         '        Define a custom document ID used as ID of the event document.' \
+         '        The option has no effect with option --bare and defaults to some number.' \
+         '' \
+         '  -F<format>  --rform=<format>' \
+         '        Override the format derived from the raw meterial file'\''s suffix by an' \
+         '        explicitly choosen value. The option is appropriate to distinguish several' \
+         '        formats all exhibitting the same file suffix. E.g. a file with suffix .json might' \
+         '        contain a "Stammzertifikat", a "Leistungsbeschreibung", an "ERP-Auszug" or even' \
+         '        other contents.' \
+         '' \
+         '  -f<format>  --form=<format>' \
+         '        Override the format derived from the input file'\''s suffix by an explicitly' \
+         '        choosen value. The option is appropriate to distinguish several formats all' \
+         '        exhibitting the same file suffix. E.g. a file with suffix .json might contain' \
+         '        a "Stammzertifikat", a "Leistungsbeschreibung", an "ERP-Auszug" or even other' \
+         '        contents.' \
+         '' \
+         '  -g<company-prefix>  --gcp=<company-prefix>' \
+         '        Define the global company prefix of the EPCs GTIN.' \
+         '        Global company prefix and item reference together have to have exact 13 digits.' \
+         '' \
+         '  -i<item-reference>  --item=<item-reference>' \
+         '        Define the item reference of the EPCs GTIN.' \
+         '        Global company prefix and item reference together have to have exact 13 digits.' \
+         '' \
+         '  -l  --lazy' \
+         '        Suppress errors on missing mandatory information. This option allows to import' \
+         '        the generated event into another application and then add the missing pieces.' \
+         '' \
+         '  -r<raw-material-document>  --raw=<raw-material-document>' \
+         '        Specify a second input document describing the raw material processed in a' \
+         '        GS1 transformation event. If specified neither input document may produce a' \
+         '        parent EPC.' \
+         '' \
+         '  -q<quote>  --quote=<quote>' \
+         '        Define the quote character used to mark text strings.' \
+         '' \
+         '  -s  --hash' \
+         '        Only determine the hash representing the document ID.' \
+         '' \
+         '  -t  --tractid' \
+         '        Determine the transaction id based on the hash representing the document.' \
+         '' \
+         '  -u<base-url>  --url=<base-url>' \
+         '        The base URL used to create transaction IDs identifying the input file.' \
+         '        The base URL has to have a scheme http: or https: and a domain' \
+         '        belonging to the owner of the file, i.e. the issuer of the event.' \
+         '        Further it has to end with /bt in order to be conformant with the standard.'|
+    less
+  exit 1
+}
+unset DOC_ID FORMAT RAW_FORM GCP ITEM_REF QUOTE RAW_DOC HASH_MODE URL_BASE BARE_EVENT LAZY_MSG
+while [ -n "${1+1}" ]
+do
+  case "${1}" in
+  '-F' )        RAW_FORM="${2-}"
+                shift 2
+                set -- -f "${@}";;
+  '-F'* )       RAW_FORM="${1:2}";;
+  '--rform='* ) RAW_FORM="${1#*=}";;
+  '-b'* )       BARE_EVENT='bare';;
+  '--bare' )    BARE_EVENT='bare';;
+  '-d' )        DOC_ID="${2-}"
+                shift 2
+                set -- -d "${@}";;
+  '-d'* )       DOC_ID="${1:2}";;
+  '--doc='* )   DOC_ID="${1#*=}";;
+  '-f' )        FORMAT="${2-}"
+                shift 2
+                set -- -f "${@}";;
+  '-f'* )       FORMAT="${1:2}";;
+  '--form='* )  FORMAT="${1#*=}";;
+  '-g' )        GCP="${2-}"
+                shift 2
+                set -- -g "${@}";;
+  '-g'* )       GCP="${1:2}";;
+  '--gcp='* )   GCP="${1#*=}";;
+  '-i' )        ITEM_REF="${2-}"
+                shift 2
+                set -- -i "${@}";;
+  '-i'* )       ITEM_REF="${1:2}";;
+  '--item='* )  ITEM_REF="${1#*=}";;
+  '-l'* )       LAZY_MSG='lazy';;
+  '--lazy' )    LAZY_MSG='lazy';;
+  '-q' )        QUOTE="${2-}"
+                shift 2
+                set -- -q "${@}";;
+  '-q'* )       QUOTE="${1:2}";;
+  '--quote='* ) QUOTE="${1#*=}";;
+  '-r' )        RAW_DOC="$(handle_tilde_files "${2-}")"
+                shift 2
+                set -- -q "${@}";;
+  '-r'* )       RAW_DOC="$(handle_tilde_files "${1:2}")";;
+  '--raw='* )   RAW_DOC="$(handle_tilde_files "${1#*=}")";;
+  '-s'* )       HASH_MODE='hash';;
+  '--hash' )    HASH_MODE='hash';;
+  '-t'* )       HASH_MODE='tractid';;
+  '--tractid' ) HASH_MODE='tractid';;
+  '-u' )        URL_BASE="${2-}"
+                shift 2
+                set -- -u "${@}";;
+  '-u'* )       URL_BASE="${1:2}";;
+  '--url='* )   URL_BASE="${1#*=}";;
+  '--' )        shift
+                break;;
+  '-'* )        message -n1 -- "${1}" 'unknown option';;
+  * )           break;;
+  esac
+  case "${1}" in
+  '--'* ) shift;;
+  '-'[dfFgiqru]* )
+          shift;;
+  '-'? )  shift;;
+  '-'* )  eval 'set -- "${1:0:1}${1:2}"'"$(shift; [ -z "${1+1}" ] || printf ' %q' "${@}"; echo)";;
+  esac
+done
+[ -n "${QUOTE+1}" ] ||
+  QUOTE='"'
+
+unset RAW_IMP_TYPE
+if [ -n "${RAW_DOC:+1}" ]
+then
+  [ -f "${RAW_DOC}" ] ||
+    message -n1 -- "${RAW_DOC}" 'no such file'
+  if [ -n "${RAW_FORM}" ]
+  then
+    RAW_IMP_TYPE="${RAW_FORM}"
+  else
+    RAW_IMP_TYPE="$(detect_import_type "${RAW_DOC}")"
+  fi
+fi
+if [ -n "${FORMAT+1}" ]
+then
+  IMPORT_TYPE="${FORMAT}"
+else
+  IMPORT_TYPE="$(detect_import_type "${@}")"
+fi
+OWN_NM="${0##*/}"
+OWN_PATH="${0:0:${#0} - ${#OWN_NM}}"
+OWN_NM="${OWN_NM%.sh}"
+OWN_TMP_LOC="$(uname -n)"
+OWN_TMP_LOC="${OWN_TMP_LOC}${OWN_TMP_LOC:+-}$(id -nu)"
+OWN_TMP_LOC="${OWN_TMP_LOC%-}"
+OWN_TMP_LOC="${OWN_TMP_LOC}${OWN_TMP_LOC:+${$:+-}}${$}"
+OWN_TMP_LOC="${OWN_NM}${OWN_NM:+${OWN_TMP_LOC:+-}}${OWN_TMP_LOC}"
+OWN_TMP_LOC="$(sed 's/[ \t][ \t]*/_/g' <<<  "${OWN_TMP_LOC}")"
+OWN_TMP_LOC="${OWN_TMP_LOC:+/tmp/}${OWN_TMP_LOC%/}${OWN_TMP_LOC:+/}"
+if [ -n "${RAW_IMP_TYPE+1}" ]
+then
+  RAW_IMPORT_PATH="${OWN_PATH}${RAW_IMP_TYPE}${RAW_IMP_TYPE:+/}${OWN_NM}${OWN_NM:+.shar}"
+  RAW_PROPERTY_PATH="${OWN_PATH}${RAW_IMP_TYPE}${RAW_IMP_TYPE:+/}${OWN_NM}${OWN_NM:+.properties}"
+fi
+IMPORT_PATH="${OWN_PATH}${IMPORT_TYPE}${IMPORT_TYPE:+/}${OWN_NM}${OWN_NM:+.shar}"
+PROPERTY_PATH="${OWN_PATH}${IMPORT_TYPE}${IMPORT_TYPE:+/}${OWN_NM}${OWN_NM:+.properties}"
+
+[ -z "${OWN_TMP_LOC:+1}" ] ||
+  trap 'rm -rf '"${OWN_TMP_LOC@Q}" EXIT TERM
+[ -d "${OWN_TMP_LOC%/*}" ] ||
+  mkdir -p "${OWN_TMP_LOC%/*}"
+
+if [ -n "${RAW_IMP_TYPE+1}" ]
+then
+  [ -f "${RAW_IMPORT_PATH}" ] ||
+    message -n1 -- "${RAW_IMP_TYPE}" 'unknown format' 'no format adapter available'
+  . "${RAW_IMPORT_PATH}"
+fi
+[ -f "${IMPORT_PATH}" ] ||
+  message -n1 -- "${IMPORT_TYPE}" 'unknown format' 'no format adapter available'
+. "${IMPORT_PATH}"
+if [ -n "${RAW_IMP_TYPE+1}" ]
+then
+  RAW_HANDLER=handle__"${RAW_IMP_TYPE}"
+  RAW_CANONER=canon__"${RAW_IMP_TYPE}"
+  RAW_HASHER="$(detect_command hash__"${RAW_IMP_TYPE}" shasum_hash)"
+  RAW_PARAMETRIZE="$(detect_command param__"${RAW_IMP_TYPE}" fetch_property)"
+fi
+HANDLER=handle__"${IMPORT_TYPE}"
+[ -n "$(detect_command "${HANDLER}")" ] ||
+  message -n1 -- "${HANDLER}" 'no such function defined by format adapter'
+CANONER=canon__"${IMPORT_TYPE}"
+[ -n "$(detect_command "${CANONER}")" ] ||
+  message -n1 -- "${CANONER}" 'no such function defined by format adapter'
+HASHER="$(detect_command hash__"${IMPORT_TYPE}" shasum_hash)"
+PARAMETRIZE="$(detect_command param__"${IMPORT_TYPE}" fetch_property)"
+
+if [ -n "${HASH_MODE+1}" ]
+then
+  case "${HASH_MODE}" in
+  'hash' )    document_hash "${CANONER}" "${HASHER}" "${@}";;
+  'tractid' ) doc_transaction_id "${CANONER}" "${HASHER}" "${URL_BASE}" "$(eval "${PARAMETRIZE}"' idpattern')" \
+                                 "${@}";;
+  esac
+else
+  EVENT_TYPE="$(eval "${PARAMETRIZE}"' eventtype')"
+  EVENT_TYPE="${EVENT_TYPE:-ObjectEvent}"
+  [ -z "${RAW_DOC:+1}" ] ||
+    EVENT_TYPE='transformationEvent'
+  if [ -n "${RAW_DOC:+1}" ] && [ -f "${RAW_DOC}" ]
+  then
+    {
+      (
+        read_file "${RAW_DOC}"
+      )
+      message -sf"${OWN_TMP_LOC}"fail.journal
+    } |
+      buffer_stdin "${OWN_TMP_LOC}"raw_inpu.buffer |
+      eval "${RAW_HANDLER}"' "${OWN_TMP_LOC}"raw_inpu.buffer \
+                             "${OWN_TMP_LOC}"parent_item.list "${OWN_TMP_LOC}"trash.list "${OWN_TMP_LOC}"trash.list \
+                             "${OWN_TMP_LOC}"input.list "${OWN_TMP_LOC}"in_quant.list - '\'\'' '\'\'
+    {
+      (
+        read_file "${@}"
+      )
+      message -sf"${OWN_TMP_LOC}"fail.journal
+    } |
+      buffer_stdin "${OWN_TMP_LOC}"inpu.buffer |
+      eval "${HANDLER}"' "${OWN_TMP_LOC}"inpu.buffer \
+                         "${OWN_TMP_LOC}"parent_item.list "${OWN_TMP_LOC}"trash.list "${OWN_TMP_LOC}"trash.list \
+                         "${OWN_TMP_LOC}"item.list "${OWN_TMP_LOC}"quant.list "${EVENT_TYPE}" "${GCP}" "${ITEM_REF}"'
+  else
+    {
+      (
+        read_file "${@}"
+      )
+      message -sf"${OWN_TMP_LOC}"fail.journal
+    } |
+      buffer_stdin "${OWN_TMP_LOC}"inpu.buffer |
+      eval "${HANDLER}"' "${OWN_TMP_LOC}"inpu.buffer \
+                         "${OWN_TMP_LOC}"parent_item.list "${OWN_TMP_LOC}"input.list "${OWN_TMP_LOC}"in_quant.list \
+                         "${OWN_TMP_LOC}"item.list "${OWN_TMP_LOC}"quant.list "${EVENT_TYPE}" "${GCP}" "${ITEM_REF}"'
+  fi
+  {
+    (
+      format_epc_enlistings "${OWN_TMP_LOC}"parent_item.list "${OWN_TMP_LOC}"input.list "${OWN_TMP_LOC}"in_quant.list \
+                            "${OWN_TMP_LOC}"item.list "${OWN_TMP_LOC}"quant.list "${OWN_TMP_LOC}"trash.list \
+                            "${EVENT_TYPE}" "${QUOTE}" ${LAZY_MSG:+"${LAZY_MSG}"}
+    )
+    message -sf"${OWN_TMP_LOC}"fail.journal
+  } |
+    format_event "${QUOTE}" "${CANONER}" "${HASHER}" "${URL_BASE}" '' \
+                 "$(eval "${PARAMETRIZE}"' idpattern')" \
+                 "${EVENT_TYPE}" \
+                 "$(eval "${PARAMETRIZE}"' action')" \
+                 "$(eval "${PARAMETRIZE}"' bizstep')" \
+                 "$(eval "${PARAMETRIZE}"' disposition')" "${@}" |
+    if [ -n "${BARE_EVENT:+1}" ]
+    then
+      cat
+    else
+      format_event_list "${QUOTE}" |
+      format_epcis_body "${QUOTE}" |
+      format_epcis_document "${QUOTE}" "${DOC_ID}"
+    fi > "${OWN_TMP_LOC}"result.event
+  if [ -s "${OWN_TMP_LOC}"fail.journal ]
+  then
+    exit "$(sort -nr "${OWN_TMP_LOC}"fail.journal | head -1)"
+  else
+    cat "${OWN_TMP_LOC}"result.event
+    printf '\n'
+  fi
+fi

@@ -1,0 +1,50 @@
+# seed/serial-import.shar  -  Type specific function archive for seed certificates as JSON from a PDF
+
+
+
+_seed__extract_seed_identity () {
+  sed -n 's/^"fields"."materialEpc":[ \t]*/C/p' |
+    sed 's/^\(C\)[ \t]*"\([^"]*\)"[ \t]*$/\1\2/'
+}
+
+
+
+_seed__extract_document_identity () {
+  sed -n 's/^"fields"."zertifikatNr":[ \t]*/I/p' |
+    sed 's/^I[ \t]*"\([^"]*\)"[ \t]*$/\1/'
+}
+
+
+
+canon__seed () {
+  local JOURNAL="${1-}"
+  cat "${JOURNAL}" |
+    encode_for_json_normalization |
+    normalize_nested_json
+}
+
+
+
+hash__seed () {
+  _seed__extract_document_identity |
+    decode_from_json_normalization |
+    sed 's/[ \t][ \t]*/_/g'
+}
+
+
+
+handle__seed () {
+  local INPUT_BUFFER="${1}"
+  local PARENT_LIST="${2}"
+  local INPUT_LIST="${3}"
+  local IN_QUANT_LIST="${4}"
+  local ITEM_LIST="${5}"
+  local QUANT_LIST="${6}"
+  local EVENT_TYPE="${7}"
+  local GCP="${8}"
+  local ITEM_REF="${9}"
+  encode_for_json_normalization |
+    normalize_nested_json |
+    _seed__extract_seed_identity |
+    decode_from_json_normalization >> "${QUANT_LIST}"
+}

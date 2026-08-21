@@ -1,0 +1,66 @@
+# hpr/serial-import.shar  -  Type specific function archive for StanForD hpr
+
+
+
+_hpr__extract_session_trunk_log () {
+  sed -n 's/^[ \t]*<SessionId>\([0-9]*\)<\/SessionId>[ \t]*$/S\1/p
+          s/^[ \t]*<StemKey>\([0-9]*\)<\/StemKey>[ \t]*$/T\1/p
+          s/^[ \t]*<LogKey>\([0-9]*\)<\/LogKey>[ \t]*$/L\1/p
+          s/^[ \t]*<Identity type="http:\/\/stanford\.org\/gs1\/urn">\(.*\)<\/Identity>/E\1/p
+          $s/^.*$/./p'
+}
+
+
+
+_hpr__fetch_or_assemble_serialized () {
+  local GCP="${1}"
+  local ITEM_REF="${2}"
+  local URN_GTIN="$(as_sed_replacement 'urn:epc:id:sgtin:'"${GCP}${GCP:+${ITEM_REF:+.}}${ITEM_REF}")"
+  sed ': reeval
+       /^T/{
+         h
+       }
+       /^S/{
+         x
+         s/S[0-9]*//
+         x
+         G
+         s/\n//
+         x
+       }
+       /^L/{
+         G
+         s/\n//
+         s/^\(L[0-9]*\)\(.*\)$/Y'"${URN_GTIN}${URN_GTIN:+.}"'\2\1/
+         N
+         s/^[^\n]*\n\(E.*\)$/\1/
+         P
+         s/^[^\n]*$//
+         s/^[^\n]*\n//
+         b reeval
+       }' |
+    sed -n 's/^[YE]\(.*\)$/\1/p'
+}
+
+
+
+canon__hpr () {
+  local JOURNAL="${1-}"
+  xmllint 2> /dev/null --c14n "${JOURNAL}"
+}
+
+
+
+handle__hpr () {
+  local INPUT_BUFFER="${1}"
+  local PARENT_LIST="${2}"
+  local INPUT_LIST="${3}"
+  local IN_QUANT_LIST="${4}"
+  local ITEM_LIST="${5}"
+  local QUANT_LIST="${6}"
+  local EVENT_TYPE="${7}"
+  local GCP="${8}"
+  local ITEM_REF="${9}"
+  _hpr__extract_session_trunk_log |
+    _hpr__fetch_or_assemble_serialized "${GCP}" "${ITEM_REF}" >> "${ITEM_LIST}"
+}

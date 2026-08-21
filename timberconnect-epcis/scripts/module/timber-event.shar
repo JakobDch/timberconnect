@@ -1,0 +1,103 @@
+# module/serial-import.shar  -  Type specific function archive for module assembly logs as JSON from an ERP mocked as Excel
+
+
+
+_module__extract_input_identity () {
+  sed -n 's/^"identification"."identityInput"-[0-9][0-9]*:[ \t]*/I/p' |
+    sed 's/^I[ \t]*"\([^"]*\)"[ \t]*$/\1/'
+}
+
+
+
+_module__extract_product_identity () {
+  sed -n 's/^"identification"."identity"-[0-9][0-9]*:[ \t]*/I/p' |
+    sed 's/^I[ \t]*"\([^"]*\)"[ \t]*$/\1/'
+}
+
+
+
+canon__module () {
+  local JOURNAL="${1-}"
+  cat "${JOURNAL}" |
+    encode_for_json_normalization |
+    normalize_nested_json
+}
+
+
+
+_module__extract_document_identity () {
+  sed -n 's/^"product"."auftrag":[ \t]*/I/p
+          s/^"product"."produktnorm":[ \t]*/J/p' |
+    #  -n
+    sed '1{
+              x
+              s/^.*$//
+              x
+            }
+            s/^\(I\)[ \t]*"Vertriebsauftragsposition[ \t]*\([^"]*\)"[ \t]*$/\1\2/
+            s/^\(J\)[ \t]*"\([^"]*\)"[ \t]*$/\1\2/
+            /^I/{
+              G
+              x
+              s/^.*$//
+              x
+              t clear_i
+              : clear_i
+              s/^I\([^\n]*\)\nJ\(.*\)$/\1 \2/p
+              t wrap_i
+              s/\nI.*$//
+              s/\n$//
+              h
+              : wrap_i
+              d
+            }
+            /^J/{
+              G
+              x
+              s/^.*$//
+              x
+              t clear_j
+              : clear_j
+              s/^J\([^\n]*\)\nI\(.*\)$/\2 \1/p
+              t wrap_j
+              s/\nJ.*$//
+              s/\n$//
+              h
+              : wrap_j
+              d
+            }'
+}
+
+
+
+hash__module () {
+  _module__extract_document_identity |
+    decode_from_json_normalization |
+    sed 's/[.:]\([ \t]\)/\1/g
+         s/[.:]$//
+         s/[/:.]/ /g
+         s/[ \t][ \t]*/_/g'
+}
+
+
+
+handle__module () {
+  local INPUT_BUFFER="${1}"
+  local PARENT_LIST="${2}"
+  local INPUT_LIST="${3}"
+  local IN_QUANT_LIST="${4}"
+  local ITEM_LIST="${5}"
+  local QUANT_LIST="${6}"
+  local EVENT_TYPE="${7}"
+  local GCP="${8}"
+  local ITEM_REF="${9}"
+  encode_for_json_normalization |
+    normalize_nested_json |
+    _module__extract_input_identity |
+    decode_from_json_normalization >> "${INPUT_LIST}"
+  cat "${INPUT_BUFFER}" |
+    encode_for_json_normalization |
+    normalize_nested_json |
+    _module__extract_product_identity |
+    decode_from_json_normalization >> "${ITEM_LIST}"
+}

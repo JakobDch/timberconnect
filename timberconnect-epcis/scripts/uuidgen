@@ -1,0 +1,11 @@
+#! /bin/bash
+# uuidgen.sh  -  Utility replacing a missing UUID generator.
+
+
+
+if [ -n "$(type -t python3)" ]
+then
+  python3 -c 'import uuid; print(uuid.uuid4())'
+else
+  python -c 'import uuid; print(uuid.uuid4())'
+fi

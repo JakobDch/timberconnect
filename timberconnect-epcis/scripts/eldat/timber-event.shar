@@ -1,0 +1,95 @@
+# eldat/serial-import.shar  -  Type specific function archive for KWF ELDAT
+
+
+
+_eldat__extract_lat_long_amount () {
+  sed -n 's/^.*"origin"-0: "pile_data"-0: "coordinate"\."latitude":[ \t]*/T/p
+          s/^.*"origin"-0: "pile_data"-0: "coordinate"\."longitude":[ \t]*/N/p
+          s/^.*"origin"-0: "pile_data"-0: .*[. ]"amount_value":[ \t]*/Q/p
+          s/^.*"origin"-0: "pile_data"-0: .*[. ]"amount_unit":[ \t]*"\([^"]*\)"/U\1/p' |
+    sed 's/^\(T\)\([0-9]\)/\1N\2/
+         s/^\(T\)+\([0-9]\)/\1N\2/
+         s/^\(T\)-\([0-9]\)/\1S\2/
+         s/^\(N\)\([0-9]\)/\1E\2/
+         s/^\(N\)+\([0-9]\)/\1E\2/
+         s/^\(N\)-\([0-9]\)/\1W\2/
+         s/^\([NT][ENSW][0-9]*\)$/\1./
+         s/^\(N[EW]\)\(\.\)/\10\2/
+         s/^\(N[EW]\)\([0-9]\.\)/\10\2/
+         s/^\(T[NS]\)\(\.\)/\10\2/
+         s/^\(T[NS]\)\([0-9]\.\)/\10\2/
+         s/^\(T[NS]\)\([0-9][0-9]\.\)/\10\2/
+         s/^\([NT][ENSW][0-9]*\.\)$/\10/
+         s/^\([NT][ENSW][0-9]*\.[0-9]\)$/\10/
+         s/^\([NT][ENSW][0-9]*\.[0-9][0-9]\)$/\10/
+         s/^\([NT][ENSW][0-9]*\.[0-9][0-9][0-9]\)$/\10/
+         s/^\([NT][ENSW][0-9]*\.[0-9][0-9][0-9][0-9]\)$/\10/
+         s/^\([NT][ENSW][0-9]*\.[0-9][0-9][0-9][0-9][0-9]\)[0-9]*$/\1/'
+}
+
+
+
+_eldat__assemble_log_quantity () {
+  local GCP="${1}"
+  local ITEM_REF="${2}"
+  local URN_GTIN="$(as_sed_replacement 'urn:epc:id:lgtin:'"${GCP}${GCP:+${ITEM_REF:+.}}${ITEM_REF}")"
+  {
+    sed -n '/^[NT]/{
+              s/\.//
+              G
+              s/\n//
+              s/^\(N[EW][0-9][0-9]*\)\(T[NS][0-9][0-9]*\)$/\2\1/
+              s/^T\([NS][0-9][0-9]*\)N\([EW][0-9][0-9]*\)$/C'"${URN_GTIN}${URN_GTIN:+.}"'\1\2/p
+              s/^C[a-z:0-9.][a-z:0-9.]*[NS][0-9][0-9]*[EW][0-9][0-9]*$//
+              h
+            }
+            /^[^NT]/p'
+    echo '.'
+  } |
+    sed -n '/^[QU]/{
+              s/^\(U\)rmm$/\1G26/
+              G
+              s/\n$//
+              s/^\(U.*\)\n\(Q[0-9.]*\)$/\2\1/
+              s/^\(Q[0-9.]*\)\(U.*\)$/\1\n\2/p
+              s/^Q[^\n]*\nU.*$//
+              s/\n//
+              s/^\(Q[0-9.]*\)\(Q[0-9.]*\)$/\2\n\1/
+              h
+              s/\n.*$//p
+              g
+              s/.*\n//
+              h
+            }
+            /^\.$/{
+              g
+              s/^\(Q[0-9.]*\)$/\1/p
+            }
+            /^[^QU.]/p'
+}
+
+
+
+canon__eldat () {
+  local JOURNAL="${1-}"
+  jq 2> /dev/null '.' "${JOURNAL}"
+}
+
+
+
+handle__eldat () {
+  local INPUT_BUFFER="${1}"
+  local PARENT_LIST="${2}"
+  local INPUT_LIST="${3}"
+  local IN_QUANT_LIST="${4}"
+  local ITEM_LIST="${5}"
+  local QUANT_LIST="${6}"
+  local EVENT_TYPE="${7}"
+  local GCP="${8}"
+  local ITEM_REF="${9}"
+  encode_for_json_normalization |
+    normalize_nested_json |
+    _eldat__extract_lat_long_amount |
+    decode_from_json_normalization |
+    _eldat__assemble_log_quantity "${GCP}" "${ITEM_REF}" >> "${QUANT_LIST}"
+}
