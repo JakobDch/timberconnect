@@ -2,9 +2,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const executeQuery = vi.fn();
 const queryPlantingAreas = vi.fn();
+const queryPlantingAreaByEpc = vi.fn();
 vi.mock('../sparqlService', () => ({
   executeQuery: (...args: unknown[]) => executeQuery(...args),
   queryPlantingAreas: (...args: unknown[]) => queryPlantingAreas(...args),
+  queryPlantingAreaByEpc: (...args: unknown[]) => queryPlantingAreaByEpc(...args),
+}));
+
+// Der Suchraum fuer Pflanzflaechen geht ueber den Katalog und wird
+// rollengefiltert -- beides hier neutral gestellt, geprueft wird die
+// Verdrahtung des Werkzeugs.
+vi.mock('../accessControlService', () => ({
+  filterSourcesByRole: (urls: string[]) => Promise.resolve({ allowed: urls, denied: [] }),
+}));
+vi.mock('../authFetch', () => ({ getCurrentRole: () => null }));
+vi.mock('../../config/solidPods', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  // Ohne Katalog bleibt der Suchraum die Scope-Liste -- so pruefen die
+  // Tests das Werkzeug und nicht den Katalogdienst.
+  getAllProductsAsync: () => Promise.resolve([]),
 }));
 vi.mock('../geoService', () => ({
   // Punkt-in-Polygon ist in geoService getestet; hier zaehlt nur die
@@ -75,6 +91,10 @@ beforeEach(() => {
   executeQuery.mockResolvedValue([]);
   queryPlantingAreas.mockReset();
   queryPlantingAreas.mockResolvedValue([]);
+  // Kein Zertifikat mit direktem Ident-Bezug -- der Regelfall. Tests, die
+  // Weg 1 pruefen, setzen ihn selbst.
+  queryPlantingAreaByEpc.mockReset();
+  queryPlantingAreaByEpc.mockResolvedValue([]);
   queryEpcisEvents.mockReset();
 });
 
@@ -266,6 +286,77 @@ describe('match_forest_origin — Zuordnung', () => {
     expect(result.ok).toBe(true);
     expect(result.positions_checked).toBe(1);
     expect(executeQuery).toHaveBeenCalled();
+  });
+
+  it('sucht die Koordinate AUCH an einem Nachbarknoten', async () => {
+    // Der Grund, warum die Zuordnung nie zustande kam: in den Erntedaten
+    // haengt die Position an einem eigenen Subjekt
+    // (tc:Stem --tc:hasMachinePosition--> tc:MachinePosition), nicht am
+    // Ident-Traeger. Eine Abfrage, die beides am selben Knoten verlangt,
+    // findet konstant nichts.
+    queryPlantingAreas.mockResolvedValue([{ certificateIri: 'urn:cert:1', ring: [] }]);
+    executeQuery.mockResolvedValue([]);
+
+    await executeTool({ name: 'match_forest_origin', args: {} }, ctx());
+
+    const query = String(executeQuery.mock.calls[0][0]);
+    // Der Ident haengt an einem eigenen Traeger, nicht am Koordinatenknoten.
+    expect(query).toMatch(/\?traeger tc:(epc|sgtin|lgtin) \?ident/);
+    // Und es gibt einen Weg ueber eine Kante zum Nachbarn.
+    expect(query).toMatch(/\?traeger \?kante \?subject/);
+    expect(query).toContain('geo:lat');
+    expect(query).toContain('geo:long');
+  });
+
+  it('erzeugt gueltiges SPARQL fuer die Positionssuche', async () => {
+    // Klammern zaehlen reicht nicht -- hier parst derselbe Parser, den
+    // Comunica verwendet.
+    const { Parser } = await import('sparqljs');
+    queryPlantingAreas.mockResolvedValue([{ certificateIri: 'urn:cert:1', ring: [] }]);
+    executeQuery.mockResolvedValue([]);
+
+    await executeTool({ name: 'match_forest_origin', args: {} }, ctx());
+
+    const query = String(executeQuery.mock.calls[0][0]);
+    expect(() => new Parser().parse(query)).not.toThrow();
+  });
+
+  it('nimmt den direkten Ident-Bezug vor der Punkt-in-Polygon-Suche', async () => {
+    // Zeigt ein Zertifikat per tc:epc auf einen Ident der Kette, ist das die
+    // belastbarere Aussage -- dieselbe Reihenfolge wie im Produktpass.
+    queryPlantingAreas.mockResolvedValue([{ certificateIri: 'urn:cert:1', ring: [] }]);
+    queryPlantingAreaByEpc.mockResolvedValue([
+      {
+        certificateIri: 'urn:cert:direkt',
+        ring: [],
+        certificateNumber: 'KJZ-2024-9',
+        species: 'Fichte',
+        maturityYear: '2024',
+        epc: 'urn:epc:id:sgtin:1.2.SAAT',
+      },
+    ]);
+
+    const { result } = await executeTool({ name: 'match_forest_origin', args: {} }, ctx());
+
+    expect(result.ok).toBe(true);
+    const matches = result.matches as Array<Record<string, unknown>>;
+    expect(matches).toHaveLength(1);
+    expect(matches[0].bezug).toBe('direkt');
+    expect(matches[0].certificate_number).toBe('KJZ-2024-9');
+    // Der Geo-Weg wurde gar nicht erst beschritten.
+    expect(executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('dedupliziert Zertifikate, die an mehreren Identen haengen', async () => {
+    queryPlantingAreas.mockResolvedValue([{ certificateIri: 'urn:cert:1', ring: [] }]);
+    // Derselbe Treffer fuer jeden abgefragten Ident.
+    queryPlantingAreaByEpc.mockResolvedValue([
+      { certificateIri: 'urn:cert:direkt', ring: [], certificateNumber: 'KJZ-1' },
+    ]);
+
+    const { result } = await executeTool({ name: 'match_forest_origin', args: {} }, ctx());
+
+    expect((result.matches as unknown[])).toHaveLength(1);
   });
 });
 

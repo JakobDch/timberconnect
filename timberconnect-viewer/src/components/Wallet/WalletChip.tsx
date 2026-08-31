@@ -12,15 +12,18 @@ export function WalletChip({ onClick }: { onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-1.5 bg-acid-400/15 border border-acid-400/40 rounded-full hover:bg-acid-400/25 transition-colors"
+      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-acid-400/15 border border-acid-400/40 rounded-full hover:bg-acid-400/25 transition-colors flex-shrink-0"
       title="Token-Guthaben — klicken zum Kaufen"
     >
-      <Coins className="w-4 h-4 text-acid-300" />
+      <Coins className="w-4 h-4 text-acid-300 flex-shrink-0" />
       {isLoading || balance === null ? (
         <Loader2 className="w-3.5 h-3.5 text-acid-300 animate-spin" />
       ) : (
-        <span className="text-xs font-bold text-acid-300 tabular-nums">
-          {balance.toLocaleString('de-DE')} {TOKEN_SYMBOL}
+        <span className="text-xs font-bold text-acid-300 tabular-nums whitespace-nowrap">
+          {/* Das Symbol erst ab sm: die Zahl allein genuegt neben dem
+              Muenzsymbol, und im Header zaehlt jeder Pixel. */}
+          {balance.toLocaleString('de-DE')}
+          <span className="hidden sm:inline"> {TOKEN_SYMBOL}</span>
         </span>
       )}
     </button>

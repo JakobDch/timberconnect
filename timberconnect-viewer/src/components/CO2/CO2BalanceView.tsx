@@ -4,11 +4,9 @@ import {
   ArrowLeft,
   ChevronDown,
   Factory,
-  FlaskConical,
   Home,
   Info,
   Leaf,
-  Plus,
   Truck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,7 +16,6 @@ import {
   computeLca,
   extractLcaInputs,
   mapToLcaInfo,
-  DEMO_LCA_INPUTS,
   type LcaChartBar,
   type LcaInfoField,
   type LcaModule,
@@ -299,15 +296,13 @@ export function CO2BalanceView({
   onBack,
   onAddProduct,
 }: CO2BalanceViewProps) {
-  const isDemo = !product;
-
   const [openModule, setOpenModule] = useState<string | null>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
 
   // --- Eingangsgroessen + Zusatzinfos -------------------------------------
   const inputs = useMemo(
-    () => (isDemo ? DEMO_LCA_INPUTS : extractLcaInputs(productData ?? null)),
-    [isDemo, productData],
+    () => extractLcaInputs(productData ?? null),
+    [productData],
   );
   const info = useMemo(
     () => mapToLcaInfo(productData ?? null, product ?? null),
@@ -318,28 +313,19 @@ export function CO2BalanceView({
   // Geocoding laeuft ausserhalb der reinen Rechnung, im gemeinsamen Hook:
   // der Bauproduktpass braucht dieselbe Zahl, und zwei Kopien der
   // Aufloesung waeren auseinandergelaufen.
-  const distances = useLcaDistances(inputs, isDemo);
+  const distances = useLcaDistances(inputs);
 
   const lca = useMemo(() => computeLca(inputs, distances), [inputs, distances]);
 
   // --- Kopfdaten (Bauteil / Masse) ----------------------------------------
-  const header = isDemo
-    ? {
-        name: 'X-LAM L-150/5s (Demo)',
-        manufacturer: 'Holzwerk Westfalen GmbH',
-        declaration: 'Leistungserklärung Brettsperrholz (Demo)',
-        reference: 'Demo-Bauteil (5,22 m³ netto)',
-        mass: '2.510 kg',
-        dimensions: '150 mm × 2,95 m × 11,8 m',
-      }
-    : {
-        name: info.componentName ?? product?.name ?? 'BSP-Platte',
-        manufacturer: info.manufacturer,
-        declaration: info.declarationTitle,
-        reference: info.referenceSize,
-        mass: info.mass,
-        dimensions: info.dimensions,
-      };
+  const header = {
+    name: info.componentName ?? product?.name ?? 'BSP-Platte',
+    manufacturer: info.manufacturer,
+    declaration: info.declarationTitle,
+    reference: info.referenceSize,
+    mass: info.mass,
+    dimensions: info.dimensions,
+  };
 
   const productImage = useMemo(
     () =>
@@ -365,7 +351,7 @@ export function CO2BalanceView({
   // Ohne ihn wuerde die Ansicht die Bilanz der im Quellensatz gefundenen
   // Platte anzeigen, obwohl ein Stamm gescannt wurde.
   const scannedStage = detectProductStage(product ?? null, productData ?? null);
-  if (!isDemo && scannedStage !== 'clt-panel') {
+  if (scannedStage !== 'clt-panel') {
     return (
       <div className="flex-1 bg-night-900">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -424,31 +410,14 @@ export function CO2BalanceView({
             </p>
           </motion.div>
 
-          {/* Demo-Banner nur ohne Produkt; sonst dezenter Live-Hinweis */}
-          {isDemo ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 mb-4"
-            >
-              <FlaskConical className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-300/90 leading-relaxed">
-                <span className="font-semibold text-amber-300">Demo-Ansicht:</span>{' '}
-                Ohne gescanntes Bauteil rechnet die Bilanz mit Beispielwerten der
-                Demo-Platte. Scannen Sie ein Produkt für Live-Daten aus dem
-                Datenraum.
-              </p>
-            </motion.div>
-          ) : (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-xs text-night-300 leading-relaxed mb-4 px-1"
-            >
-              Berechnet aus den Live-Daten dieses Bauteils. Fehlende oder
-              abgeleitete Eingangsgrößen sind ausgewiesen.
-            </motion.p>
-          )}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-xs text-night-300 leading-relaxed mb-4 px-1"
+          >
+            Berechnet aus den Live-Daten dieses Bauteils. Fehlende oder
+            abgeleitete Eingangsgrößen sind ausgewiesen.
+          </motion.p>
 
           <div className="space-y-4">
             {/* Bauteil-Karte */}
@@ -698,98 +667,80 @@ export function CO2BalanceView({
             </motion.section>
 
             {/* Zusatzinformationen der Informationsbedarfstiefe */}
-            {!isDemo && (
-              <motion.section
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 }}
-                className="space-y-2"
-              >
-                {info.categories.map((category) => {
-                  const open = openCategory === category.id;
-                  const filled = category.fields.filter((f) => f.value !== null).length;
-                  return (
-                    <div
-                      key={category.id}
-                      className={`bg-night-800 border rounded-2xl overflow-hidden transition-colors ${
-                        open ? 'border-acid-400/40' : 'border-white/5'
-                      }`}
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="space-y-2"
+            >
+              {info.categories.map((category) => {
+                const open = openCategory === category.id;
+                const filled = category.fields.filter((f) => f.value !== null).length;
+                return (
+                  <div
+                    key={category.id}
+                    className={`bg-night-800 border rounded-2xl overflow-hidden transition-colors ${
+                      open ? 'border-acid-400/40' : 'border-white/5'
+                    }`}
+                  >
+                    <button
+                      onClick={() => setOpenCategory(open ? null : category.id)}
+                      aria-expanded={open}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.03] transition-colors"
                     >
-                      <button
-                        onClick={() => setOpenCategory(open ? null : category.id)}
-                        aria-expanded={open}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.03] transition-colors"
-                      >
-                        <Info
-                          className={`w-4 h-4 flex-shrink-0 ${open ? 'text-acid-400' : 'text-night-300'}`}
-                        />
-                        <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
-                          {category.title}
-                        </span>
-                        <span className="text-[11px] tabular-nums text-night-400 flex-shrink-0">
-                          {filled}/{category.fields.length}
-                        </span>
-                        <ChevronDown
-                          className={`w-4 h-4 text-night-300 flex-shrink-0 transition-transform ${
-                            open ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {open && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="px-4 pb-4">
-                              <p className="text-xs text-night-300 leading-relaxed mb-3">
-                                {category.description}
-                              </p>
-                              <dl>
-                                {category.fields.map((field) => (
-                                  <InfoFieldRow key={field.id} field={field} />
-                                ))}
-                              </dl>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-                <p className="text-xs text-night-300 leading-relaxed px-1">
-                  {info.coverage.filled} von {info.coverage.total} Angaben zu
-                  diesem Bauteil sind belegt. Fehlende Angaben sind mit einer
-                  Begründung ausgewiesen.
-                </p>
-              </motion.section>
-            )}
+                      <Info
+                        className={`w-4 h-4 flex-shrink-0 ${open ? 'text-acid-400' : 'text-night-300'}`}
+                      />
+                      <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
+                        {category.title}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-night-400 flex-shrink-0">
+                        {filled}/{category.fields.length}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-night-300 flex-shrink-0 transition-transform ${
+                          open ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {open && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-4">
+                            <p className="text-xs text-night-300 leading-relaxed mb-3">
+                              {category.description}
+                            </p>
+                            <dl>
+                              {category.fields.map((field) => (
+                                <InfoFieldRow key={field.id} field={field} />
+                              ))}
+                            </dl>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+              <p className="text-xs text-night-300 leading-relaxed px-1">
+                {info.coverage.filled} von {info.coverage.total} Angaben zu
+                diesem Bauteil sind belegt. Fehlende Angaben sind mit einer
+                Begründung ausgewiesen.
+              </p>
+            </motion.section>
 
             {/* Downloadbereich (geteilt, einklappbar) */}
-            {!isDemo && (
-              <DocumentDownloadSection
-                productId={productId}
-                productData={productData}
-                delay={0.4}
-                sortRank={DOCUMENT_RANK}
-              />
-            )}
-
-            {/* Produkt hinzufügen (Demo-Modus: Ausweg zum Scanner) */}
-            {isDemo && (
-              <motion.button
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 }}
-                onClick={onAddProduct}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-night-800 border border-acid-400/40 text-acid-300 font-semibold hover:bg-acid-400/10 transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Produkt hinzufügen</span>
-              </motion.button>
-            )}
+            <DocumentDownloadSection
+              productId={productId}
+              productData={productData}
+              delay={0.4}
+              sortRank={DOCUMENT_RANK}
+            />
           </div>
         </div>
       </div>

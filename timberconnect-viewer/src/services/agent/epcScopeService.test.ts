@@ -19,7 +19,11 @@ vi.mock('../epcisService', () => ({
 vi.mock('../accessControlService', () => ({
   filterSourcesByRole: (s: string[]) => Promise.resolve({ allowed: s }),
 }));
-vi.mock('../authFetch', () => ({ getCurrentRole: () => 'forst' }));
+// Der Wert wird nie interpretiert (filterSourcesByRole ist oben gemockt),
+// soll aber wie eine echte Rollen-IRI aussehen.
+vi.mock('../authFetch', () => ({
+  getCurrentRole: () => 'https://timberconnect.org/ontology#Forstbetrieb',
+}));
 vi.mock('../../config/solidPods', () => ({
   getAllProductsAsync: () =>
     Promise.resolve([
@@ -192,5 +196,138 @@ describe('Kandidatenprüfung läuft IMMER, nicht nur im Notfall', () => {
     const scope = await buildEpcScope(EPC);
     expect(scope.sources).toContain(CHAIN_SOURCE);
     expect(scope.sources).not.toContain(PANEL_SOURCE);
+  });
+});
+
+describe('Materialfluss aus den Pod-Daten', () => {
+  const CHAIN_SOURCE = 'https://pod.example/chain.ttl';
+  const STAMM = 'urn:epc:id:sgtin:404711145.0100.12A3D4567';
+
+  it('nimmt einen Stamm auf, der nur per tc:derivedFrom im Pod steht', async () => {
+    // Der Fall aus der Praxis: EPCIS liefert die Lamellen, der Stamm steht
+    // nur als tc:derivedFrom in den Pod-Daten. Ohne diesen Schritt lehnte der
+    // Agent ihn ab ("gehoert nicht zu diesem Bauteil") -- und genau an ihm
+    // haengt die Waldherkunft.
+    sourcesFromBizTransactions.mockReturnValue([CHAIN_SOURCE]);
+    filterAvailableSources.mockImplementation((urls: string[]) =>
+      Promise.resolve({ available: urls }),
+    );
+    executeQuery.mockImplementation((query: string) => {
+      if (query.includes('tc:derivedFrom')) {
+        return Promise.resolve([{ vorEpc: { value: STAMM } }]);
+      }
+      return Promise.resolve([{ s: { value: 'urn:subject:1' } }]);
+    });
+
+    const scope = await buildEpcScope(EPC);
+
+    expect(scope.relatedEpcs.has(STAMM)).toBe(true);
+  });
+
+  it('holt den Stamm auch, wenn tc:derivedFrom direkt auf den Ident-IRI zeigt', async () => {
+    // Die Form, die die Leistungserklärung Schnittholz erzeugt:
+    //
+    //   <…/saegevorgang/1> a tc:SawingProcess ;
+    //       tc:epc        <…0212.120231002917> ;   # Lamelle
+    //       tc:derivedFrom <…0100.12A3D4567> .     # Stamm, als blosser IRI
+    //
+    // Der Stamm ist hier KEIN Subjekt mit eigenem tc:epc. Ein Rueckfallzweig
+    // `UNION { BIND(?vor AS ?vorEpc) }` liefert dafuer null Zeilen -- ein BIND
+    // sieht Variablen ausserhalb seiner Gruppe nicht. Genau daran scheiterte
+    // die Waldherkunft: der Stamm-Ident kam nie in den Scope.
+    sourcesFromBizTransactions.mockReturnValue([CHAIN_SOURCE]);
+    filterAvailableSources.mockImplementation((urls: string[]) =>
+      Promise.resolve({ available: urls }),
+    );
+    executeQuery.mockImplementation((query: string) => {
+      if (query.includes('tc:derivedFrom')) {
+        // Der Rueckfall auf ?vor selbst muss im SELECT stehen -- sonst kann
+        // die Abfrage diese Datenform gar nicht ausdruecken.
+        expect(query).toContain('COALESCE');
+        expect(query).not.toMatch(/UNION\s*\{\s*BIND/);
+        return Promise.resolve([{ vorEpc: { value: STAMM } }]);
+      }
+      return Promise.resolve([{ s: { value: 'urn:subject:1' } }]);
+    });
+
+    const scope = await buildEpcScope(EPC);
+
+    expect(scope.relatedEpcs.has(STAMM)).toBe(true);
+  });
+
+  it('nimmt die Quelle auf, die erst der neu entdeckte Stamm-Ident erschliesst', async () => {
+    // Der eigentliche Fall der Waldherkunft, ueber ZWEI Pods:
+    //
+    //   chain.ttl  (Saegewerk) -- fuehrt die Lamellen, nennt den Stamm per
+    //                             tc:derivedFrom
+    //   fremd.ttl  (Forst)     -- fuehrt NUR den Stamm-Ident, traegt Forstamt,
+    //                             Revier und Einschlagdatum
+    //
+    // Ein einzelner Durchlauf findet fremd.ttl nie: zum Zeitpunkt der
+    // Quellenpruefung ist der Stamm-Ident noch unbekannt, und wenn er bekannt
+    // ist, wird nicht mehr gesucht. Der Agent sah dann den Ident, bekam aber
+    // auf jede Abfrage dazu null Zeilen.
+    const FOREST_SOURCE = 'https://pod.example/fremd.ttl';
+    sourcesFromBizTransactions.mockReturnValue([CHAIN_SOURCE]);
+    filterAvailableSources.mockImplementation((urls: string[]) =>
+      Promise.resolve({ available: urls }),
+    );
+    executeQuery.mockImplementation((query: string, sources: string[]) => {
+      if (query.includes('tc:derivedFrom')) {
+        // Nur der Saegewerks-Pod kennt den Materialfluss.
+        return Promise.resolve(
+          sources.includes(CHAIN_SOURCE) ? [{ vorEpc: { value: STAMM } }] : [],
+        );
+      }
+      // Identpruefung: fremd.ttl antwortet NUR, wenn nach dem Stamm gefragt
+      // wird -- die Lamellen kennt der Forst-Pod nicht.
+      if (sources.includes(FOREST_SOURCE)) {
+        return Promise.resolve(query.includes(STAMM) ? [{ s: { value: 'urn:stamm' } }] : []);
+      }
+      return Promise.resolve([{ s: { value: 'urn:subject:1' } }]);
+    });
+
+    const scope = await buildEpcScope(EPC);
+
+    expect(scope.relatedEpcs.has(STAMM)).toBe(true);
+    // Der Kern: die Forst-Quelle ist im Scope und damit abfragbar.
+    expect(scope.sources).toContain(FOREST_SOURCE);
+  });
+
+  it('nimmt keine Ressourcen-IRIs auf, die keine EPCs sind', async () => {
+    // tc:derivedFrom kann auf eine beliebige IRI zeigen -- als Ident taugt
+    // die nicht und wuerde nur Abfragen ins Leere schicken.
+    sourcesFromBizTransactions.mockReturnValue([CHAIN_SOURCE]);
+    filterAvailableSources.mockImplementation((urls: string[]) =>
+      Promise.resolve({ available: urls }),
+    );
+    executeQuery.mockImplementation((query: string) => {
+      if (query.includes('tc:derivedFrom')) {
+        return Promise.resolve([
+          { vorEpc: { value: 'http://timberconnect.2050.de/resource/stem/4711' } },
+        ]);
+      }
+      return Promise.resolve([{ s: { value: 'urn:subject:1' } }]);
+    });
+
+    const scope = await buildEpcScope(EPC);
+
+    expect([...scope.relatedEpcs].some((e) => e.startsWith('http'))).toBe(false);
+  });
+
+  it('bleibt beim EPCIS-Stand, wenn die Abfrage fehlschlaegt', async () => {
+    sourcesFromBizTransactions.mockReturnValue([CHAIN_SOURCE]);
+    filterAvailableSources.mockImplementation((urls: string[]) =>
+      Promise.resolve({ available: urls }),
+    );
+    executeQuery.mockImplementation((query: string) => {
+      if (query.includes('tc:derivedFrom')) return Promise.reject(new Error('kaputt'));
+      return Promise.resolve([{ s: { value: 'urn:subject:1' } }]);
+    });
+
+    const scope = await buildEpcScope(EPC);
+
+    // Der gescannte Ident bleibt -- kein Absturz, nur kein Zugewinn.
+    expect(scope.relatedEpcs.has(EPC)).toBe(true);
   });
 });

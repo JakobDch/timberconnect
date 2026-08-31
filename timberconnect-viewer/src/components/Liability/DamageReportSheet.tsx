@@ -117,9 +117,14 @@ export function DamageReportSheet({
         <motion.div
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="relative w-full sm:max-w-lg max-h-[90vh] overflow-y-auto bg-night-800 border border-white/10 rounded-t-3xl sm:rounded-3xl p-5"
+          // max-h-[92%] statt vh: Prozent misst gegen das `fixed inset-0`
+          // darueber, also gegen den WIRKLICH sichtbaren Bereich. `90vh` meint
+          // auf iOS Safari die Hoehe MIT eingefahrener Adressleiste -- steht
+          // sie, rutschten die Knoepfe unter die Browserleiste. Aufteilung in
+          // festen Kopf + scrollenden Rumpf wie in allen anderen Sheets.
+          className="relative w-full sm:max-w-lg max-h-[92%] sm:max-h-[85%] flex flex-col bg-night-800 border border-white/10 rounded-t-3xl sm:rounded-3xl"
         >
-          <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-start justify-between gap-3 p-5 pb-4 flex-shrink-0">
             <div className="min-w-0">
               <h2 className="text-lg font-extrabold text-white">Schaden melden</h2>
               <p className="text-xs text-night-300 mt-1 truncate">
@@ -130,12 +135,14 @@ export function DamageReportSheet({
               onClick={onClose}
               disabled={saving}
               aria-label="Schließen"
-              className="p-1.5 rounded-lg text-night-300 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg text-night-300 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50 flex-shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
+          {/* pb-[max(...)] haelt die Knoepfe ueber dem Home-Indicator. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="space-y-4">
             <Field id="damage-date" label="Schadensdatum">
               <input
@@ -244,6 +251,7 @@ export function DamageReportSheet({
             Die Meldung wird in Ihrem eigenen Pod gespeichert und mit dem Bauteil
             verknüpft. Das Erfassen ist kostenfrei.
           </p>
+          </div>
         </motion.div>
       </div>
     </SheetPortal>

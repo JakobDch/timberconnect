@@ -17,10 +17,13 @@ import { queryEpcisEvents, collectEpcs } from '../epcisService';
 import {
   executeQuery,
   queryPlantingAreas,
+  queryPlantingAreaByEpc,
   type PlantingAreaResult,
 } from '../sparqlService';
 import { areasContaining } from '../geoService';
-import { NAMESPACES } from '../../config/solidPods';
+import { filterSourcesByRole } from '../accessControlService';
+import { getCurrentRole } from '../authFetch';
+import { NAMESPACES, getAllProductsAsync } from '../../config/solidPods';
 import { runScopedQuery } from './agentSparqlService';
 import type { EpcScope } from './epcScopeService';
 import type { SchemaPack } from './schemaContextService';
@@ -58,7 +61,68 @@ export interface ToolSchema {
  * Zeilen des Schema-Blocks (renderClass), wo es sie gibt. Nur haengt jetzt
  * nichts mehr an ihrer Vollstaendigkeit.
  */
+/**
+ * Der Name des Antwort-Werkzeugs -- an mehreren Stellen gebraucht, deshalb
+ * eine Konstante statt einer Zeichenkette im Code.
+ */
+export const ANSWER_TOOL = 'antwort';
+
 export const TOOL_SCHEMAS: ToolSchema[] = [
+  {
+    type: 'function',
+    function: {
+      name: ANSWER_TOOL,
+      description:
+        'Gib deine fertige Antwort an den Nutzer. Das ist der EINZIGE Weg, auf ' +
+        'dem Text den Nutzer erreicht — freier Fließtext neben Werkzeugaufrufen ' +
+        'wird verworfen und nie angezeigt. Rufe dies genau einmal auf, wenn du ' +
+        'die Frage beantworten kannst oder sicher weißt, dass die Daten fehlen.',
+      parameters: {
+        type: 'object',
+        properties: {
+          antwort: {
+            type: 'string',
+            description:
+              'Die Antwort auf die Frage des Nutzers, auf Deutsch, mit Belegen ' +
+              '[Q<n>.<variable>]. Nur das Ergebnis — keine Beschreibung deines ' +
+              'Vorgehens, keine Überlegungen, was du als Nächstes versuchen ' +
+              'könntest, keine Erwähnung von Abfragen oder Werkzeugen.',
+          },
+          verwendete_daten: {
+            type: 'array',
+            description:
+              'Genau die Werte, die in deiner Antwort vorkommen — nur diese werden ' +
+              'dem Nutzer berechnet. Was du unterwegs gesehen, aber nicht verwendet ' +
+              'hast, gehört NICHT hierher. Nennst du eine Holzart, steht hier ein ' +
+              'Eintrag für die Holzart; nennst du keine, steht auch keiner hier. ' +
+              'Eine Antwort ohne Datenwerte ("dazu liegen keine Angaben vor") hat ' +
+              'eine leere Liste.',
+            items: {
+              type: 'object',
+              properties: {
+                abfrage: {
+                  type: 'integer',
+                  description: 'Die Nummer der Abfrage (die 3 aus [Q3.holzart]).',
+                },
+                variable: {
+                  type: 'string',
+                  description: 'Der Variablenname (das "holzart" aus [Q3.holzart]).',
+                },
+                wert: {
+                  type: 'string',
+                  description:
+                    'Der Wert selbst, exakt wie im Abfrageergebnis ("Fichte"). ' +
+                    'Nicht umformuliert und nicht übersetzt.',
+                },
+              },
+              required: ['abfrage', 'variable', 'wert'],
+            },
+          },
+        },
+        required: ['antwort', 'verwendete_daten'],
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -242,22 +306,74 @@ export async function executeTool(
       const lon = typeof call.args.lon === 'number' ? call.args.lon : null;
 
       try {
-        const areas = await queryPlantingAreas(scope.sources);
+        // BREITER SUCHRAUM -- und warum das hier zulaessig ist.
+        //
+        // scope.sources enthaelt nur Dokumente, die einen Ident dieser Kette
+        // TRAGEN. Ein Stammzertifikat traegt aber den Pflanzungs-EPC (siehe
+        // pdf_stammzertifikat.rml.ttl: tc:epc = materialEpc am selben Subjekt
+        // wie das Polygon) -- und der steht nicht in relatedEpcs, weil die
+        // EPCIS-Kette beim Stamm endet. Das Zertifikat kam also nie in den
+        // Suchraum, und die Herkunft war strukturell unauffindbar.
+        //
+        // Der Produktpass loest das seit je so: PlantingAreaCard sucht ueber
+        // ALLE Katalogquellen, weil das Zertifikat in einem fremden Pod liegt
+        // (Baumschule statt Saegewerk). Genau dieser Weg wird hier uebernommen.
+        //
+        // Zwei Schranken halten fremde Zertifikate draussen:
+        //
+        //   1. ROLLE -- nicht freigegebene Pods werden vorher entfernt.
+        //   2. GEOMETRIE -- zurueckgegeben wird ausschliesslich, was eine
+        //      Einschlagsposition DIESES Bauteils enthaelt. Ein fremdes
+        //      Zertifikat wird geladen, enthaelt den Punkt aber nicht und
+        //      erreicht das Modell nie.
+        //
+        // Die Erweiterung bleibt bewusst IN DIESEM WERKZEUG. scope.sources
+        // anzufassen waere der falsche Ort: der Agent formuliert SPARQL frei
+        // und koennte mit "SELECT ?s ?p ?o" fremde Pods auslesen -- genau
+        // deshalb ist die Ident-Schranke dort scharf (epcScopeService.ts).
+        const areas = await plantingAreaSearchSpace(scope);
         if (areas.length === 0) {
           return {
             result: {
               ok: true,
               matches: [],
               note:
-                'In den Quellen dieses Bauteils liegt kein Stammzertifikat mit ' +
-                'gezeichneter Pflanzfläche. Die Waldherkunft ist damit geometrisch ' +
-                'nicht bestimmbar.',
+                'Es ist kein Stammzertifikat mit gezeichneter Pflanzfläche ' +
+                'erreichbar. Die Waldherkunft ist damit geometrisch nicht ' +
+                'bestimmbar.',
             },
             billable: false,
           };
         }
 
-        // Ohne Koordinate: die Positionen der Lieferkette selbst suchen.
+        // Weg 1: direkter Bezug ueber tc:epc. Ein Zertifikat, das auf einen
+        // Ident dieser Kette zeigt, ist die belastbarere Aussage als eine
+        // Punktlage -- deshalb zuerst, genau wie im Produktpass.
+        if (lat === null && lon === null) {
+          const direct = await plantingAreasByChainEpc(scope);
+          if (direct.length > 0) {
+            return {
+              result: {
+                ok: true,
+                matches: direct.map((area) => ({
+                  position: null,
+                  subject: null,
+                  certificate: area.certificateIri,
+                  certificate_number: area.certificateNumber,
+                  species: area.species,
+                  maturity_year: area.maturityYear,
+                  seed_epc: area.epc,
+                  bezug: 'direkt',
+                })),
+                planting_areas: areas.length,
+              },
+              billable: true,
+            };
+          }
+        }
+
+        // Weg 2: Punkt in Polygon. Ohne Koordinate die Positionen der
+        // Lieferkette selbst suchen.
         const points: Array<{ lat: number; lon: number; subject?: string }> =
           lat !== null && lon !== null
             ? [{ lat, lon }]
@@ -394,12 +510,86 @@ export async function executeTool(
 }
 
 /**
+ * Die Quellen, in denen nach Pflanzflaechen gesucht wird.
+ *
+ * BREITER als scope.sources -- und nur hier, nicht im Scope selbst.
+ *
+ * Das Stammzertifikat liegt typischerweise im Pod der Baumschule, nicht in
+ * dem des Saegewerks, und traegt den Pflanzungs-EPC statt eines Idents dieser
+ * Kette. Die Ident-Schranke des Scopes schliesst es damit aus -- weshalb die
+ * Waldherkunft strukturell unauffindbar war. Der Produktpass loest das seit
+ * je ueber alle Katalogquellen (PlantingAreaCard); genau das wird hier
+ * uebernommen.
+ *
+ * Der Rollenfilter bleibt scharf: nicht freigegebene Pods fallen weg. Die
+ * zweite Schranke ist die Geometrie -- der Aufrufer gibt nur zurueck, was
+ * eine Position DIESES Bauteils enthaelt.
+ */
+async function plantingAreaSources(scope: EpcScope): Promise<string[]> {
+  try {
+    const products = await getAllProductsAsync();
+    const all = new Set<string>([...scope.sources, ...products.flatMap((p) => p.sources)]);
+    const { allowed } = await filterSourcesByRole([...all], getCurrentRole());
+    return allowed;
+  } catch (err) {
+    // Katalog nicht erreichbar -> lieber die engen Quellen als gar keine.
+    console.warn('[agent] Katalogquellen fuer Pflanzflaechen nicht ermittelbar:', err);
+    return scope.sources;
+  }
+}
+
+/** Alle erreichbaren Pflanzflaechen -- der Suchraum, noch ungefiltert. */
+async function plantingAreaSearchSpace(scope: EpcScope): Promise<PlantingAreaResult[]> {
+  return queryPlantingAreas(await plantingAreaSources(scope));
+}
+
+/**
+ * Weg 1: Zertifikate, die per tc:epc direkt auf einen Ident dieser Kette
+ * zeigen. Belastbarer als eine Punktlage, deshalb zuerst gefragt -- dieselbe
+ * Reihenfolge wie im Produktpass.
+ */
+async function plantingAreasByChainEpc(scope: EpcScope): Promise<PlantingAreaResult[]> {
+  const sources = await plantingAreaSources(scope);
+  const seen = new Map<string, PlantingAreaResult>();
+
+  for (const ident of [scope.epc, ...scope.relatedEpcs]) {
+    const areas = await queryPlantingAreaByEpc(ident, sources).catch(() => []);
+    for (const area of areas) {
+      if (!seen.has(area.certificateIri)) seen.set(area.certificateIri, area);
+    }
+  }
+  return [...seen.values()];
+}
+
+/**
  * Die Einschlagspositionen der Lieferkette suchen.
  *
- * Bewusst nicht auf eine bestimmte Klasse festgelegt: die Position kann am
- * Stamm, am Abschnitt oder am Erntevorgang haengen, je nach Mapping. Gefragt
- * wird deshalb nach dem, was zaehlt -- einem Subjekt mit wgs84-Koordinaten,
- * das ueber einen Ident dieser Kette erreichbar ist.
+ * DER IDENT UND DIE KOORDINATE SITZEN AN VERSCHIEDENEN SUBJEKTEN.
+ *
+ * Das war der Grund, warum die geometrische Zuordnung nie zustande kam: die
+ * Abfrage verlangte beides am selben Subjekt. In den Erntedaten (stanford_hpr)
+ * haengt die Position aber an einem EIGENEN Knoten:
+ *
+ *   tc:Stem  --tc:hasMachinePosition-->  tc:MachinePosition (geo:lat/long)
+ *   (tc:sgtin)                           (kein Ident)
+ *
+ * Der Stamm traegt seinen Ident erst durch die Ident-Injektion des Konverters
+ * (ident_injector.py haengt tc:sgtin an tc:Stem/tc:Log); die Koordinate liegt
+ * unter .../stem/{StemKey}/coordinates/machine. Beide Seiten sind da, nur nie
+ * am selben Knoten -- die alte Abfrage lieferte deshalb konstant null Zeilen,
+ * und die Antwort lautete "keine Einschlagsposition vorhanden", obwohl die
+ * Daten im Pod lagen.
+ *
+ * Deshalb ZWEI Wege: die Koordinate direkt am Ident-Subjekt, oder einen
+ * Schritt weiter ueber eine beliebige Kante.
+ *
+ * Bewusst ueber eine BELIEBIGE Kante statt einer Liste bekannter Namen
+ * (hasMachinePosition, hasCraneTipPosition, hasLogPosition): eine Namensliste
+ * haette genau den Fehler wiederholt, den wir hier beheben -- ein neues
+ * Mapping mit anderer Bezeichnung waere wieder still durchgefallen. Die
+ * Einschraenkung leistet ohnehin der Knoten selbst: er muss beide Koordinaten
+ * tragen. Ein Schritt, nicht mehr -- eine offene Pfadsuche (``+``) waere in
+ * Comunica langsam und wuerde ueber die halbe Kette laufen.
  */
 async function harvestPositionsIn(
   scope: EpcScope,
@@ -410,10 +600,18 @@ PREFIX tc: <${NAMESPACES.tc}>
 PREFIX geo: <${NAMESPACES.geo}>
 SELECT DISTINCT ?subject ?lat ?long WHERE {
   VALUES ?ident { ${idents} }
-  { ?subject tc:epc ?ident } UNION { ?subject tc:sgtin ?ident } UNION
-  { ?subject tc:lgtin ?ident }
-  ?subject geo:lat ?lat ;
-           geo:long ?long .
+  { ?traeger tc:epc ?ident } UNION { ?traeger tc:sgtin ?ident } UNION
+  { ?traeger tc:lgtin ?ident }
+  {
+    # Koordinate am Ident-Subjekt selbst
+    BIND(?traeger AS ?subject)
+    ?subject geo:lat ?lat ; geo:long ?long .
+  } UNION {
+    # ... oder einen Schritt weiter (tc:hasMachinePosition,
+    # tc:hasCraneTipPosition, tc:hasLogPosition, ...)
+    ?traeger ?kante ?subject .
+    ?subject geo:lat ?lat ; geo:long ?long .
+  }
 }
 LIMIT 50`.trim();
 

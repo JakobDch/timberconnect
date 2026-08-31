@@ -38,6 +38,22 @@ interface ActorLocationMapProps {
 // Deutschland-Mitte; Zoom zeigt das ganze Land (wie in PlantingAreaMap).
 const GERMANY_CENTER: L.LatLngTuple = [51.16, 10.45];
 const GERMANY_ZOOM = 6;
+/** Zoomstufe fuer einen einzelnen gewaehlten Akteur -- Ort mit Umfeld. */
+const ACTOR_ZOOM = 12;
+
+/** Gesamtsicht: alle Marker im Bild. Geteilt von Marker-Aufbau und Abwahl. */
+function fitToMarkers(map: L.Map, markers: ActorMarker[]): void {
+  if (markers.length === 0) {
+    map.setView(GERMANY_CENTER, GERMANY_ZOOM);
+  } else if (markers.length === 1) {
+    map.setView([markers[0].position.lat, markers[0].position.lng], 11);
+  } else {
+    const bounds = L.latLngBounds(
+      markers.map((m) => [m.position.lat, m.position.lng] as L.LatLngTuple),
+    );
+    map.fitBounds(bounds.pad(0.3));
+  }
+}
 
 /** Tropfen-Marker in der Akteursfarbe. */
 function pinIcon(color: string, selected: boolean, approximate: boolean): L.DivIcon {
@@ -75,6 +91,12 @@ export function ActorLocationMap({
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+
+  // Die aktuelle Auswahl auch als Ref: der Marker-Effekt muss sie lesen, darf
+  // aber nicht auf sie reagieren -- sonst baute jede Auswahl alle Marker neu
+  // auf und die Tooltips flackerten.
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
 
   // Karte einmalig aufbauen.
   useEffect(() => {
@@ -130,15 +152,13 @@ export function ActorLocationMap({
       layersRef.current.set(entry.id, marker);
     }
 
-    if (markers.length === 0) {
-      map.setView(GERMANY_CENTER, GERMANY_ZOOM);
-    } else if (markers.length === 1) {
-      map.setView([markers[0].position.lat, markers[0].position.lng], 11);
-    } else {
-      const bounds = L.latLngBounds(
-        markers.map((m) => [m.position.lat, m.position.lng] as L.LatLngTuple),
-      );
-      map.fitBounds(bounds.pad(0.3));
+    // Nur ohne Auswahl auf die Gesamtsicht springen. Die Marker treffen
+    // nacheinander ein (jede Geocodierung braucht ihre Sekunde) -- ein
+    // Neuzeichnen waehrend einer aktiven Auswahl wuerde den Ausschnitt sonst
+    // vom gewaehlten Akteur wegziehen. Das Zentrieren uebernimmt in dem Fall
+    // der Auswahl-Effekt unten.
+    if (!selectedIdRef.current) {
+      fitToMarkers(map, markers);
     }
   }, [markers]);
 
@@ -157,7 +177,19 @@ export function ActorLocationMap({
 
     const active = markers.find((m) => m.id === selectedId);
     if (active) {
-      map.panTo([active.position.lat, active.position.lng], { animate: true });
+      // Heranzoomen, nicht nur schwenken: der Ausschnitt zeigt vorher alle
+      // Akteure, in dieser Weite liegen zwei Standorte oft nur Pixel
+      // auseinander. Ein reines panTo sieht dann aus, als reagiere die Karte
+      // nicht auf den Klick. Nur hineinzoomen, nie hinaus -- wer selbst naeher
+      // herangegangen ist, soll nicht zurueckgeworfen werden.
+      map.flyTo([active.position.lat, active.position.lng], Math.max(map.getZoom(), ACTOR_ZOOM), {
+        duration: 0.6,
+      });
+      layersRef.current.get(active.id)?.openTooltip();
+    } else {
+      // Abwahl: zurueck auf die Gesamtsicht, sonst bliebe die Karte im
+      // Detailausschnitt des zuletzt gewaehlten Akteurs stehen.
+      fitToMarkers(map, markers);
     }
   }, [selectedId, markers]);
 

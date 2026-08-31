@@ -27,7 +27,12 @@ import {
 } from '@inrupt/solid-client';
 import { DCTERMS } from '@inrupt/vocab-common-rdf';
 import { getAuthFetch } from './authFetch';
-import { getAllowedRoles, podBaseFromWebId } from './accessControlService';
+import {
+  getAllowedRoles,
+  getDocumentPolicies,
+  effectiveRolesForDocument,
+  podBaseFromWebId,
+} from './accessControlService';
 import { discoverMemberWebIds, getRoleForWebId } from './registryService';
 import { fetchCatalogDatasets, getCachedDatasets } from './catalogService';
 import { getRoleByIri } from '../config/roles';
@@ -219,6 +224,34 @@ async function catalogContainersByPod(): Promise<Map<string, Set<string>>> {
   return byPod;
 }
 
+/**
+ * Die dokumentweisen Freigaben eines fremden Pods, als Datei-URL -> wirksame
+ * Rollen.
+ *
+ * Nur Dateien MIT eigener Regel stehen darin. Eine fehlende Datei bedeutet
+ * "folgt der Pod-Freigabe", nicht "gesperrt" — der Aufrufer hat die
+ * Pod-Freigabe zu diesem Zeitpunkt bereits geprueft.
+ *
+ * Faellt der Abruf aus, bleibt die Map leer: der Vorfilter greift dann nicht,
+ * die Server-ACL weist den Zugriff aber weiterhin ab. Ein Ausfall macht die
+ * Anzeige also grosszuegiger, nie den Zugriff.
+ */
+async function documentRestrictions(pod: string): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  try {
+    const [podAllowlist, policies] = await Promise.all([
+      getAllowedRoles(pod),
+      getDocumentPolicies(pod),
+    ]);
+    for (const policy of policies) {
+      map.set(policy.fileUrl, effectiveRolesForDocument(podAllowlist, policy.roleIris));
+    }
+  } catch (e) {
+    console.warn('[fileBrowser] Dokument-Freigaben nicht lesbar:', pod, e);
+  }
+  return map;
+}
+
 /** Trace id = name of the product container (last path segment). */
 function traceIdFromContainer(containerUrl: string): string | null {
   const match = containerUrl.match(/\/data\/([^/]+)\/$/);
@@ -236,12 +269,24 @@ function traceIdFromContainer(containerUrl: string): string | null {
  */
 export async function listAccessibleFiles(
   accessiblePods: PodAccessInfo[],
+  /**
+   * Rolle des Abrufenden. Ohne sie entfaellt der dokumentweise Vorfilter —
+   * die Server-ACL bleibt in jedem Fall die Grenze.
+   */
+  roleIri: string | null = null,
 ): Promise<PodFileEntry[]> {
   const catalogContainers = await catalogContainersByPod();
   const entries: PodFileEntry[] = [];
 
   await Promise.all(
     accessiblePods.map(async (pod) => {
+      // Dokumentweise Freigaben dieses Pods: sie koennen die Pod-Freigabe
+      // einschraenken, also muss der Vorfilter sie kennen. Der eigene Pod ist
+      // ausgenommen — der Eigentuemer sieht immer alles Eigene.
+      const restricted = pod.isOwn
+        ? new Map<string, string[]>()
+        : await documentRestrictions(pod.pod);
+
       // 1. Product containers under data/
       const containers = new Set<string>(catalogContainers.get(pod.pod) ?? []);
       try {
@@ -256,7 +301,13 @@ export async function listAccessibleFiles(
           try {
             const { files } = await listContainer(containerUrl);
             const traceId = traceIdFromContainer(containerUrl);
-            for (const file of files) entries.push(toEntry(file, pod, traceId, false));
+            for (const file of files) {
+              const allowed = restricted.get(file.url);
+              // Kein Eintrag = keine eigene Regel = Pod-Freigabe gilt (der
+              // Aufrufer hat sie bereits geprueft).
+              if (allowed && !(roleIri !== null && allowed.includes(roleIri))) continue;
+              entries.push(toEntry(file, pod, traceId, false));
+            }
           } catch (e) {
             console.warn('[fileBrowser] Container not listable:', containerUrl, e);
           }

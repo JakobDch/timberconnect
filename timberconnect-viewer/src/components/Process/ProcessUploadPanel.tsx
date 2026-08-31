@@ -12,6 +12,7 @@ import {
   FileText,
   Factory,
   HelpCircle,
+  ImagePlus,
   Loader2,
   LogIn,
   Plus,
@@ -30,11 +31,23 @@ import {
 import {
   fetchPdfTemplates,
   uploadPdfDocument,
+  PLANTING_AREA_KEY,
+  SEED_QUANTITY_KEY,
   type PdfDocumentResult,
   type PdfTemplate,
 } from '../../services/pdfDocumentService';
 import { preparePhoto, uploadProductPhoto } from '../../services/productPhotoService';
-import { PdfTemplateSelect, PlantingAreaSheet } from '../PdfIntegration';
+import {
+  PdfReviewSheet,
+  PdfTemplateSelect,
+  PlantingAreaSheet,
+  SeedQuantitySheet,
+  type PdfReviewItem,
+} from '../PdfIntegration';
+import {
+  buildPdfReview,
+  identityLines,
+} from '../../services/pdfReviewService';
 import type { PolygonGeoJson } from '../Map/PlantingAreaMap';
 import { useAuth } from '../../auth/AuthContext';
 import { TOKEN_SYMBOL } from '../../services/walletService';
@@ -54,7 +67,17 @@ import {
   type ProcessRecord,
   type ProcessTypeId,
 } from '../../services/processService';
-import { extractPdfIdentity } from '../../services/pdfIdentityService';
+import {
+  DocumentAccessSheet,
+  type DocumentAccessDecision,
+  type DocumentAccessTarget,
+} from '../Access/DocumentAccessSheet';
+import {
+  getAllowedRoles,
+  podBaseFromWebId,
+  setDocumentPolicies,
+} from '../../services/accessControlService';
+import { extractPdfForm, extractPdfIdentity } from '../../services/pdfIdentityService';
 import { isEpc } from '../../services/sparqlQueries';
 import { ProcessTypePicker } from './ProcessTypePicker';
 import { LeadDocumentSlot } from './LeadDocumentSlot';
@@ -241,12 +264,28 @@ export function ProcessUploadPanel({
    * nicht tragen kann — er wird vor dem Registrieren auf der Karte erhoben.
    */
   const [plantingAreas, setPlantingAreas] = useState<Record<string, PolygonGeoJson>>({});
+  /** Groesse der jeweiligen Flaeche in Hektar — Bezugsgroesse der Saatgutmenge. */
+  const [areaHectares, setAreaHectares] = useState<Record<string, number>>({});
   /** Datei, fuer die die Karte gerade offen ist. */
   const [areaPrompt, setAreaPrompt] = useState<ProcessDraftFile | null>(null);
-  /** Dateien, fuer die der Nutzer die Flaeche bewusst uebersprungen hat. */
-  const [skippedAreas, setSkippedAreas] = useState<string[]>([]);
-  /** Nach dem Karten-Schritt: Registrierung fortsetzen. */
-  const [pendingSubmit, setPendingSubmit] = useState(false);
+  /**
+   * Ausgebrachte Saatgutmenge je Dateiname, in Gramm.
+   *
+   * Gehoert zur gezeichneten Flaeche, nicht zur zertifizierten Partie (die
+   * steht als Punkt 12 im Stammzertifikat selbst). Wandert als
+   * quantity/uom=GRM in die quantityList des ObjectEvents — dorthin, wo EPCIS
+   * die Menge zu einem klassenbezogenen Ident (LGTIN) erwartet.
+   */
+  const [seedGrams, setSeedGrams] = useState<Record<string, number>>({});
+  /** Datei, fuer die die Mengenabfrage gerade offen ist. */
+  const [quantityPrompt, setQuantityPrompt] = useState<ProcessDraftFile | null>(null);
+
+  /**
+   * Pruefansicht der ausgelesenen Daten. `null` in `reviewItems` heisst: die
+   * Dokumente werden gerade gelesen. Erst die Bestaetigung startet den Upload.
+   */
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewItems, setReviewItems] = useState<PdfReviewItem[] | null>(null);
   /**
    * Material-ID des in der IFC geplanten Bauteils (Vorgang "Ausführungsplanung").
    *
@@ -259,6 +298,19 @@ export function ProcessUploadPanel({
   const [ifcEpc, setIfcEpc] = useState('');
   /** Ident, den die gewaehlte IFC-Datei selbst mitbringt (null = keiner). */
   const [ifcFileEpc, setIfcFileEpc] = useState<string | null>(null);
+
+  /**
+   * Dokumentweise Freigabe — der Schritt NACH dem Upload.
+   *
+   * Bewusst danach und nicht davor: gefragt wird nach der Datei-URL im Pod,
+   * und die steht erst fest, wenn die Datei dort liegt. Bricht der Nutzer hier
+   * ab, bleibt es bei der allgemeinen Pod-Freigabe — die Dateien sind dann
+   * bereits sicher abgelegt, nur eben nicht feiner geregelt.
+   */
+  const [accessTargets, setAccessTargets] = useState<DocumentAccessTarget[]>([]);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [podAllowlist, setPodAllowlist] = useState<string[]>([]);
+  const [savingAccess, setSavingAccess] = useState(false);
 
   // Optionales Produktfoto -- zeigt spaeter das tatsaechliche Stueck statt des
   // Standardbilds der Produktart. Die Vorschau-URL wird beim Wechsel wieder
@@ -277,7 +329,11 @@ export function ProcessUploadPanel({
   }, [photo]);
 
   const attachInputRef = useRef<HTMLInputElement>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  // Zwei getrennte Inputs: ``capture`` ist ein Attribut des Elements, kein
+  // Aufruf-Parameter. Ein einzelner Input kann deshalb nicht wahlweise die
+  // Kamera oder den Dateidialog oeffnen.
+  const photoPickRef = useRef<HTMLInputElement>(null);
+  const photoCaptureRef = useRef<HTMLInputElement>(null);
 
   /**
    * Template-Vorschlaege des aktuellen Vorgangs: die Pflichtdatei-Vorlage
@@ -318,19 +374,39 @@ export function ProcessUploadPanel({
       delete next[fileName];
       return next;
     });
-    setPlantingAreas((prev) => {
+    // Flaeche und Menge haengen an der alten Vorlage: eine Flaeche, die zu
+    // einem anderen Dokument gezeichnet wurde, gehoert nicht zum neuen.
+    const drop = <T,>(prev: Record<string, T>) => {
       if (!(fileName in prev)) return prev;
       const next = { ...prev };
       delete next[fileName];
       return next;
-    });
-    setSkippedAreas((prev) => prev.filter((name) => name !== fileName));
+    };
+    setPlantingAreas(drop);
+    setAreaHectares(drop);
+    setSeedGrams(drop);
   }, []);
 
   /** Alles vergessen, was zu einer entfernten Datei gehoerte. */
   const forgetFile = useCallback((fileName: string) => {
     setTemplateForFile(fileName, null);
   }, [setTemplateForFile]);
+
+  /**
+   * Nur die Geo-Angaben einer Datei verwerfen, ohne ihre Vorlagenzuordnung
+   * anzutasten — der Weg zurueck von der Menge auf die Karte.
+   */
+  const forgetArea = useCallback((fileName: string) => {
+    const drop = <T,>(prev: Record<string, T>) => {
+      if (!(fileName in prev)) return prev;
+      const next = { ...prev };
+      delete next[fileName];
+      return next;
+    };
+    setPlantingAreas(drop);
+    setAreaHectares(drop);
+    setSeedGrams(drop);
+  }, []);
 
   // PDF-Vorlagen einmalig laden; die Zuordnung passiert bereits beim Sammeln
   // der Dateien, nicht erst nach dem Upload.
@@ -469,9 +545,12 @@ export function ProcessUploadPanel({
     setPdfResults([]);
     setPdfTemplateIds({});
     setPlantingAreas({});
+    setAreaHectares({});
+    setSeedGrams({});
     setAreaPrompt(null);
-    setSkippedAreas([]);
-    setPendingSubmit(false);
+    setQuantityPrompt(null);
+    setReviewOpen(false);
+    setReviewItems(null);
     setPhoto(null);
     setIfcEpc('');
     setIfcFileEpc(null);
@@ -489,54 +568,126 @@ export function ProcessUploadPanel({
   );
 
   /**
-   * Datei, deren Vorlage eine Pflanzflaeche verlangt, fuer die aber noch keine
-   * gezeichnet wurde. Eine Flaeche laesst sich nicht ins PDF eintragen — ohne
-   * diesen Schritt ginge der Geo-Bezug des Pflanzvorgangs verloren.
+   * Dateien, deren Vorlage eine Pflanzflaeche verlangt — in der Reihenfolge,
+   * in der sie abgefragt werden. Eine Flaeche laesst sich nicht ins PDF
+   * eintragen; ohne diesen Schritt ginge der Geo-Bezug des Pflanzvorgangs
+   * verloren.
    */
-  const fileNeedingArea = useMemo(
+  const filesNeedingArea = useMemo(
     () =>
-      draftFiles.find((item) => {
+      draftFiles.filter((item) => {
         if (!isPdf(item)) return false;
-        if (plantingAreas[item.file.name] || skippedAreas.includes(item.file.name)) {
-          return false;
-        }
         const template = templateForFile(item);
         return template?.sections.some((s) => s.plantingArea) ?? false;
-      }) ?? null,
-    [draftFiles, plantingAreas, skippedAreas, templateForFile],
+      }),
+    [draftFiles, templateForFile],
+  );
+
+  /** Naechste Datei, fuer die noch eine Flaeche fehlt. */
+  const nextAreaFile = useCallback(
+    (drawn: Record<string, PolygonGeoJson>) =>
+      filesNeedingArea.find((item) => !drawn[item.file.name]) ?? null,
+    [filesNeedingArea],
   );
 
   /**
-   * Absenden. Fehlt noch eine Pflanzflaeche, wird zuerst die Karte gezeigt;
-   * der eigentliche Upload laeuft erst danach.
+   * Die Pruefansicht oeffnen: alle PDFs lokal auslesen und aufbereiten.
+   *
+   * Bewusst OHNE Netzaufruf und ohne jeden Schreibzugriff — die Werte stecken
+   * im AcroForm der bereits gewaehlten Datei. Eine Vorschau, die dafuer erst
+   * hochladen muesste, waere keine.
+   *
+   * PDFs ohne zugeordnete Vorlage tauchen hier nicht auf: Von ihnen wird
+   * nichts uebernommen, es gibt also auch nichts zu bestaetigen. Sie landen
+   * als Original im Pod, was der Vorlagen-Hinweis beim Sammeln bereits sagt.
+   */
+  const openReview = async () => {
+    setReviewItems(null);
+    setReviewOpen(true);
+
+    const items: PdfReviewItem[] = [];
+    for (const item of draftFiles.filter(isPdf)) {
+      const template = templateForFile(item);
+      if (!template) continue;
+      try {
+        const extract = await extractPdfForm(await item.file.arrayBuffer());
+
+        // Die im Viewer erhobenen Werte gehoeren in dieselbe Ansicht: der
+        // Nutzer soll seine eigenen Angaben mitpruefen koennen, nicht nur die
+        // aus dem Dokument gelesenen.
+        const extras: Record<string, { label: string; display: string }> = {};
+        const area = plantingAreas[item.file.name];
+        if (area) {
+          const ha = areaHectares[item.file.name];
+          extras[PLANTING_AREA_KEY] = {
+            label: 'Pflanzfläche (auf der Karte gezeichnet)',
+            display:
+              ha != null
+                ? `${ha.toLocaleString('de-DE', { maximumFractionDigits: 2 })} ha`
+                : 'eingezeichnet',
+          };
+        }
+        const grams = seedGrams[item.file.name];
+        if (grams) {
+          extras[SEED_QUANTITY_KEY] = {
+            label: 'Ausgebrachte Saatgutmenge',
+            display: `${grams.toLocaleString('de-DE')} g`,
+          };
+        }
+
+        items.push({
+          fileName: item.file.name,
+          templateLabel: template.label,
+          review: buildPdfReview(template, extract.fields, extras),
+          identities: identityLines(extract.identity),
+        });
+      } catch (err) {
+        console.warn('[process-upload] Pruefansicht fehlgeschlagen:', err);
+      }
+    }
+
+    setReviewItems(items);
+  };
+
+  /**
+   * Absenden — der Einstieg in die Vorschaltkette.
+   *
+   * Vor dem ersten Byte im Pod stehen drei Schritte, und zwar ALLE vorher:
+   *   1. Pflanzflaeche(n) zeichnen   (nur Stammzertifikat)
+   *   2. ausgebrachte Saatgutmenge   (nur Stammzertifikat)
+   *   3. ausgelesene Daten pruefen und bestaetigen
+   *
+   * Frueher lief der Upload bereits an, waehrend Schritt 1 noch offen war:
+   * der Abbruch der Karte setzte `pendingSubmit` und damit den Upload in
+   * Gang, der dann am fehlenden Pflichtfeld scheiterte — die Datei lag da
+   * schon im Pod. Deshalb gibt es keinen Pfad mehr, der aus einem
+   * abgebrochenen Vorschaltschritt in `runSubmit` fuehrt.
    */
   const handleSubmit = () => {
     if (!validation.ok) {
       setError(validation.error);
       return;
     }
-    if (fileNeedingArea) {
-      setError(null);
-      setAreaPrompt(fileNeedingArea);
-      return;
-    }
-    void runSubmit();
-  };
+    setError(null);
 
-  // Nach dem Karten-Schritt weitermachen: entweder die naechste Datei, die
-  // eine Flaeche braucht, oder der eigentliche Upload.
-  useEffect(() => {
-    if (!pendingSubmit) return;
-    setPendingSubmit(false);
-    if (fileNeedingArea) {
-      setAreaPrompt(fileNeedingArea);
+    const pending = nextAreaFile(plantingAreas);
+    if (pending) {
+      setAreaPrompt(pending);
       return;
     }
-    void runSubmit();
-    // runSubmit haengt an vielem, was sich waehrend des Uploads nicht aendert;
-    // ausgeloest wird der Effekt allein durch pendingSubmit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSubmit]);
+
+    // Die Pruefansicht zeigt AcroForm-Werte aus PDFs. Ein Vorgang ohne solches
+    // PDF -- der Faellvorgang laedt ein Harvesterprotokoll (.hpr), die
+    // Herstellung eine ERP-Tabelle (.xlsx) -- hat dort nichts zu zeigen und
+    // meldete "Keine Werte gefunden". Das las sich wie ein Fehlschlag beim
+    // Auslesen, obwohl diese Formate ueber einen ganz anderen Weg im Backend
+    // ausgewertet werden. Gibt es nichts zu bestaetigen, entfaellt der Schritt.
+    if (!draftFiles.some((item) => isPdf(item) && templateForFile(item))) {
+      void runSubmit();
+      return;
+    }
+    void openReview();
+  };
 
   const runSubmit = async () => {
     setIsUploading(true);
@@ -582,6 +733,12 @@ export function ProcessUploadPanel({
       const uploadErrors: string[] = [];
       const newPdfResults: PdfDocumentResult[] = [];
       const registered: Omit<ProcessFileRef, 'addedAt'>[] = [];
+      /**
+       * Dokumente dieses Durchlaufs fuer die anschliessende Freigabefrage.
+       * Nur was tatsaechlich im Pod gelandet ist — eine gescheiterte Datei
+       * braucht keine Regel.
+       */
+      const accessDocs: DocumentAccessTarget[] = [];
 
       if (pdfItems.length > 0) {
         setProgress(
@@ -598,6 +755,7 @@ export function ProcessUploadPanel({
               webId,
               userName,
               plantingAreas[item.file.name],
+              seedGrams[item.file.name] ?? null,
             );
             newPdfResults.push(pdfResult);
             if (pdfResult.warning) uploadErrors.push(pdfResult.warning);
@@ -628,6 +786,20 @@ export function ProcessUploadPanel({
             if (embeddedEpcs.length > 0) {
               attachProcessIdents(record.id, { materialEpcs: embeddedEpcs });
             }
+
+            // Freigabe wird auf die materialisierten Daten bezogen, sofern es
+            // sie gibt: die TTL traegt die auswertbaren Inhalte, das Original
+            // liegt daneben im selben Container. Ohne TTL bleibt das PDF.
+            const template = templateForFile(item);
+            accessDocs.push({
+              fileUrl: pdfResult.published?.ttlUrl ?? pdfResult.outcome.pdfUrl,
+              label: template?.label ?? item.file.name,
+              hint:
+                item === leadDoc
+                  ? `Pflichtdokument · ${item.file.name}`
+                  : item.file.name,
+              epcs: embeddedEpcs,
+            });
           } catch (err) {
             uploadErrors.push(
               `${item.file.name}: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`,
@@ -650,6 +822,10 @@ export function ProcessUploadPanel({
           // Datei den Ident selbst, ist das Feld leer -- der Konverter liest
           // ihn dann direkt aus der IFC.
           isEpc(ifcEpc) ? ifcEpc.trim() : null,
+          // In den Container des Vorgangs ablegen. Sonst baut der Upload einen
+          // eigenen Ordner aus der trace_id — bei hpr/eldat ist das der rohe
+          // EPC, und der Doppelpunkt darin zerlegt den Pfad (401).
+          record.containerUrl,
         );
         setResult(uploadResult);
 
@@ -676,6 +852,19 @@ export function ProcessUploadPanel({
             ];
             if (embeddedEpcs.length > 0) {
               attachProcessIdents(record.id, { materialEpcs: embeddedEpcs });
+            }
+
+            const fileUrl = fileResult?.rdf_url || fileResult?.raw_url;
+            if (fileUrl) {
+              accessDocs.push({
+                fileUrl,
+                label: item.file.name,
+                hint:
+                  item === leadDoc
+                    ? `Pflichtdokument · ${getProcessType(record.type).leadDoc.label}`
+                    : (item.dataType ?? null),
+                epcs: embeddedEpcs,
+              });
             }
           }
         }
@@ -737,11 +926,61 @@ export function ProcessUploadPanel({
       if (messages.length > 0) setError(messages.join('; '));
 
       setStep('done');
+
+      // 4. Freigabe je Dokument erfragen. Das geschieht NACH dem Wechsel auf
+      //    'done': die Dateien sind gespeichert, das Ergebnis steht — die
+      //    Freigabe legt sich als eigener Schritt darueber. Bricht der Nutzer
+      //    ab, bleibt das Ergebnis stehen und es gilt die Pod-Freigabe.
+      if (accessDocs.length > 0) {
+        try {
+          const allowlist = await getAllowedRoles(podBaseFromWebId(webId));
+          setPodAllowlist(allowlist);
+          setAccessTargets(accessDocs);
+          setAccessOpen(true);
+        } catch (err) {
+          console.warn('[process-upload] Freigabe-Dialog nicht moeglich:', err);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
       setProgress(null);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  /**
+   * Die dokumentweisen Freigaben schreiben.
+   *
+   * Fehlschlaege werden gemeldet, aber der Vorgang bleibt gueltig: die Dateien
+   * liegen bereits im Pod und unterliegen weiterhin der allgemeinen
+   * Pod-Freigabe. Ein misslungener Feinschliff darf einen abgeschlossenen
+   * Upload nicht als gescheitert erscheinen lassen.
+   */
+  const saveDocumentAccess = async (decisions: DocumentAccessDecision[]) => {
+    if (!webId) return;
+    setSavingAccess(true);
+    try {
+      await setDocumentPolicies(
+        webId,
+        decisions.map((d) => ({
+          fileUrl: d.fileUrl,
+          roleIris: d.roleIris,
+          label: d.label,
+          epcs: d.epcs,
+        })),
+      );
+      setAccessOpen(false);
+      setAccessTargets([]);
+    } catch (err) {
+      setError(
+        `Die Freigaben konnten nicht gespeichert werden: ${
+          err instanceof Error ? err.message : 'Unbekannter Fehler'
+        }. Die Dateien liegen im Pod, es gilt Ihre allgemeine Freigabe.`,
+      );
+      setAccessOpen(false);
+    } finally {
+      setSavingAccess(false);
     }
   };
 
@@ -767,7 +1006,11 @@ export function ProcessUploadPanel({
               onSelect={(type) => {
                 setProcessType(type);
                 setTargetProcess(null);
-                setTitle(defaultProcessTitle(type));
+                // Bewusst NICHT vorbelegt: ein vorausgefuelltes Feld liest sich
+                // wie eine Eingabe des Nutzers und wird beim Durchklicken
+                // uebersehen. Bleibt es leer, setzt runSubmit den Standardtitel
+                // — ohne ihn hier schon zu zeigen.
+                setTitle('');
                 setStep('collect');
               }}
               disabled={isUploading}
@@ -830,22 +1073,8 @@ export function ProcessUploadPanel({
                 <p className="text-[11px] font-bold tracking-[0.16em] text-night-300 uppercase mb-2">
                   Vorgang
                 </p>
-                <h3 className="text-base font-bold text-white mb-3">{activeType!.label}</h3>
-                <label className="block text-xs font-semibold text-night-300 mb-1.5">
-                  Bezeichnung
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={isUploading}
-                  placeholder={defaultProcessTitle(activeType!.id)}
-                  className="w-full px-4 py-3 bg-night-900 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-acid-400/60 focus:ring-4 focus:ring-acid-400/10"
-                />
-                <p className="text-xs text-night-400 mt-2">
-                  Hilft beim Wiederfinden. Der Vorgang ist zusätzlich über seinen
-                  Registrierungszeitpunkt auffindbar.
-                </p>
+                <h3 className="text-base font-bold text-white">{activeType!.label}</h3>
+                <p className="text-xs text-night-400 mt-1">{activeType!.description}</p>
               </>
             )}
           </div>
@@ -865,21 +1094,7 @@ export function ProcessUploadPanel({
                 setIfcFileEpc(null);
               }}
               disabled={isUploading}
-            >
-              {leadDoc && isPdf(leadDoc) && (
-                <PdfTemplateSelect
-                  templates={templates}
-                  isLoading={isLoadingTemplates}
-                  loadError={templateError}
-                  value={pdfTemplateIds[leadDoc.file.name] ?? null}
-                  onChange={(templateId) =>
-                    setTemplateForFile(leadDoc.file.name, templateId)
-                  }
-                  suggestedTemplateIds={suggestedTemplateIds}
-                  disabled={isUploading}
-                />
-              )}
-            </LeadDocumentSlot>
+            />
           )}
 
           {/* Material-ID des geplanten Bauteils — nur bei der
@@ -984,8 +1199,12 @@ export function ProcessUploadPanel({
                   />
                 </div>
                 <p className="text-sm font-bold text-white mb-1">Dateien hierher ziehen</p>
+                {/* Nur die Endungen (Vorgabe Anni, 26.08.2026): welches
+                    Fachformat hinter .xml oder .json steckt, weiss der
+                    Nutzer aus seinem Vorgang -- "JSON (ELDAT, VLEX)" erklaerte
+                    ihm die Systemlandschaft, nicht seine Aufgabe. */}
                 <p className="text-xs text-night-300">
-                  XML (StanForD), JSON (ELDAT, VLEX), IFC (Planung), PDF – max. 50 MB
+                  .pdf · .ifc · .xlsx · .hpr · .xml · .json – max. 50 MB
                 </p>
               </div>
             </motion.div>
@@ -1085,36 +1304,35 @@ export function ProcessUploadPanel({
 
               Ohne Foto zeigt die App das Standardbild der Produktart. Mit
               Foto sieht der spaetere Betrachter das tatsaechliche Stueck.
-              ``capture="environment"`` oeffnet auf dem Handy direkt die
-              Ruecckamera; am Rechner bleibt es ein normaler Dateidialog. */}
+
+              Zwei getrennte Wege, weil sie zwei verschiedene Situationen sind:
+              das fertig abgelegte Foto vom Rechner, und die Aufnahme direkt am
+              Bauteil. ``capture="environment"`` oeffnet dabei die Ruecckamera;
+              wo es keine gibt (Desktop), faellt der Browser auf den
+              Dateidialog zurueck — der Weg bleibt also in jedem Fall
+              begehbar. */}
           <div className="px-4 py-3 bg-night-700/40 border border-white/10 rounded-2xl">
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                disabled={isUploading}
-                className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-white/10 bg-night-800 flex items-center justify-center hover:border-acid-400/40 transition-colors disabled:opacity-50"
-                aria-label="Produktfoto auswählen oder aufnehmen"
-              >
+              <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-white/10 bg-night-800 flex items-center justify-center">
                 {photoPreview ? (
                   <img src={photoPreview} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <Camera className="w-5 h-5 text-night-300" />
                 )}
-              </button>
+              </div>
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-white">
                   Produktfoto <span className="text-night-400 font-normal">(optional)</span>
                 </p>
-                <p className="text-xs text-night-300 mt-0.5">
+                <p className="text-xs text-night-300 mt-0.5 truncate">
                   {photo
                     ? photo.name
                     : 'Ohne eigenes Foto wird das Standardbild der Produktart gezeigt.'}
                 </p>
               </div>
 
-              {photo ? (
+              {photo && (
                 <button
                   type="button"
                   onClick={() => setPhoto(null)}
@@ -1124,20 +1342,44 @@ export function ProcessUploadPanel({
                 >
                   <X className="w-5 h-5" />
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="px-3 py-1.5 rounded-xl bg-night-800 border border-white/10 text-xs font-semibold text-night-200 hover:text-white hover:border-white/20 transition-colors flex-shrink-0 disabled:opacity-50"
-                >
-                  Auswählen
-                </button>
               )}
             </div>
 
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => photoPickRef.current?.click()}
+                disabled={isUploading}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-night-800 border border-white/10 text-xs font-semibold text-night-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
+              >
+                <ImagePlus className="w-4 h-4" />
+                Foto hochladen
+              </button>
+              <button
+                type="button"
+                onClick={() => photoCaptureRef.current?.click()}
+                disabled={isUploading}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-night-800 border border-white/10 text-xs font-semibold text-night-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
+              >
+                <Camera className="w-4 h-4" />
+                Foto aufnehmen
+              </button>
+            </div>
+
             <input
-              ref={photoInputRef}
+              ref={photoPickRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setPhoto(file);
+                e.target.value = '';
+              }}
+              className="hidden"
+              disabled={isUploading}
+            />
+            <input
+              ref={photoCaptureRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -1150,6 +1392,38 @@ export function ProcessUploadPanel({
               disabled={isUploading}
             />
           </div>
+
+          {/* Bezeichnung — bewusst hier unten und ohne Vorbelegung.
+
+              Der Vorgang ist ueber seinen Registrierungszeitpunkt und seine
+              Material-ID auffindbar; die Bezeichnung ist eine zusaetzliche
+              Gedaechtnisstuetze, kein Pflichtfeld. Bleibt sie leer, vergibt die
+              App beim Registrieren selbst einen Namen — welchen, muss den
+              Nutzer an dieser Stelle nicht beschaeftigen. */}
+          {!targetProcess && (
+            <div className="px-4 py-3 bg-night-700/40 border border-white/10 rounded-2xl">
+              <label
+                htmlFor="process-title"
+                className="block text-sm font-bold text-white"
+              >
+                Bezeichnung des Vorgangs{' '}
+                <span className="text-night-400 font-normal">(optional)</span>
+              </label>
+              <p className="text-xs text-night-300 mt-0.5 mb-2.5">
+                Nur als Gedächtnisstütze. Ohne Eintrag wird der Vorgang
+                automatisch benannt.
+              </p>
+              <input
+                id="process-title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={isUploading}
+                placeholder="z. B. Abteilung 7, Nordhang"
+                className="w-full px-4 py-3 bg-night-900 border border-white/10 rounded-xl text-white text-sm placeholder:text-night-400 focus:outline-none focus:border-acid-400/60 focus:ring-4 focus:ring-acid-400/10"
+              />
+            </div>
+          )}
 
           {/* Passen die Idente der Dateien zueinander? Warnung, keine Sperre —
               der Nutzer kennt seinen Vorgang besser als die Heuristik. */}
@@ -1358,26 +1632,85 @@ export function ProcessUploadPanel({
         }}
       />
 
-      {/* Der einzige verbliebene Eingabeschritt: die Flaeche, die sich nicht
-          ins PDF eintragen laesst. */}
+      {/* Vorschaltschritt 1: die Flaeche, die sich nicht ins PDF eintragen
+          laesst. Abbruch fuehrt zurueck ins Formular — nicht in den Upload. */}
       <PlantingAreaSheet
         isOpen={areaPrompt !== null}
         template={areaPrompt ? templateForFile(areaPrompt) : null}
         fileName={areaPrompt?.file.name ?? null}
-        onConfirm={(area) => {
+        onConfirm={(area, hectares) => {
           if (!areaPrompt) return;
-          setPlantingAreas((prev) => ({ ...prev, [areaPrompt.file.name]: area }));
+          const name = areaPrompt.file.name;
+          setPlantingAreas((prev) => ({ ...prev, [name]: area }));
+          setAreaHectares((prev) => ({ ...prev, [name]: hectares }));
           setAreaPrompt(null);
-          setPendingSubmit(true);
+          // Direkt weiter zur Menge, die auf DIESER Flaeche ausgebracht wurde.
+          setQuantityPrompt(areaPrompt);
+        }}
+        onCancel={() => setAreaPrompt(null)}
+      />
+
+      {/* Vorschaltschritt 2: die auf der Flaeche ausgebrachte Saatgutmenge. */}
+      <SeedQuantitySheet
+        isOpen={quantityPrompt !== null}
+        fileName={quantityPrompt?.file.name ?? null}
+        hectares={
+          quantityPrompt ? (areaHectares[quantityPrompt.file.name] ?? null) : null
+        }
+        onConfirm={(grams) => {
+          if (!quantityPrompt) return;
+          const name = quantityPrompt.file.name;
+          setSeedGrams((prev) => ({ ...prev, [name]: grams }));
+          setQuantityPrompt(null);
+
+          // Naechste Flaeche — oder, wenn alle erhoben sind, die Pruefansicht.
+          // `plantingAreas` enthaelt die eben bestaetigte Flaeche bereits; der
+          // State-Update von oben ist zu diesem Zeitpunkt schon sichtbar, weil
+          // er im vorigen Schritt (onConfirm der Karte) gesetzt wurde.
+          const pending = nextAreaFile(plantingAreas);
+          if (pending) setAreaPrompt(pending);
+          else void openReview();
+        }}
+        onBack={() => {
+          // Zurueck auf die Karte: die Flaeche laesst sich korrigieren, bevor
+          // die Menge dazu angegeben wird.
+          if (!quantityPrompt) return;
+          const file = quantityPrompt;
+          setQuantityPrompt(null);
+          forgetArea(file.file.name);
+          setAreaPrompt(file);
+        }}
+      />
+
+      {/* Nachgelagerter Schritt: Freigabe je Dokument. Erst hier steht die
+          Datei-URL fest, auf die sich die Regel bezieht. */}
+      <DocumentAccessSheet
+        isOpen={accessOpen}
+        documents={accessTargets}
+        podAllowlist={podAllowlist}
+        saving={savingAccess}
+        onConfirm={(decisions) => void saveDocumentAccess(decisions)}
+        onSkip={() => {
+          setAccessOpen(false);
+          setAccessTargets([]);
+        }}
+      />
+
+      {/* Vorschaltschritt 3: die ausgelesenen Daten pruefen. Erst die
+          Bestaetigung hier startet den Upload. */}
+      <PdfReviewSheet
+        isOpen={reviewOpen}
+        items={reviewItems}
+        onConfirm={() => {
+          setReviewOpen(false);
+          void runSubmit();
         }}
         onCancel={() => {
-          // Bewusst ohne Flaeche fortfahren: der Vorgang darf daran nicht
-          // scheitern. Der Verzicht wird vermerkt, damit nicht erneut gefragt
-          // wird — sonst haenge der Nutzer in einer Schleife fest.
-          if (!areaPrompt) return;
-          setSkippedAreas((prev) => [...prev, areaPrompt.file.name]);
-          setAreaPrompt(null);
-          setPendingSubmit(true);
+          // Abbruch heisst Abbruch: nichts ist hochgeladen, der Entwurf wird
+          // verworfen und der Vorgang beginnt von vorn.
+          setReviewOpen(false);
+          setReviewItems(null);
+          resetDraft();
         }}
       />
     </div>

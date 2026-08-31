@@ -5,6 +5,7 @@ import { LandingView } from './components/Landing';
 import { ScanView } from './components/Scanner';
 import { UploadSheet } from './components/Upload/UploadSheet';
 import { FileBrowserSheet } from './components/Files';
+import { PodResetSheet } from './components/Settings';
 import { UseCaseGrid } from './components/UseCases';
 import { ProductPassView } from './components/ProductPass';
 import { CO2BalanceView } from './components/CO2';
@@ -19,10 +20,11 @@ import {
   fetchProductData,
   type SourceStatus,
   type ProductDataResult,
+  type SparqlBinding,
 } from './services/sparqlService';
 import { mapToProduct, mapToSupplyChain } from './services/productMapper';
 import { addRecentScan } from './services/recentActivity';
-import { initializeCatalog } from './config/solidPods';
+import { initializeCatalog, refreshCatalog } from './config/solidPods';
 import {
   collectExtractedDatapoints,
   estimateExtractionCost,
@@ -41,14 +43,47 @@ import type { AppView, Product, SupplyChainStep } from './types';
 import logoNrwMunv from '/logo-nrw-munv.png';
 import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
 
-/** Fertig gemappte Produktdaten, die auf die Kosten-Bestätigung warten. */
-interface PendingDisplay {
-  traceId: string;
-  product: Product;
-  supplyChain: SupplyChainStep[];
-  /** Rohdaten für Ansichten, die mehr brauchen als Product/SupplyChain
-      (Herkunftsnachweis: Transportaufträge, Zertifikate, EPCIS-Events). */
-  raw: ProductDataResult;
+/**
+ * Welche Abfrageergebnisse ein Anwendungsfall tatsaechlich anzeigt.
+ *
+ * Grundlage der Bezahlung: berechnet wird nur, was DIESER Fall aus den
+ * Pod-Daten liest. Der Scan selbst ist kostenlos -- wer nur die ID erfasst,
+ * soll nicht fuer Daten zahlen, die er vielleicht nie oeffnet.
+ *
+ * Ueberschneidungen sind ausdruecklich gewollt und kosten NICHT doppelt: das
+ * Kaufregister (purchaseService) arbeitet auf Datenpunkt-Schluesseln, nicht auf
+ * Anwendungsfaellen. Wer die Herkunft gekauft hat, bekommt dieselben Wald- und
+ * Lieferkettenpunkte im Produktpass gratis -- bezahlt wird dort nur, was
+ * wirklich hinzukommt.
+ */
+const USE_CASE_DATA: Record<string, (d: ProductDataResult) => SparqlBinding[][]> = {
+  dbpp: (d) => [d.product, d.stem, d.forest, d.sawmill, d.bspWerk, d.supplyChain, d.dbpp],
+  co2: (d) => [d.product, d.lca, d.transportOrders, d.declarations],
+  'origin-proof': (d) => [
+    d.forest,
+    d.stem,
+    d.supplyChain,
+    d.businessPartners,
+    d.transportOrders,
+    d.certificates,
+  ],
+  liability: (d) => [d.liability, d.declarations, d.deconstruction, d.product],
+  deconstruction: (d) => [d.deconstruction, d.product],
+  documentation: (d) => [d.documentation, d.deconstruction, d.product],
+  // Der Assistent rechnet selbst ab (useProductChat: bezahlt wird, was er
+  // zitiert). Das Oeffnen der Ansicht ist deshalb frei.
+  chatbot: () => [],
+};
+
+/** Datenpunkt-Schluessel eines Anwendungsfalls fuer das gescannte Bauteil. */
+function useCaseDatapointKeys(
+  useCaseId: string,
+  data: ProductDataResult | null,
+): Set<string> {
+  if (!data) return new Set();
+  const select = USE_CASE_DATA[useCaseId];
+  if (!select) return new Set();
+  return collectExtractedDatapoints(select(data));
 }
 
 function App() {
@@ -68,6 +103,7 @@ function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [partnersOpen, setPartnersOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
@@ -75,10 +111,16 @@ function App() {
   // Zuerst gewaehlter Anwendungsfall, fuer den noch ein Produkt fehlt.
   // Nach dem Scan wird direkt hierhin gesprungen -- die Auswahl steht ja schon.
   const [pendingUseCase, setPendingUseCase] = useState<UseCaseDefinition | null>(null);
-  // Kostenpflichtige Anzeige: Daten sind geladen, warten aber auf Bestätigung
-  // + Token-Transfer, bevor sie sichtbar werden.
-  const [pendingDisplay, setPendingDisplay] = useState<PendingDisplay | null>(null);
+  // Produkt ist da, der gemerkte Fall soll geoeffnet werden -- der Effekt
+  // unten erledigt das, sobald der State steht (siehe consumePendingUseCase).
+  const [awaitingUseCase, setAwaitingUseCase] = useState<UseCaseDefinition | null>(null);
+  // Kostenpflichtiger Anwendungsfall: gewaehlt, aber noch nicht bezahlt. Die
+  // Ansicht oeffnet erst nach Bestaetigung + Token-Transfer.
+  const [pendingUseCaseCost, setPendingUseCaseCost] = useState<UseCaseDefinition | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  // Anwendungsfaelle, die in dieser Sitzung schon bezahlt (oder gratis
+  // freigeschaltet) wurden -- ein zweiter Aufruf oeffnet ohne Nachfrage.
+  const [unlockedUseCases, setUnlockedUseCases] = useState<Set<string>>(new Set());
   const [isPaying, setIsPaying] = useState(false);
   // Mehrere Tags aus einem RFID-Sweep, aus denen der Nutzer waehlt.
   const [scanSession, setScanSession] = useState<ParsedIdentifier[] | null>(null);
@@ -98,11 +140,15 @@ function App() {
   /**
    * Gemerkten Anwendungsfall einloesen, sobald ein Produkt vorliegt.
    * Gibt true zurueck, wenn dadurch navigiert wurde.
+   *
+   * Nur die ANKUENDIGUNG: geoeffnet wird der Fall im Effekt weiter unten,
+   * sobald ``product``/``productData`` wirklich im State stehen. Direkt hier
+   * zu oeffnen wuerde openUseCase mit den Daten des VORIGEN Scans rechnen
+   * lassen -- und damit den falschen Preis nennen.
    */
   const consumePendingUseCase = useCallback((): boolean => {
     if (!pendingUseCase?.view) return false;
-    setCurrentView(pendingUseCase.view);
-    setPendingUseCase(null);
+    setAwaitingUseCase(pendingUseCase);
     return true;
   }, [pendingUseCase]);
 
@@ -177,47 +223,12 @@ function App() {
         );
 
         if (mappedProduct) {
-          // Token-Bezahlschranke: Bezahlt wird nur, was TATSÄCHLICH extrahiert
-          // wurde (die eindeutigen Datenpunkte im Abfrageergebnis) und noch
-          // nicht früher gekauft war — nicht der Gesamtwert der Quelldateien.
-          // Eigene Daten sind kostenlos.
-          const availableUrls = data.sourceStatus
-            .filter((s) => s.available)
-            .map((s) => s.url);
-          const extractedKeys = collectExtractedDatapoints([
-            data.product,
-            data.stem,
-            data.forest,
-            data.sawmill,
-            data.bspWerk,
-            data.supplyChain,
-            data.businessPartners,
-          ]);
-          let estimate: CostEstimate | null = null;
-          try {
-            estimate = await estimateExtractionCost(extractedKeys, availableUrls, webId);
-          } catch (err) {
-            console.warn('[App] Kostenberechnung fehlgeschlagen:', err);
-          }
-
-          if (estimate && estimate.totalTokens > 0) {
-            console.log(
-              `[App] Kostenpflichtige Anzeige: ${estimate.totalTokens} Token ` +
-                `(${estimate.alreadyOwnedDatapoints} von ${estimate.totalDatapoints} ` +
-                `bereits gekauft) an`,
-              estimate.byRecipient.map((r) => r.recipientWebId),
-            );
-            setPendingDisplay({
-              traceId,
-              product: mappedProduct,
-              supplyChain: mappedSupplyChain,
-              raw: data,
-            });
-            setCostEstimate(estimate);
-            // Noch nichts anzeigen — erst nach Bestätigung + Transfer.
-            return null;
-          }
-
+          // Der SCAN selbst ist kostenlos. Bezahlt wird erst beim Oeffnen eines
+          // Anwendungsfalls (openUseCase) -- vorher weiss der Nutzer ja gar
+          // nicht, welche Daten er ueberhaupt sehen will. Die Rohdaten liegen ab
+          // hier zwar im Speicher, sichtbar wird davon aber nur, was die
+          // Kurzinfo zeigt: ID und Produktart. Alles andere haengt an der
+          // Bezahlschranke des jeweiligen Anwendungsfalls.
           setProduct(mappedProduct);
           setSupplyChain(mappedSupplyChain);
           setProductData(data);
@@ -256,16 +267,16 @@ function App() {
     [webId]
   );
 
-  // Kosten bestätigt: Token transferieren, dann die Daten anzeigen.
+  // Kosten bestätigt: Token transferieren, dann den Anwendungsfall oeffnen.
   const handleConfirmCost = async () => {
-    if (!pendingDisplay || !costEstimate) return;
+    if (!pendingUseCaseCost || !costEstimate) return;
     setIsPaying(true);
     try {
       const result = await pay(
         costEstimate.byRecipient.map((r) => ({
           recipientWebId: r.recipientWebId,
           amount: r.tokens,
-          reason: `Datenabruf ${pendingDisplay.traceId}`,
+          reason: `${pendingUseCaseCost.title} — ${productId}`,
         })),
       );
       // Erst nach erfolgreicher Zahlung ins Kaufregister — ein WalletError
@@ -274,15 +285,11 @@ function App() {
       if (result.warnings.length > 0) {
         setWarnings((prev) => [...prev, ...result.warnings]);
       }
-      setProduct(pendingDisplay.product);
-      setSupplyChain(pendingDisplay.supplyChain);
-      setProductData(pendingDisplay.raw);
-      addRecentScan({ id: pendingDisplay.traceId, name: pendingDisplay.product.name });
-      setPendingDisplay(null);
+      const target = pendingUseCaseCost.view;
+      setPendingUseCaseCost(null);
       setCostEstimate(null);
-      // Erst hier sind die Daten sichtbar -- also erst hier in den
-      // vorgewaehlten Anwendungsfall springen, sonst auf die Produktseite.
-      if (!consumePendingUseCase()) setCurrentView('usecases');
+      setPendingUseCase(null);
+      if (target) setCurrentView(target);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Token-Transfer fehlgeschlagen',
@@ -292,9 +299,10 @@ function App() {
     }
   };
 
-  // Abgebrochen: geladene Daten verwerfen, nichts abbuchen.
+  // Abgebrochen: der Anwendungsfall bleibt zu, nichts abgebucht. Das Bauteil
+  // bleibt erfasst -- nur die Ansicht wird nicht geoeffnet.
   const handleCancelCost = () => {
-    setPendingDisplay(null);
+    setPendingUseCaseCost(null);
     setCostEstimate(null);
     setPendingUseCase(null);
     setError('Anzeige abgebrochen — es wurden keine Token abgebucht.');
@@ -306,11 +314,12 @@ function App() {
   // erreichbar. War vorher schon ein Fall gewaehlt, wird dieser geoeffnet.
   const handleProductScanned = async (id: string) => {
     setProductId(id);
+    setUnlockedUseCases(new Set());
     const mapped = await loadProductData(id);
     if (mapped) {
       addRecentScan({ id, name: mapped.name });
-      // loadProductData liefert null, solange die Bezahlschranke offen ist --
-      // dann uebernimmt handleConfirmCost den Sprung.
+      // Der Scan ist kostenlos -- es geht immer direkt weiter. Die
+      // Bezahlschranke sitzt jetzt in openUseCase, nicht mehr hier.
       if (!consumePendingUseCase()) setCurrentView('usecases');
     }
   };
@@ -373,9 +382,10 @@ function App() {
     enabled:
       !uploadOpen &&
       !filesOpen &&
+      !resetOpen &&
       !walletOpen &&
       !loginOpen &&
-      !pendingDisplay &&
+      !pendingUseCaseCost &&
       !scanInputOpen,
     onSingle: handleParsedScan,
     onMultiple: handleMultipleScans,
@@ -415,16 +425,52 @@ function App() {
     (useCase: UseCaseDefinition) => {
       if (!isAvailable(useCase) || !useCase.view) return;
 
-      if (product) {
-        setPendingUseCase(null);
+      if (!product) {
+        setPendingUseCase(useCase);
+        setCurrentView('scanner');
+        return;
+      }
+
+      setPendingUseCase(null);
+
+      // In dieser Sitzung schon freigeschaltet -> direkt oeffnen.
+      if (unlockedUseCases.has(useCase.id)) {
         setCurrentView(useCase.view);
         return;
       }
 
-      setPendingUseCase(useCase);
-      setCurrentView('scanner');
+      // Bezahlschranke pro Anwendungsfall: berechnet wird nur, was DIESER Fall
+      // tatsaechlich aus den Pod-Daten liest -- und davon nur, was der Nutzer
+      // nicht ohnehin schon besitzt.
+      const target = useCase.view;
+      void (async () => {
+        let estimate: CostEstimate | null = null;
+        try {
+          estimate = await estimateExtractionCost(
+            useCaseDatapointKeys(useCase.id, productData),
+            sourceStatus.filter((s) => s.available).map((s) => s.url),
+            webId,
+          );
+        } catch (err) {
+          // Eine kaputte Kostenberechnung darf den Anwendungsfall nicht
+          // verschlucken -- dann wird er kostenlos gezeigt.
+          console.warn('[App] Kostenberechnung fehlgeschlagen:', err);
+        }
+
+        if (estimate && estimate.totalTokens > 0) {
+          setPendingUseCaseCost(useCase);
+          setCostEstimate(estimate);
+          return;
+        }
+
+        // Gratis -- trotzdem als Erwerb verbuchen, sonst gelten dieselben
+        // Datenpunkte spaeter wieder als neu.
+        if (estimate) await commitPurchase(webId, estimate);
+        setUnlockedUseCases((prev) => new Set(prev).add(useCase.id));
+        setCurrentView(target);
+      })();
     },
-    [product],
+    [product, productData, sourceStatus, webId, unlockedUseCases],
   );
 
   // Ziel kommt aus der Registry -- keine if-Kette, die beim naechsten
@@ -433,6 +479,16 @@ function App() {
     const useCase = findUseCase(useCaseId);
     if (useCase) openUseCase(useCase);
   };
+
+  // Vorgemerkter Anwendungsfall (erst Fall gewaehlt, dann gescannt): jetzt
+  // sind Produkt und Rohdaten im State, also kann openUseCase korrekt
+  // rechnen -- inklusive Bezahlschranke.
+  useEffect(() => {
+    if (!awaitingUseCase || !product || !productData) return;
+    setAwaitingUseCase(null);
+    setPendingUseCase(null);
+    openUseCase(awaitingUseCase);
+  }, [awaitingUseCase, product, productData, openUseCase]);
 
   /** Kontext-Chip oben rechts im Header (PDF-Vorgabe). */
   const contextChipFor = (view: AppView): string | undefined => {
@@ -451,9 +507,13 @@ function App() {
     setSupplyChain([]);
     setProductData(null);
     setError(null);
-    setPendingDisplay(null);
+    setPendingUseCaseCost(null);
     setCostEstimate(null);
     setPendingUseCase(null);
+    // Freischaltungen gelten je Bauteil: ein anderes Produkt bringt andere
+    // Datenpunkte. Das Kaufregister im Pod sorgt dafuer, dass wirklich
+    // gekaufte Punkte trotzdem gratis bleiben.
+    setUnlockedUseCases(new Set());
   };
 
   const handleBackToScanner = () => {
@@ -484,6 +544,8 @@ function App() {
         onScanClick={() => setCurrentView('scanner')}
         onPartnersClick={() => setPartnersOpen(true)}
         onFilesClick={() => setFilesOpen(true)}
+        onResetClick={() => setResetOpen(true)}
+        isLoggedIn={isLoggedIn}
         onUseCaseClick={handleSelectUseCase}
       />
 
@@ -632,13 +694,27 @@ function App() {
         onClose={() => setFilesOpen(false)}
       />
 
+      {/* Uploads zurücksetzen: löscht ausschließlich die eigenen Vorgänge unter
+          data/ samt Katalog-Einträgen. Danach den Katalog neu laden, sonst
+          zeigt die App die gerade gelöschten Produkte weiter an. */}
+      <PodResetSheet
+        isOpen={resetOpen}
+        onClose={() => setResetOpen(false)}
+        onResetComplete={() => {
+          refreshCatalog().catch(() => {
+            // Der Reset selbst ist durch; ein fehlgeschlagener Neuaufbau des
+            // Katalogs kostet hoechstens eine veraltete Liste bis zum Reload.
+          });
+        }}
+      />
+
       {/* Wallet: Guthaben + Token kaufen (Demo-Zahlung) */}
       <WalletSheet isOpen={walletOpen} onClose={() => setWalletOpen(false)} />
 
       {/* Kosten-Bestätigung: Preis + Empfänger anzeigen, erst nach Bestätigung
           werden die Token transferiert und die Daten sichtbar */}
       <CostConfirmSheet
-        isOpen={pendingDisplay !== null && costEstimate !== null}
+        isOpen={pendingUseCaseCost !== null && costEstimate !== null}
         estimate={costEstimate}
         balance={balance}
         isLoggedIn={isLoggedIn}
@@ -665,26 +741,31 @@ function App() {
       {/* Praxispartner (Startseite / Seitenmenü) */}
       <PartnerSheet isOpen={partnersOpen} onClose={() => setPartnersOpen(false)} />
 
-      {/* Footer: EU-Logo | NRW-Logo kompakt nebeneinander (PDF-Vorgabe) */}
-      <footer className="bg-night-900 border-t border-white/5 py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Footer: EU-Logo | NRW-Logo nebeneinander.
+          Die Foerderlogos muessen lesbar sein (Rueckmeldung Anni, 24.08.2026),
+          insbesondere das des Ministeriums. Zwei Dinge machen sie gross:
+          die Bilddateien sind auf ihren Inhalt zugeschnitten (das NRW-Logo
+          bestand zu ~64% aus Weissraum, der bei fester CSS-Hoehe die eigentliche
+          Marke schrumpfte), und die Hoehen sind angehoben. Das NRW-Logo bekommt
+          mehr, weil es die dreizeilige Ministeriumszeile traegt. */}
+      <footer className="bg-night-900 border-t border-white/5 py-5 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-5">
           <p className="text-sm text-night-300">
             TimberConnect – Transparenz in der Holzlieferkette
           </p>
-          <div className="flex items-center gap-3 sm:gap-4 max-w-full">
-            <div className="bg-white rounded-xl px-3 py-1.5">
+          <div className="flex items-center gap-4 sm:gap-5 max-w-full">
+            <div className="bg-white rounded-xl px-4 py-3">
               <img
                 src={logoEuKofinanziert}
                 alt="Kofinanziert von der Europäischen Union"
                 className="h-10 sm:h-12 w-auto object-contain"
               />
             </div>
-            <div className="w-px h-10 sm:h-12 bg-white/15" />
-            <div className="bg-white rounded-xl px-3 py-1.5">
+            <div className="bg-white rounded-xl px-4 py-3">
               <img
                 src={logoNrwMunv}
                 alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-                className="h-10 sm:h-12 w-auto object-contain"
+                className="h-14 sm:h-16 w-auto object-contain"
               />
             </div>
           </div>

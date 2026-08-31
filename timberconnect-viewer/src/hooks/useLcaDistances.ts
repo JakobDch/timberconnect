@@ -21,7 +21,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  DEMO_LCA_DISTANCES,
   LCA_CONSTANTS,
   type LcaInputs,
   type ResolvedDistances,
@@ -73,21 +72,11 @@ async function resolveKm(from: string[], to: string[]): Promise<number | null> {
 
 /**
  * @param inputs  Eingangsgroessen aus extractLcaInputs()
- * @param isDemo  true = feste Demo-Strecken statt Geocoding
  */
-export function useLcaDistances(
-  inputs: LcaInputs,
-  isDemo = false,
-): ResolvedDistances {
-  const [distances, setDistances] = useState<ResolvedDistances>(() =>
-    isDemo ? DEMO_LCA_DISTANCES : PENDING,
-  );
+export function useLcaDistances(inputs: LcaInputs): ResolvedDistances {
+  const [distances, setDistances] = useState<ResolvedDistances>(PENDING);
 
   useEffect(() => {
-    if (isDemo) {
-      setDistances(DEMO_LCA_DISTANCES);
-      return;
-    }
     let cancelled = false;
 
     (async () => {
@@ -148,7 +137,7 @@ export function useLcaDistances(
     return () => {
       cancelled = true;
     };
-  }, [isDemo, inputs]);
+  }, [inputs]);
 
   return distances;
 }

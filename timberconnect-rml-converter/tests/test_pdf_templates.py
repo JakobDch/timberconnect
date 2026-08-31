@@ -28,14 +28,19 @@ from services.rml_converter import RMLConverter  # noqa: E402
 TC = "http://timberconnect.2050.de/ontology#"
 DOC_ID = "abc123def4567890"
 
-# Werte, die der Viewer erhebt (kein AcroForm-Feld): EPC-Bezug und die auf der
-# Karte gezeichnete Pflanzflaeche. Rechteck im Sauerland, Zentroid (8.15, 51.33).
+# Werte, die der Viewer erhebt (kein AcroForm-Feld): EPC-Bezug, die auf der
+# Karte gezeichnete Pflanzflaeche und die darauf ausgebrachte Saatgutmenge.
+# Rechteck im Sauerland, Zentroid (8.15, 51.33).
 STAMM_EXTRA = {
     "materialEpc": "urn:epc:class:lgtin:4012345.012345.LOT2026",
     "pflanzflaeche": {
         "type": "Polygon",
         "coordinates": [[[8.10, 51.30], [8.20, 51.30], [8.20, 51.36], [8.10, 51.36], [8.10, 51.30]]],
     },
+    # Gramm. NICHT die Menge der zertifizierten Partie (Punkt 12 des
+    # Zertifikats, "menge"/kg), sondern die davon auf DIESER Flaeche
+    # verstreute Teilmenge.
+    "ausgebrachteMenge": 250,
 }
 
 

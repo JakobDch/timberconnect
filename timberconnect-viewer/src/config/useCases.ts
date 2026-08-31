@@ -47,61 +47,56 @@ export interface UseCaseDefinition {
   id: string;
   /** Titel -- ueberall identisch, das war vorher der Hauptunterschied. */
   title: string;
-  /** Kurzbeschreibung fuer Kachel und Menue. */
+  /** Kurzbeschreibung fuer das Menue und die Kopfzeile der Ansicht. */
   description: string;
+  /**
+   * Fachliche Beschreibung fuer den Infoblock, der sich beim Anklicken der
+   * Kachel oeffnet (Texte Anni, 26.08.2026).
+   *
+   * Bewusst getrennt von ``description``: die Kachel selbst traegt keinen
+   * Untertitel mehr -- weitere Informationen erscheinen erst beim Anklicken.
+   * Das haelt das Raster ruhig und gibt dem Text den Platz, den ein Satz wie
+   * die EN-15804-Definition braucht.
+   */
+  longDescription: string;
   icon: LucideIcon;
   /**
    * Zielansicht. Gesetzt = der Fall ist nutzbar und wird ueberall als
    * verfuegbar gezeigt; fehlt sie, erscheint "Demnaechst".
    */
   view?: AppView;
-  /**
-   * True, wenn die Ansicht auch ohne Produkt etwas Sinnvolles zeigt.
-   *
-   * Steuert NICHT mehr die Auswaehlbarkeit -- jeder verfuegbare Fall laesst
-   * sich jederzeit waehlen. Fehlt das Produkt, wird der Fall gemerkt und der
-   * Scanner geoeffnet; danach geht es direkt in die Ansicht. Dieses Flag sagt
-   * nur, ob man die Ansicht auch ohne Produkt schon oeffnen kann (CO2 zeigt
-   * z.B. Demo-Werte, der Produktpass waere dagegen leer).
-   */
-  standalone?: boolean;
 }
 
+/**
+ * Reihenfolge nach Vorgabe Anni (26.08.2026): erst die fachlichen Nachweise
+ * entlang der Wertschoepfungskette, dann der Produktpass als Buendelung
+ * aller Daten, zuletzt der Assistent.
+ */
 export const USE_CASES: UseCaseDefinition[] = [
-  {
-    id: 'dbpp',
-    title: 'DBPP (Digitaler Bau Produktpass)',
-    description: 'Alle Produktdaten in der Struktur eines digitalen Produktpasses',
-    icon: FileText,
-    view: 'productpass',
-  },
-  {
-    id: 'co2',
-    title: 'CO₂ Bilanzierung',
-    description: 'CO₂-Bilanz über die Lebenszyklusmodule A1–A5',
-    icon: BarChart3,
-    view: 'co2',
-    standalone: true,
-  },
   {
     id: 'origin-proof',
     title: 'Herkunftsnachweis',
     description: 'Herkunft des Holzes auf der Karte',
+    longDescription:
+      'Nachweis der Rohstoffherkunft (u.a. Holzart, Herkunftsregion, Zertifizierung) des verarbeiteten Holz entlang der Wertschöpfungskette.',
     icon: MapPin,
     view: 'origin',
-    standalone: true,
   },
   {
-    id: 'liability',
-    title: 'Nachweis der Haftung',
-    description: 'Haftungsnachweis über die Lieferkette',
-    icon: Scale,
-    view: 'liability',
+    id: 'co2',
+    title: 'CO₂-Bilanz',
+    description: 'CO₂-Bilanz über die Lebenszyklusmodule A1–A5',
+    longDescription:
+      'Ausweisung der produktbezogenen Treibhausgasemissionen für die Herstellungsphase (A1–A3) sowie den Bauprozess (A4–A5) in Anlehnung an EN 15804+A2.',
+    icon: BarChart3,
+    view: 'co2',
   },
   {
     id: 'deconstruction',
     title: 'Rückbaubarkeit',
     description: 'Verbindungsarten und Wiederverwendbarkeit',
+    longDescription:
+      'Bewertung der technischen Trenn- und Wiederverwendbarkeit am Ende der Nutzungsphase, maßgeblich beeinflusst durch die verwendete Verbindungstechnik.',
     icon: Recycle,
     view: 'deconstruction',
   },
@@ -109,13 +104,40 @@ export const USE_CASES: UseCaseDefinition[] = [
     id: 'documentation',
     title: 'Dokumentation',
     description: 'Produktbegleitende Dokumentation bis zum Einbau',
+    longDescription:
+      'Nachvollziehbarkeit von Einbauort, Menge und produktspezifischen Eigenschaften der verbauten BSP-Platte innerhalb des konkreten Bauwerks.',
     icon: Wrench,
     view: 'documentation',
+  },
+  {
+    id: 'liability',
+    title: 'Nachweis der Haftung',
+    description: 'Haftungsnachweis über die Lieferkette',
+    longDescription:
+      'Zuordnung von Verantwortlichkeiten und Gewährleistungsansprüchen entlang der Wertschöpfungskette bei Qualitätsmängeln oder Abweichungen von deklarierten Produkteigenschaften.',
+    icon: Scale,
+    view: 'liability',
+  },
+  {
+    // Id bleibt 'dbpp': sie steckt in gespeicherten Rollen-Toggles und in der
+    // Navigation. DBPP und DPP bezeichnen dieselbe Sache -- geaendert hat sich
+    // nur der angezeigte Name (Vorgabe Anni, 26.08.2026).
+    id: 'dbpp',
+    title: 'DPP EU (Digitaler Produktpass)',
+    description: 'Alle Produktdaten in der Struktur eines digitalen Produktpasses',
+    longDescription:
+      'Digitaler Produktpass in Anlehnung an künftige EU-Vorgaben (ESPR), der produktspezifische Herkunfts-, Zusammensetzungs- und Nachhaltigkeitsdaten über den gesamten Lebenszyklus hinweg bereitstellt.',
+    icon: FileText,
+    view: 'productpass',
   },
   {
     id: 'chatbot',
     title: 'Sprich mit deinem Bauteil',
     description: 'Frage dein Bauteil direkt nach Herkunft, Daten und Nachweisen',
+    // Im Stil der uebrigen Texte formuliert; von Anni nicht mitgeliefert,
+    // weil ihre Liste nur die sechs fachlichen Nachweise umfasst.
+    longDescription:
+      'Abfrage der produktbezogenen Daten in natürlicher Sprache; der Assistent beantwortet Fragen zu Herkunft, Eigenschaften und Nachweisen ausschließlich aus den im Datenraum hinterlegten Angaben des Bauteils.',
     icon: MessageCircle,
     view: 'chat',
   },
@@ -172,11 +194,13 @@ export function useCaseAvailability(
     };
   }
 
-  // Ohne geladenes Bauteil zaehlt nur, ob die Ansicht allein etwas zeigt.
+  // Ohne Bauteil ist kein Anwendungsfall auswertbar -- ausnahmslos. Jeder
+  // Fall trifft eine Aussage UEBER EIN PRODUKT; ohne Produkt gaebe es nur
+  // einen Leerzustand oder, schlimmer, Demo-Werte, die wie echte Daten
+  // aussehen. Frueher waren CO2 und Herkunftsnachweis hiervon ausgenommen
+  // (Flag ``standalone``); das ist ersatzlos entfallen.
   if (!facts) {
-    return useCase.standalone
-      ? { available: true }
-      : { available: false, reason: 'Zuerst ein Bauteil erfassen.' };
+    return { available: false, reason: 'Zuerst ein Bauteil erfassen.' };
   }
 
   switch (useCase.id) {

@@ -193,6 +193,9 @@ export function useProductChat({ productId, productName }: UseProductChatOptions
           setCostEstimate(estimate);
         } else {
           reveal(answer);
+          // Gratis gezeigt ist trotzdem erworben -- sonst gelten dieselben
+          // Datenpunkte beim naechsten Mal wieder als neu und werden berechnet.
+          if (estimate) await commitPurchase(webId, estimate);
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;

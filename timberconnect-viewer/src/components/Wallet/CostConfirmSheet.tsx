@@ -63,7 +63,7 @@ export function CostConfirmSheet({
               <div className="w-10 h-1 rounded-full bg-white/15" />
             </div>
 
-            <div className="px-5 sm:px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto space-y-4">
+            <div className="px-5 sm:px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex-1 min-h-0 overflow-y-auto space-y-4">
               <h2 className="text-xl font-bold text-white">
                 Kostenpflichtiger Datenabruf
               </h2>

@@ -6,19 +6,54 @@ import {
   parseDistanceKm,
   parseGermanNumber,
   mapToLcaInfo,
-  DEMO_LCA_INPUTS,
-  DEMO_LCA_DISTANCES,
   type LcaInputs,
   type ResolvedDistances,
 } from './lcaService';
 import type { ProductDataResult, SparqlBinding } from './sparqlService';
 
 // ---------------------------------------------------------------------------
-// Testdaten: die Werte der Demo-BSP-Platte (V = 5,22 m³)
+// Testdaten: eine vollstaendig belegte BSP-Platte (V = 5,22 m³).
+//
+// Frueher kamen diese Werte aus DEMO_LCA_INPUTS/DEMO_LCA_DISTANCES im
+// Service. Die waren dort aber fuer den Demo-Modus der Ansicht gedacht --
+// die Bilanz ohne gescanntes Bauteil -- und sind mit ihm entfallen. Als
+// Testfixture gehoeren sie ohnehin hierher: der Test soll seine eigenen
+// Eingangswerte mitbringen und nicht davon abhaengen, was die Anwendung
+// zufaellig als Beispiel vorhaelt.
 // ---------------------------------------------------------------------------
 
-const INPUTS: LcaInputs = { ...DEMO_LCA_INPUTS };
-const DISTANCES: ResolvedDistances = { ...DEMO_LCA_DISTANCES };
+const INPUTS: LcaInputs = {
+  volumeBsp: { value: 5.22, availability: 'available' },
+  distancePolterSawmillKm: { value: 18, availability: 'available' },
+  roundwoodTransportTotalM3: { value: 13.2, availability: 'available' },
+  sawnTimberTransportTotalM3: {
+    value: 3.02,
+    availability: 'derived',
+    note: 'Transportvolumen des Schnittholz-Transportauftrags.',
+  },
+  bspTransportTotalM3: { value: 5.22, availability: 'available' },
+  sawmillAddress: 'Sägewerk Sauerland, Ruhrstraße 45, 59872 Meschede',
+  bspWerkAddress: 'Holzwerk Westfalen GmbH, Zum Sägewerk 8, 59929 Brilon',
+  pickupLocation: '59929 Brilon',
+  deliveryLocation: '59821 Arnsberg',
+  sawmillGeoCandidates: [],
+  bspWerkGeoCandidates: [],
+  pickupGeoCandidates: [],
+  deliveryGeoCandidates: [],
+};
+
+const DISTANCES: ResolvedDistances = {
+  sawmillToBspKm: {
+    value: 26,
+    availability: 'derived',
+    note: 'Luftlinie Meschede–Brilon × Umwegfaktor 1,3.',
+  },
+  bspToSiteKm: {
+    value: 33,
+    availability: 'derived',
+    note: 'Luftlinie Brilon–Arnsberg × Umwegfaktor 1,3.',
+  },
+};
 
 const lit = (value: string): { value: string; type: string } => ({
   value,
@@ -89,6 +124,26 @@ describe('buildAddressCandidates', () => {
 
   it('faellt ohne Strasse auf "PLZ Ort" zurueck', () => {
     expect(buildAddressCandidates(['59929 Brilon', null])).toEqual(['59929 Brilon']);
+  });
+
+  // Reale Werte aus demo-dateien_v3/3_Aufsaegevorgang/transportauftrag_
+  // schnittholz.pdf: der Ortsname fehlt, es steht nur die PLZ im Feld.
+  it('erkennt eine nackte PLZ als Ort (unvollstaendig ausgefuellte Vorlage)', () => {
+    const candidates = buildAddressCandidates([
+      'Egger Sägewerk Brilon GmbH',
+      'Im Kissen 19',
+      '59929',
+    ]);
+    // Ohne diese Behandlung blieb nur der Volljoin mit Firmenname uebrig --
+    // daran scheitert Nominatim, und A2 wurde nie berechenbar.
+    expect(candidates[0]).toBe('Im Kissen 19, 59929');
+    expect(candidates[1]).toBe('59929');
+    expect(candidates[2]).toContain('Egger Sägewerk');
+  });
+
+  it('zieht das vollstaendige "PLZ Ort" der nackten PLZ vor', () => {
+    const candidates = buildAddressCandidates(['Zum Sägewerk 8', '59929', '59929 Brilon']);
+    expect(candidates[0]).toBe('Zum Sägewerk 8, 59929 Brilon');
   });
 
   it('liefert eine leere Liste fuer leere Eingaben', () => {

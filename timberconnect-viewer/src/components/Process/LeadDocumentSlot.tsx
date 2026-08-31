@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useRef } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -31,11 +31,6 @@ interface LeadDocumentSlotProps {
   onSelect: (file: File) => void;
   onRemove: () => void;
   disabled?: boolean;
-  /**
-   * Zusatzfeld unterhalb der gewaehlten Datei — bei PDF-Pflichtdateien die
-   * Zuordnung, gegen welche Vorlage ausgelesen wird.
-   */
-  children?: ReactNode;
 }
 
 export function LeadDocumentSlot({
@@ -45,7 +40,6 @@ export function LeadDocumentSlot({
   onSelect,
   onRemove,
   disabled = false,
-  children,
 }: LeadDocumentSlotProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { leadDoc } = processType;
@@ -89,22 +83,22 @@ export function LeadDocumentSlot({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="text-sm font-bold text-white">{leadDoc.label}</h4>
-            <span className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30">
-              Pflicht
-            </span>
-            {isPending ? (
+            {isPending && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
                 <Clock className="w-2.5 h-2.5" />
                 Format folgt
               </span>
-            ) : isTemplate ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-acid-400/15 text-acid-300 border border-acid-400/30">
-                <FileCheck className="w-2.5 h-2.5" />
-                Vorlage vorhanden
-              </span>
-            ) : null}
+            )}
           </div>
-          <p className="text-xs text-night-300 mt-1">{leadDoc.note}</p>
+          {/* leadDoc.note bleibt bewusst unsichtbar (Vorgabe Anni,
+              26.08.2026): "Enthaelt die Verknuepfung zur Material-ID des
+              Vermehrungsguts" erklaert die Datenmechanik dahinter, nicht die
+              Aufgabe des Nutzers. Wer die Datei hochlaedt, muss wissen WELCHE
+              Datei -- das steht im Titel samt Endung. Das Feld bleibt am
+              Datenmodell, weil die Zuordnung es weiterhin auswertet. */}
+          <p className="text-xs text-night-300 mt-1">
+            Erwartetes Format: {leadDoc.fileExt}
+          </p>
         </div>
       </div>
 
@@ -174,15 +168,12 @@ export function LeadDocumentSlot({
               <X className="w-4 h-4 text-night-400" />
             </button>
           </div>
-          {children && (
-            <div className="mt-3 pt-3 border-t border-white/10">{children}</div>
-          )}
         </div>
       ) : (
         <button
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-amber-500/40 bg-night-800/40 hover:border-amber-400 hover:bg-night-800/70 text-sm font-semibold text-amber-300 transition-all disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-acid-400/40 bg-night-800/40 hover:border-acid-400 hover:bg-night-800/70 text-sm font-semibold text-acid-300 transition-all disabled:opacity-50"
         >
           <Upload className="w-4 h-4" />
           {leadDoc.label} auswählen

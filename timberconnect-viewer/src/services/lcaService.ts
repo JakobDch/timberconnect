@@ -115,6 +115,15 @@ export interface LcaInputs {
  *   - "PLZ Ort"  : beginnt mit 4-5 Ziffern
  *   - Strasse    : endet auf eine Hausnummer und ist kein "PLZ Ort"
  *   - alles andere (Firmenname) fliegt aus den vorderen Kandidaten raus
+ *
+ * Der Ortsteil darf dabei FEHLEN. Wird die Vorlage unvollstaendig ausgefuellt
+ * ("59929" statt "59929 Brilon" -- so im Transportauftrag der Demodaten), war
+ * frueher weder ein "PLZ Ort" noch eine Strasse erkennbar: die Ziffernfolge
+ * sah wie eine Hausnummer aus und beanspruchte die Strassen-Rolle. Uebrig
+ * blieb einzig der Volljoin MIT Firmenname -- also genau der Kandidat, an dem
+ * Nominatim scheitert, und A2 der CO2-Bilanz blieb dauerhaft unberechenbar.
+ * Eine nackte PLZ zaehlt deshalb ebenfalls als Ort; "Im Kissen 19, 59929"
+ * findet Nominatim genauso zuverlaessig wie mit ausgeschriebenem Ortsnamen.
  */
 export function buildAddressCandidates(values: Array<string | null | undefined>): string[] {
   const cleaned = values
@@ -122,11 +131,18 @@ export function buildAddressCandidates(values: Array<string | null | undefined>)
     .filter((v) => v.length > 0);
 
   const PLZ_CITY = /^\d{4,5}\s+\S/;
+  const PLZ_ONLY = /^\d{4,5}$/;
   const HOUSE_NUMBER_END = /\d+\s*[a-zA-Z]?\s*$/;
 
-  const plzCity = cleaned.find((v) => PLZ_CITY.test(v)) ?? null;
+  // Vollstaendiges "PLZ Ort" schlaegt die nackte PLZ -- der Ortsname macht die
+  // Suche eindeutiger, wenn er denn dasteht.
+  const isPlace = (v: string) => PLZ_CITY.test(v) || PLZ_ONLY.test(v);
+  const plzCity =
+    cleaned.find((v) => PLZ_CITY.test(v)) ?? cleaned.find((v) => PLZ_ONLY.test(v)) ?? null;
+  // isPlace() vor der Hausnummer pruefen: "59929" endet auf Ziffern und wuerde
+  // sonst als Strasse durchgehen.
   const street =
-    cleaned.find((v) => !PLZ_CITY.test(v) && HOUSE_NUMBER_END.test(v)) ?? null;
+    cleaned.find((v) => !isPlace(v) && HOUSE_NUMBER_END.test(v)) ?? null;
 
   const candidates: string[] = [];
   if (street && plzCity) candidates.push(`${street}, ${plzCity}`);
@@ -605,46 +621,6 @@ export function computeLca(inputs: LcaInputs, distances: ResolvedDistances): Lca
     chart,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Demo-Modus (standalone ohne Produkt; klar als Demo gekennzeichnet)
-// ---------------------------------------------------------------------------
-
-/** Eingangswerte der Demo-BSP-Platte (Werte der Demo-Vorgaenge im Pod). */
-export const DEMO_LCA_INPUTS: LcaInputs = {
-  volumeBsp: { value: 5.22, availability: 'available' },
-  distancePolterSawmillKm: { value: 18, availability: 'available' },
-  roundwoodTransportTotalM3: { value: 13.2, availability: 'available' },
-  sawnTimberTransportTotalM3: {
-    value: 3.02,
-    availability: 'derived',
-    note: 'Transportvolumen des Schnittholz-Transportauftrags (Demo).',
-  },
-  bspTransportTotalM3: { value: 5.22, availability: 'available' },
-  sawmillAddress: 'Sägewerk Sauerland, Ruhrstraße 45, 59872 Meschede',
-  bspWerkAddress: 'Holzwerk Westfalen GmbH, Zum Sägewerk 8, 59929 Brilon',
-  pickupLocation: '59929 Brilon',
-  deliveryLocation: '59821 Arnsberg',
-  // Demo rechnet mit festen Strecken -- Kandidaten werden nicht angefragt.
-  sawmillGeoCandidates: [],
-  bspWerkGeoCandidates: [],
-  pickupGeoCandidates: [],
-  deliveryGeoCandidates: [],
-};
-
-/** Demo-Strecken -- feste Schaetzwerte statt Geocoding. */
-export const DEMO_LCA_DISTANCES: ResolvedDistances = {
-  sawmillToBspKm: {
-    value: 26,
-    availability: 'derived',
-    note: 'Demo-Schätzung: Luftlinie Meschede–Brilon × Umwegfaktor 1,3.',
-  },
-  bspToSiteKm: {
-    value: 33,
-    availability: 'derived',
-    note: 'Demo-Schätzung: Luftlinie Brilon–Arnsberg × Umwegfaktor 1,3.',
-  },
-};
 
 // ---------------------------------------------------------------------------
 // Zusatzinformationen (Klassen der Informationsbedarfstiefe)

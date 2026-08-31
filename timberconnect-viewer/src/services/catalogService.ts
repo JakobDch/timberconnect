@@ -405,13 +405,28 @@ export async function fetchCatalogDatasets(): Promise<CatalogDataset[]> {
  * Group individual datasets into product configurations.
  * Async because TC-ID extraction may need to load data files.
  */
-async function groupDatasetsToProducts(datasets: CatalogDataset[]): Promise<ProductConfig[]> {
+export async function groupDatasetsToProducts(
+  datasets: CatalogDataset[],
+): Promise<ProductConfig[]> {
+  // Je Station eine LISTE, kein Einzelwert.
+  //
+  // Frueher stand hier ``forst?: string`` usw. -- ein Platz je Station. Zu
+  // einem Bauteil gehoeren aber mehrere Dokumente derselben Station: im
+  // BSP-Werk der ERP-Auszug, die Leistungserklaerung und das
+  // Klebstoffdatenblatt. Alle drei ordnet ``detectDataType`` "bspwerk" zu,
+  // und jedes ueberschrieb das vorige -- nur das zuletzt eingelesene
+  // ueberlebte, die anderen fielen aus der Quellenliste, ohne dass es
+  // irgendwo auffiel.
+  //
+  // Genau daran scheiterte die Produktart: Der ERP-Auszug traegt als
+  // einziges Dokument ``a tc:Panel``; blieb er weg, fand der Scan nur noch
+  // die Leistungserklaerung und konnte die Platte nicht mehr benennen.
   const productMap = new Map<
     string,
     {
-      forst?: string;
-      saegewerk?: string;
-      bspwerk?: string;
+      forst: string[];
+      saegewerk: string[];
+      bspwerk: string[];
       genericSources: string[];
       title?: string;
       description?: string;
@@ -442,22 +457,29 @@ async function groupDatasetsToProducts(datasets: CatalogDataset[]): Promise<Prod
     if (!traceId) continue;
 
     if (!productMap.has(traceId)) {
-      productMap.set(traceId, { genericSources: [] });
+      productMap.set(traceId, { forst: [], saegewerk: [], bspwerk: [], genericSources: [] });
     }
 
     const product = productMap.get(traceId)!;
     const dataType = detectDataType(dataset);
+    if (!dataset.access_url_dataset) continue;
 
-    // Categorize by data type
-    if (dataType === 'forst' && dataset.access_url_dataset) {
-      product.forst = dataset.access_url_dataset;
-    } else if (dataType === 'saegewerk' && dataset.access_url_dataset) {
-      product.saegewerk = dataset.access_url_dataset;
-    } else if (dataType === 'bspwerk' && dataset.access_url_dataset) {
-      product.bspwerk = dataset.access_url_dataset;
-      product.title = dataset.title;
-      product.description = dataset.description || undefined;
-    } else if (dataset.access_url_dataset) {
+    // Nach Station einsortieren -- die Station bestimmt nur die REIHENFOLGE
+    // der Quellen (Wald vor Saegewerk vor Werk), nicht mehr, ob ein Dokument
+    // ueberhaupt mitkommt.
+    if (dataType === 'forst') {
+      product.forst.push(dataset.access_url_dataset);
+    } else if (dataType === 'saegewerk') {
+      product.saegewerk.push(dataset.access_url_dataset);
+    } else if (dataType === 'bspwerk') {
+      product.bspwerk.push(dataset.access_url_dataset);
+      // Titel/Beschreibung vom ersten Werksdatensatz, nicht vom letzten:
+      // sonst benennt ein spaeter eingelesenes Beiblatt das ganze Produkt um.
+      if (!product.title) {
+        product.title = dataset.title;
+        product.description = dataset.description || undefined;
+      }
+    } else {
       product.genericSources.push(dataset.access_url_dataset);
       if (!product.title) {
         product.title = dataset.title;
@@ -468,7 +490,7 @@ async function groupDatasetsToProducts(datasets: CatalogDataset[]): Promise<Prod
 
   return Array.from(productMap.entries())
     .map(([traceId, data]) => {
-      const typedSources = [data.forst, data.saegewerk, data.bspwerk].filter(Boolean) as string[];
+      const typedSources = [...data.forst, ...data.saegewerk, ...data.bspwerk];
       const allSources = [...typedSources, ...data.genericSources];
       const uniqueSources = [...new Set(allSources)];
 
@@ -530,10 +552,33 @@ async function extractIdFromData(downloadUrl: string): Promise<string | null> {
       if (tc) {
         result = tc[0].toUpperCase();
       } else {
-        // 2) GS1 world: group by the EpcisDocument doc_hash.
-        //    .../resource/epcisDocument/<docHash>
-        const epcisDoc = ttl.match(/epcisDocument\/([A-Za-z0-9]+)/);
-        if (epcisDoc) result = epcisDoc[1];
+        // 2) GS1 world: group by the MATERIAL ID (EPC) of the described item.
+        //
+        //    Frueher wurde hier auf den doc_hash des EpcisDocument
+        //    zurueckgefallen. Der identifiziert aber das hochgeladene
+        //    DOKUMENT, nicht das Bauteil: jeder Upload erzeugt ein eigenes
+        //    EpcisDocument, also gruppierte er nichts, sondern machte jede
+        //    Datei zu einem eigenen "Produkt". Genau das stand dann unter
+        //    "Verfuegbare Produkte" -- eine Liste von Dokument-UUIDs mit
+        //    Dokumentbeschreibungen statt Bauteilen (Rueckmeldung Anni,
+        //    26.08.2026).
+        //
+        //    Die Instanz-EPCs (SGTIN/LGTIN) sind der Bezug, ueber den auch
+        //    Schadensmeldungen und Haftungsnachweise am Bauteil haengen.
+        //
+        //    Eine Datei kann MEHRERE EPCs tragen: die Herstellung nennt
+        //    neben dem entstandenen Bauteil auch die verbauten Lamellen
+        //    (IdentityInput). Gruppiert werden muss nach dem BESCHRIEBENEN
+        //    Stueck, nicht nach einem beliebigen der genannten -- sonst
+        //    haengt das Ergebnis an der Zeilenreihenfolge der Datei.
+        //    Deshalb zuerst der explizite Bauteilbezug tc:epc; erst wenn
+        //    er fehlt, der erste EPC ueberhaupt.
+        const tagged = ttl.match(
+          /tc:epc\s+<(urn:epc:id:[sl]gtin:[0-9.*]+)>/i,
+        );
+        const anyEpc = ttl.match(/urn:epc:id:[sl]gtin:[0-9.*]+/i);
+        const epc = tagged?.[1] ?? anyEpc?.[0];
+        if (epc) result = epc.toLowerCase();
       }
     }
   } catch (error) {

@@ -9,6 +9,33 @@ _seed__extract_seed_identity () {
 
 
 
+# Die auf der Pflanzflaeche ausgebrachte Saatgutmenge als quantityElement.
+#
+# enlist_lgtin_quants (Rahmenskript) liest ein Praefix-Protokoll: "C" setzt die
+# epcClass, "Q" die Menge, "U" die Einheit; ein vollstaendiges Tripel wird zu
+# einem quantityElement. Bislang lieferte der Treiber nur "C" -- der Ident des
+# Saatguts stand damit ohne Mengenangabe in der quantityList, obwohl genau
+# dafuer eine LGTIN da ist.
+#
+# Die Reihenfolge ist wesentlich: "Q"/"U" muessen NACH ihrem "C" kommen, sonst
+# meldet der Parser eine haengende Menge ohne EPC-Klasse und verwirft sie.
+#
+# Fehlt die Menge im Dokument, bleibt es beim blossen Ident: eine Menge zu
+# erfinden waere schlimmer als keine zu nennen.
+_seed__extract_seed_quantity () {
+  sed -n 's/^"fields"."ausgebrachteMenge":[ \t]*/Q/p' |
+    sed 's/^\(Q\)[ \t]*"\{0,1\}\([^"]*\)"\{0,1\}[ \t]*$/\1\2/'
+}
+
+
+
+_seed__extract_seed_uom () {
+  sed -n 's/^"fields"."ausgebrachteMengeEinheit":[ \t]*/U/p' |
+    sed 's/^\(U\)[ \t]*"\([^"]*\)"[ \t]*$/\1\2/'
+}
+
+
+
 _seed__extract_document_identity () {
   sed -n 's/^"fields"."zertifikatNr":[ \t]*/I/p' |
     sed 's/^I[ \t]*"\([^"]*\)"[ \t]*$/\1/'
@@ -43,8 +70,22 @@ handle__seed () {
   local EVENT_TYPE="${7}"
   local GCP="${8}"
   local ITEM_REF="${9}"
+
+  # Der normalisierte Strom wird dreimal gebraucht (Ident, Menge, Einheit) und
+  # laesst sich nicht zurueckspulen -- daher einmal in eine temporaere Datei.
+  local NORMALIZED="${INPUT_BUFFER}.seed_normalized"
   encode_for_json_normalization |
-    normalize_nested_json |
-    _seed__extract_seed_identity |
+    normalize_nested_json > "${NORMALIZED}"
+
+  # Reihenfolge C -> Q -> U: enlist_lgtin_quants baut daraus EIN
+  # quantityElement. Andersherum haette es Menge und Einheit ohne EPC-Klasse
+  # gesehen und beides verworfen.
+  {
+    cat "${NORMALIZED}" | _seed__extract_seed_identity
+    cat "${NORMALIZED}" | _seed__extract_seed_quantity
+    cat "${NORMALIZED}" | _seed__extract_seed_uom
+  } |
     decode_from_json_normalization >> "${QUANT_LIST}"
+
+  rm -f "${NORMALIZED}"
 }

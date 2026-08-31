@@ -32,6 +32,13 @@ interface ProductImageSectionProps {
   /** Rueckfallebene fuer Aufrufer, die nur den groben Typ kennen. */
   productType?: ProductType;
   productName: string;
+  /**
+   * ``compact`` fuellt den vom Aufrufer vorgegebenen Rahmen quadratisch und
+   * laesst das Produktart-Band weg -- fuer die Kurzinfo nach dem Scan, wo das
+   * Bild nur der Wiedererkennung dient und die Produktart bereits daneben
+   * steht. ``default`` bleibt die grosse 4:3-Kachel der Detailansichten.
+   */
+  variant?: 'default' | 'compact';
 }
 
 export function ProductImageSection({
@@ -39,7 +46,9 @@ export function ProductImageSection({
   productData,
   productType,
   productName,
+  variant = 'default',
 }: ProductImageSectionProps) {
+  const compact = variant === 'compact';
   // Ohne belegten RDF-Typ in den Stammdaten wird die Produktart bewusst NICHT
   // geraten. Dann steht hier ein neutrales Bild ohne Beschriftung, statt eine
   // falsche Produktart zu behaupten (frueher landete so jedes Rundholz als
@@ -76,7 +85,9 @@ export function ProductImageSection({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: 0.1, duration: 0.3 }}
-      className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-night-700/40 border border-white/10"
+      className={`relative rounded-2xl overflow-hidden bg-night-700/40 border border-white/10 ${
+        compact ? 'w-full h-full' : 'aspect-[4/3]'
+      }`}
     >
       <div className="absolute inset-0 flex items-center justify-center">
         <img
@@ -84,17 +95,20 @@ export function ProductImageSection({
           alt={image.alt || productName}
           onError={() => setUseFallback(true)}
           /* Fotos fuellen die Kachel, Illustrationen behalten ihre Proportion
-             und brauchen Luft -- sonst wirken sie beschnitten. */
+             und brauchen Luft -- sonst wirken sie beschnitten. In der kleinen
+             Kachel faellt die Luft knapper aus, sonst bleibt vom Motiv nichts. */
           className={
             useFallback
-              ? 'max-h-full max-w-full object-contain p-6 drop-shadow-sm'
+              ? `max-h-full max-w-full object-contain drop-shadow-sm ${compact ? 'p-3' : 'p-6'}`
               : 'w-full h-full object-cover'
           }
         />
       </div>
 
-      {/* Produktart-Badge — entfaellt, wenn die Stammdaten keinen Typ nennen */}
-      {image.label && (
+      {/* Produktart-Badge — entfaellt, wenn die Stammdaten keinen Typ nennen.
+          In der kompakten Kachel ebenfalls: dort steht die Produktart bereits
+          als eigener Chip daneben, zweimal waere es Redundanz auf engstem Raum. */}
+      {image.label && !compact && (
         <div className="absolute top-4 left-4">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-night-900/80 backdrop-blur-sm text-acid-300 text-xs font-semibold rounded-full border border-acid-400/30">
             {image.label}

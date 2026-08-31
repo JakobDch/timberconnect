@@ -185,19 +185,73 @@ export async function buildEpcScope(epc: string): Promise<EpcScope> {
   //    Die Pruefung ist ohnehin die genauere Aussage: sie belegt, dass eine
   //    Quelle den Ident FUEHRT, waehrend die bizTransaction-Ableitung nur
   //    Dateinamen raet. Also nicht ersatzweise, sondern zusaetzlich.
-  if (candidates.size > 0) {
-    // Rollenfilter VOR der Pruefung: eine Quelle, die die Rolle ohnehin nicht
-    // lesen darf, muss gar nicht erst abgefragt werden. Ein Erreichbarkeits-
-    // filter danach waere doppelt -- sourcesBearingIdent prueft ihn selbst,
-    // und ein Treffer beweist die Lesbarkeit ohnehin.
-    const { allowed: allowedCandidates } = await filterSourcesByRole(
-      [...candidates],
-      getCurrentRole(),
-    );
-    const matched = await sourcesBearingIdent(allowedCandidates, relatedEpcs);
-    if (matched.length > 0) {
-      available = [...new Set([...available, ...matched])];
+  // Schritt 6 und 6b bedingen einander und laufen deshalb ABWECHSELND, bis
+  // nichts Neues mehr dazukommt.
+  //
+  // Ein einzelner Durchlauf greift zu kurz, und zwar genau an der Stelle, an
+  // der die Waldherkunft haengt: Schritt 6 sucht die Quellen zu den bis dahin
+  // bekannten Identen (Platte, Lamellen) -- die Forst-TTL fuehrt keinen davon
+  // und bleibt liegen. Erst Schritt 6b liest im Saegewerks-Pod den Stamm-Ident
+  // aus tc:derivedFrom. Ohne einen ZWEITEN Durchlauf von Schritt 6 wird die
+  // Datei, die diesen Stamm beschreibt, nie aufgenommen: der Ident ist bekannt,
+  // seine Quelle nicht. Der Agent sah dann zwar den Stamm-Ident, bekam aber auf
+  // jede Abfrage dazu null Zeilen -- und meldete "keine Herkunftsdaten",
+  // obwohl Forstamt und Revier im Pod stehen.
+  //
+  // Die Schleife ist beschraenkt: MAX_CHAIN_DEPTH Runden reichen fuer die reale
+  // Kette (Platte -> Lamelle -> Stamm), und sie bricht ab, sobald eine Runde
+  // weder Quelle noch Ident hinzufuegt.
+  let remaining = new Set(candidates);
+  for (let round = 0; round < MAX_CHAIN_DEPTH; round++) {
+    let grew = false;
+
+    // 6. Kandidaten IMMER pruefen und dazunehmen.
+    //
+    //    Rollenfilter VOR der Pruefung: eine Quelle, die die Rolle ohnehin
+    //    nicht lesen darf, muss gar nicht erst abgefragt werden. Ein
+    //    Erreichbarkeitsfilter danach waere doppelt -- sourcesBearingIdent
+    //    prueft ihn selbst, und ein Treffer beweist die Lesbarkeit ohnehin.
+    if (remaining.size > 0) {
+      const { allowed: allowedCandidates } = await filterSourcesByRole(
+        [...remaining],
+        getCurrentRole(),
+      );
+      const matched = await sourcesBearingIdent(allowedCandidates, relatedEpcs);
+      if (matched.length > 0) {
+        available = [...new Set([...available, ...matched])];
+        // Getroffene Quellen nicht erneut pruefen -- jede Runde fragt nur die
+        // noch offenen ab, sonst waechst der Aufwand quadratisch.
+        for (const url of matched) remaining.delete(url);
+        grew = true;
+      }
     }
+
+    // 6b. Den Materialfluss der freigegebenen Quellen nachziehen.
+    //
+    // relatedEpcs stammt zunaechst AUSSCHLIESSLICH aus dem EPCIS-Lauf. Steht
+    // ein Vorprodukt nur im Pod -- als tc:derivedFrom an der Lamelle --, kennt
+    // der Scope es nicht. Der Agent findet es dann per SPARQL, darf es aber
+    // nicht verwenden: "Der EPC ... gehoert nicht zu diesem Bauteil".
+    //
+    // Das ist KEINE Lockerung des Scopes: gelesen wird nur in ``available`` --
+    // Quellen, die den Rollenfilter bereits passiert haben und einen Ident
+    // dieser Kette tragen. Ein Ident, der dort als Vormaterial ausgewiesen ist,
+    // gehoert zu diesem Bauteil; ihn auszusperren verbirgt eigene Daten, nicht
+    // fremde.
+    if (available.length > 0) {
+      const derived = await derivedIdentsIn(available, relatedEpcs);
+      if (derived.size > 0) {
+        const before = relatedEpcs.size;
+        relatedEpcs = new Set([...relatedEpcs, ...derived]);
+        console.log(
+          `[scope] Materialfluss (Runde ${round + 1}): ${relatedEpcs.size - before} ` +
+            `weitere Ident(e) aus tc:derivedFrom (jetzt ${relatedEpcs.size}).`,
+        );
+        grew = true;
+      }
+    }
+
+    if (!grew) break;
   }
 
   // 7. Leerer Scope -> degradierter Rueckfall auf den Katalog.
@@ -358,6 +412,72 @@ async function walkSupplyChain(startEpc: string): Promise<{
  * SELECT, siehe unten) und die Pruefung wirkungslos gemacht, ohne dass man es
  * der Oberflaeche ansah.
  */
+/**
+ * Die Vormaterial-Idente aus dem Materialfluss der freigegebenen Quellen.
+ *
+ * ``relatedEpcs`` kommt aus EPCIS. Fehlt dort ein Ereignis -- weil es nie
+ * erzeugt wurde oder die Rolle es nicht sehen darf --, kennt der Scope das
+ * Vorprodukt nicht, obwohl der Pod es als ``tc:derivedFrom`` ausweist. Der
+ * Agent sieht es dann in seinen eigenen Abfrageergebnissen, darf es aber
+ * nicht weiterverfolgen.
+ *
+ * Gelesen wird ausschliesslich in ``sources`` -- Dateien, die den Rollen- und
+ * Identfilter schon passiert haben. Was dort als Vormaterial eines bekannten
+ * Idents steht, gehoert zu diesem Bauteil.
+ *
+ * EINE Stufe, nicht transitiv: Platte -> Lamelle -> Stamm ist der reale Weg,
+ * und jede Stufe wird ohnehin einzeln aufgeloest, sobald ihre Quelle im Scope
+ * ist. Eine offene Pfadsuche waere in Comunica teuer und koennte ueber
+ * Aggregationen in fremde Chargen laufen.
+ */
+async function derivedIdentsIn(
+  sources: string[],
+  known: Set<string>,
+): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (sources.length === 0 || known.size === 0) return found;
+
+  const values = [...known].map((id) => `<${id}> "${id}"`).join(' ');
+  // Der Rueckfall auf ?vor selbst MUSS ueber OPTIONAL + COALESCE laufen, nicht
+  // ueber einen UNION-Zweig mit BIND.
+  //
+  // Nachgemessen: `{ ... } UNION { BIND(?vor AS ?vorEpc) }` liefert NULL Zeilen.
+  // Ein BIND in einer Gruppe sieht die Variablen ausserhalb dieser Gruppe
+  // nicht -- ?vor ist dort ungebunden, der Zweig traegt nichts bei. Und weil
+  // tc:derivedFrom in der Leistungserklaerung direkt auf den Stamm-IRI zeigt
+  // (der als Subjekt keinen eigenen tc:epc traegt), greifen auch die drei
+  // anderen Zweige nicht. Ergebnis: der Stamm-Ident wurde NIE gefunden, der
+  // Scope kannte ihn nicht, und jede Frage nach der Waldherkunft lief ins
+  // Leere -- obwohl Forstamt und Revier im Forst-Pod stehen.
+  const query = `
+PREFIX tc: <${NAMESPACES.tc}>
+SELECT DISTINCT ?vorEpc WHERE {
+  VALUES ?ident { ${values} }
+  { ?s tc:epc ?ident } UNION { ?s tc:sgtin ?ident } UNION { ?s tc:lgtin ?ident }
+  ?s tc:derivedFrom ?vor .
+  OPTIONAL { ?vor tc:epc ?e }
+  OPTIONAL { ?vor tc:sgtin ?sg }
+  OPTIONAL { ?vor tc:lgtin ?lg }
+  BIND(COALESCE(?e, ?sg, ?lg, ?vor) AS ?vorEpc)
+}
+LIMIT 200`.trim();
+
+  try {
+    const rows = await executeQuery(query, sources);
+    for (const row of rows) {
+      const value = row.vorEpc?.value;
+      // Nur GS1-Idente -- ein tc:derivedFrom kann auch auf eine
+      // Ressourcen-IRI zeigen, die als EPC nichts taugt.
+      if (value && /^urn:epc:/i.test(value) && !known.has(value)) found.add(value);
+    }
+  } catch (err) {
+    // Ein Fehlschlag darf den Scope nicht kippen -- dann bleibt es beim
+    // EPCIS-Stand, wie bisher.
+    console.debug('[agent] Materialfluss-Abfrage fehlgeschlagen:', err);
+  }
+  return found;
+}
+
 async function sourcesBearingIdent(
   candidates: string[],
   idents: Set<string>,

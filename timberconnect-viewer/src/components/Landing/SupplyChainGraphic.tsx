@@ -1,28 +1,46 @@
 import { TreePine, Factory, Package, Truck, Building2 } from 'lucide-react';
 
 /**
- * Lieferketten-Grafik der Startseite (neue UI-Vorgabe):
- * Forst -> Saegewerk -> Haendler -> Transport -> Baustelle
+ * Lieferketten-Grafik der Startseite:
+ * Forst -> Saegewerk -> Holzwerkstoffproduzent -> Transport -> Baustelle
  * als Zickzack ueber einem abgedunkelten Luftbild, verbunden
- * durch gestrichelte Linien. Forst + Haendler sind lime hervorgehoben.
+ * durch gestrichelte Linien. Forst + Produzent sind lime hervorgehoben.
+ *
+ * "Haendler" hiess die mittlere Station bis 24.08.2026 -- fachlich falsch,
+ * es ist der Holzwerkstoffproduzent (Rueckmeldung Anni). Das Wort ist rund
+ * dreimal so lang wie das alte und wuerde bei fester Position in die
+ * Nachbarn laufen; deshalb bekommt jede Station eine Breitenbegrenzung und
+ * darf umbrechen, statt den Text zu beschneiden.
+ *
+ * Das Luftbild liegt mit object-contain, nicht object-cover: es ist mit rund
+ * 2,3:1 hoeher als der flache Container und wuerde formatfuellend oben und
+ * unten angeschnitten. Die Grafik zeigt aber die Kette vom Wald bis zur
+ * Stadt -- angeschnitten verliert sie ihre Aussage. Lieber Leerraum an den
+ * Seiten als ein halber Bogen.
  */
 
 const STEPS = [
-  { label: 'Forst', icon: TreePine, highlight: true, x: 8, y: 62 },
-  { label: 'Sägewerk', icon: Factory, highlight: false, x: 29, y: 28 },
-  { label: 'Händler', icon: Package, highlight: true, x: 50, y: 62 },
-  { label: 'Transport', icon: Truck, highlight: false, x: 71, y: 28 },
-  { label: 'Baustelle', icon: Building2, highlight: false, x: 92, y: 62 },
+  { label: 'Forst', icon: TreePine, highlight: true, x: 12, y: 60 },
+  { label: 'Sägewerk', icon: Factory, highlight: false, x: 31, y: 27 },
+  {
+    label: 'Holzwerkstoff­produzent',
+    icon: Package,
+    highlight: true,
+    x: 50,
+    y: 60,
+  },
+  { label: 'Transport', icon: Truck, highlight: false, x: 69, y: 27 },
+  { label: 'Baustelle', icon: Building2, highlight: false, x: 88, y: 60 },
 ] as const;
 
 export function SupplyChainGraphic() {
   return (
-    <div className="relative w-full h-44 sm:h-52 lg:h-64 rounded-2xl overflow-hidden">
+    <div className="relative w-full h-52 sm:h-60 lg:h-72 rounded-2xl overflow-hidden">
       {/* Luftbild-Hintergrund, stark abgedunkelt */}
       <img
-        src="./images/VR-Demonstrator.png"
+        src={`${import.meta.env.BASE_URL}images/VR-Demonstrator.png`}
         alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-25"
+        className="absolute inset-0 w-full h-full object-contain opacity-25"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/40 to-night-900/70" />
 
@@ -60,9 +78,10 @@ export function SupplyChainGraphic() {
             <step.icon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <span
-            className={`text-[10px] sm:text-xs font-semibold ${
+            className={`text-[10px] sm:text-xs font-semibold text-center leading-tight w-[4.5rem] sm:w-20 hyphens-auto ${
               step.highlight ? 'text-acid-300' : 'text-night-300'
             }`}
+            lang="de"
           >
             {step.label}
           </span>

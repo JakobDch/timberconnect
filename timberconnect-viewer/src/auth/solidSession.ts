@@ -142,6 +142,23 @@ export function getLastIssuer(): string | null {
 }
 
 /**
+ * Adresse der Registrierungsseite eines Community Solid Servers.
+ *
+ * Der CSS legt seine HTML-Seiten unter festen Pfaden ab und nennt sie selbst in
+ * den "controls" unter /.account/ (html.password.register). Wir bilden den Pfad
+ * direkt, statt ihn abzufragen: ein Fetch waere ein zusaetzlicher Netzwerkweg
+ * fuer eine Adresse, die sich in der CSS-Version dieses Demonstrators nicht
+ * aendert -- und der Knopf soll ohne Wartezeit reagieren.
+ *
+ * Achtung beim Nachpruefen per curl: Ohne "Accept: text/html" antwortet der
+ * Server hier mit 404, weil es unter diesem Pfad keine JSON-Repraesentation
+ * gibt. Im Browser (der text/html anfragt) kommt die Seite mit 200.
+ */
+export function getRegistrationUrl(oidcIssuer: string): string {
+  return new URL("/.account/login/password/register/", oidcIssuer).href;
+}
+
+/**
  * Check if user was previously logged in.
  */
 export function wasLoggedIn(): boolean {

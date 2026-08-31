@@ -358,6 +358,23 @@ PLANTING_AREA_WKT_KEY = "pflanzflaecheWkt"
 PLANTING_AREA_LAT_KEY = "pflanzflaecheLat"
 PLANTING_AREA_LON_KEY = "pflanzflaecheLon"
 
+# Auf der gezeichneten Flaeche ausgebrachte Saatgutmenge, in Gramm.
+#
+# Ebenfalls ohne AcroForm-Feld, und aus demselben Grund wie die Flaeche: sie
+# steht nicht im Zertifikat. Das Stammzertifikat nennt unter Punkt 12 die Menge
+# der zertifizierten PARTIE (tc:amount, kg) -- eine Aussage ueber das Saatgut im
+# Sack. Wie viel davon auf DIESER Flaeche gelandet ist, weiss nur, wer gesaet
+# hat. Beides zu vermischen waere fachlich falsch, denn eine Partie wird in
+# aller Regel auf mehrere Flaechen verteilt.
+#
+# Der Wert ist zugleich die Mengenangabe zum klassenbezogenen Ident (LGTIN) des
+# Saatguts und geht als quantity/uom=GRM in die quantityList des ObjectEvents --
+# genau der Platz, den EPCIS fuer Mengen zu einem LGTIN vorsieht.
+SEED_QUANTITY_KEY = "ausgebrachteMenge"
+SEED_QUANTITY_UOM_KEY = "ausgebrachteMengeEinheit"
+# UN/CEFACT-Code fuer Gramm.
+SEED_QUANTITY_UOM = "GRM"
+
 
 def _planting_area_section(hint: str, required: bool) -> dict:
     """Sektion mit der auf der Karte gezeichneten Pflanzflaeche."""
@@ -412,6 +429,29 @@ def _planting_area_section(hint: str, required: bool) -> dict:
                 "",
                 ftype="derived",
                 datatype="xsd:decimal",
+            ),
+            # Die auf DIESER Flaeche ausgebrachte Menge -- im Viewer direkt
+            # nach dem Zeichnen erhoben, weil sie ohne die Flaeche keine
+            # Aussage waere. Kein AcroForm-Feld, siehe SEED_QUANTITY_KEY.
+            _f(
+                SEED_QUANTITY_KEY,
+                "Ausgebrachte Saatgutmenge",
+                "tc:appliedQuantity",
+                "",
+                ftype="number",
+                unit="g",
+                required=required,
+                demo="250",
+            ),
+            # Abgeleitet: die Einheit ist fest, wird aber mitgeschrieben, damit
+            # die Zahl auch ausserhalb dieses Kontexts eindeutig bleibt.
+            _f(
+                SEED_QUANTITY_UOM_KEY,
+                "Einheit der ausgebrachten Menge",
+                "tc:appliedQuantityUom",
+                "",
+                ftype="derived",
+                datatype="xsd:string",
             ),
         ],
     }
@@ -486,8 +526,8 @@ TEMPLATES: dict[str, dict] = {
                 "fields": [
                     _f("kennNr", "Kenn-Nr.", "tc:identifier", "Kenn-Nr"),
                     _f("regNr", "Reg.-Nr.", "tc:registrationNumber", "Reg-Nr"),
-                    _f("artBotanisch", "Art (botanische Bezeichnung)", "tc:species", "Art (botanische Bezeichnung)"),
-                    _f("artDeutsch", "Art (deutsche Bezeichnung)", "tc:species", "Art (deutsche Bezeichnung)"),
+                    _f("artBotanisch", "Art (botanische Bezeichnung)", "tc:species", "Art_(botanische_Bezeichnung)"),
+                    _f("artDeutsch", "Art (deutsche Bezeichnung)", "tc:species", "Art_(deutsche_Bezeichnung)"),
                     _f("reifejahr", "Reifejahr", "tc:maturityYear", "Reifejahr_af_date"),
                     _f("einsender", "Einsender", "tc:senderName", "Einsender"),
                     _f("partiegroesse", "Partiegröße", "tc:lotSize", "Partiegroesse", ftype="number", unit="g"),
@@ -501,8 +541,13 @@ TEMPLATES: dict[str, dict] = {
                 "title": "Untersuchungsergebnisse",
                 "fields": [
                     _f("reinheit", "Reinheit", "tc:purity", "Reinheit", ftype="number", unit="%"),
-                    _f("samenAndererArten", "Samen anderer Arten", "tc:otherSpeciesSeedPercentage", "Samen anderer Arten", ftype="number", unit="%"),
+                    _f("samenAndererArten", "Samen anderer Arten", "tc:otherSpeciesSeedPercentage", "Samen_anderer_Arten", ftype="number", unit="%"),
                     _f("verunreinigungen", "Verunreinigungen", "tc:impurityPercentage", "Verunreinigungen", ftype="number", unit="%"),
+                    # Der Prozentwert allein sagt nicht, WORAUS die
+                    # Verunreinigung besteht ("Stängel, Nadeln, Harz") --
+                    # das ausgefuellte Zertifikat fuehrt dafuer ein eigenes
+                    # Textfeld.
+                    _f("verunreinigungenBeschreibung", "Art der Verunreinigung", "tc:impurityDescription", "Beschreibung_Verunreinigung", demo="Stängel, Nadeln, Harz"),
                     _f("tkm", "TKM (Tausendkornmasse)", "tc:thousandSeedWeight", "TKM", ftype="number", unit="g"),
                     _f("feuchtegehalt", "Feuchtegehalt", "tc:moistureContent", "Feuchtegehalt", ftype="number", unit="%"),
                 ],
@@ -512,21 +557,25 @@ TEMPLATES: dict[str, dict] = {
                 "title": "Keimprüfung",
                 "fields": [
                     _f("keimschnelligkeit", "Keimschnelligkeit", "tc:germinationSpeed", "Keimschnelligkeit", ftype="number", unit="%"),
-                    _f("keimschnelligkeitWochen", "Keimschnelligkeit nach Wochen", "tc:germinationSpeedWeeks", "Keimschnelligkeit in Wochen", ftype="number"),
+                    _f("keimschnelligkeitWochen", "Keimschnelligkeit nach Wochen", "tc:germinationSpeedWeeks", "Keimschnelligkeit_in_Wochen", ftype="number"),
                     _f("keimfaehigkeit", "Keimfähigkeit", "tc:germinationRate", "Keimfaehigkeit", ftype="number", unit="%"),
-                    _f("keimfaehigkeitWochen", "Keimfähigkeit nach Wochen", "tc:germinationRateWeeks", "Keimfaehigkeit in Wochen", ftype="number"),
-                    _f("harteSamen", "Harte Samen", "tc:hardSeedPercentage", "Harte Samen", ftype="number", unit="%"),
-                    _f("frischeSamen", "Frische Samen", "tc:freshSeedPercentage", "Frische Samen", ftype="number", unit="%"),
-                    _f("anomaleSamen", "Anomale S. Samen", "tc:abnormalSeedPercentage", "Anomale S Samen", ftype="number", unit="%"),
-                    _f("fauleSamen", "Faule Samen", "tc:rottenSeedPercentage", "Faule Samen", ftype="number", unit="%"),
-                    _f("hohleSamen", "Hohle Samen", "tc:hollowSeedPercentage", "Hohle Samen", ftype="number", unit="%"),
+                    _f("keimfaehigkeitWochen", "Keimfähigkeit nach Wochen", "tc:germinationRateWeeks", "Keimfaehigkeit_in_Wochen", ftype="number"),
+                    _f("harteSamen", "Harte Samen", "tc:hardSeedPercentage", "harte_Samen", ftype="number", unit="%"),
+                    _f("frischeSamen", "Frische Samen", "tc:freshSeedPercentage", "frische_Samen", ftype="number", unit="%"),
+                    _f("anomaleSamen", "Anomale S. Samen", "tc:abnormalSeedPercentage", "anomale_S_Samen", ftype="number", unit="%"),
+                    _f("fauleSamen", "Faule Samen", "tc:rottenSeedPercentage", "faule_Samen", ftype="number", unit="%"),
+                    _f("hohleSamen", "Hohle Samen", "tc:hollowSeedPercentage", "hohle_Samen", ftype="number", unit="%"),
+                    # Wie die Keimpruefung durchgefuehrt wurde ("1 Tag
+                    # gewaessert, aufgelegt auf Filterpapier ..."). Ohne das
+                    # Feld blieben die Prozentwerte ohne ihr Verfahren.
+                    _f("keimpruefungBeschreibung", "Beschreibung der Keimprüfung", "tc:testMethodDescription", "Beschreibung", demo="1 Tag gewässert, aufgelegt auf Filterpapier"),
                 ],
             },
             {
                 "id": "ergebnis",
                 "title": "Ergebnis",
                 "fields": [
-                    _f("keimfaehigeSamenJeKg", "Anzahl keimfähiger Samen je kg Saatgut", "tc:viableSeedsPerKg", "Anzahl keimfaehiger Samen je kg Saatgut", ftype="number"),
+                    _f("keimfaehigeSamenJeKg", "Anzahl keimfähiger Samen je kg Saatgut", "tc:viableSeedsPerKg", "Anzahl_keimfaehiger_Samen_je_kg_Saatgut", ftype="number"),
                     _f("bemerkungen", "Bemerkungen", "tc:description", "Bemerkungen"),
                     _f("keimverlauf", "Keimverlauf", "tc:germinationCurve", "Keimverlauf"),
                     _f("unterschrift", "Unterschrift", "tc:signature", "Unterschrift"),
@@ -780,7 +829,14 @@ TEMPLATES: dict[str, dict] = {
                 "id": "allgemein",
                 "title": "Allgemeine Angaben",
                 "fields": [
-                    _f("nr", "Nr. der Leistungserklärung", "tc:identifier", "Nummer", required=True),
+                    # Nicht Pflicht: die Leistungserklaerung des Saegewerks
+                    # traegt dieses Feld nicht -- sie identifiziert sich ueber
+                    # Typ, Typennummer und Hersteller. Als Pflichtfeld liess
+                    # sie sich gar nicht uebernehmen ("Pflichtfeld 'Nr. der
+                    # Leistungserklärung' fehlt"), obwohl das Dokument
+                    # vollstaendig ausgefuellt war. Die BSP-Leistungserklaerung
+                    # weiter unten hat das Feld und behaelt es als Pflicht.
+                    _f("nr", "Nr. der Leistungserklärung", "tc:identifier", "Nummer"),
                     _f("typ", "1. Typ", "tc:type", "Typ"),
                     _f("typennummer", "2. Typennummer", "tc:typeNumber", "Typennummer"),
                     _f("verwendung", "3. Verwendung", "tc:intendedUse", "Verwendung"),
@@ -789,8 +845,8 @@ TEMPLATES: dict[str, dict] = {
                     _f("herstellerStrasse", "Hersteller: Straße", "tc:manufacturerAddress", "Straße_Hersteller"),
                     _f("herstellerOrt", "Hersteller: Ort", "tc:manufacturerAddress", "Ort_Hersteller"),
                     _f("herstellerLand", "Hersteller: Land", "tc:manufacturerAddress", "Land_Hersteller"),
-                    _f("konformitaetssystem", "6. Konformitätssystem (EU 305, Anhang V)", "tc:conformitySystem", "Konformitätsystem"),
-                    _f("harmonisierteNorm", "7. Bauprodukt gemäß harmonisierter Norm", "tc:standardReference", "Bauprodukt gemäß harmonisierter Norm"),
+                    _f("konformitaetssystem", "6. Konformitätssystem (EU 305, Anhang V)", "tc:conformitySystem", "Konformitaetssystem"),
+                    _f("harmonisierteNorm", "7. Bauprodukt gemäß harmonisierter Norm", "tc:standardReference", "Bauprodukt_gemaeß_harmonisierter_Norm"),
                 ],
             },
             {
@@ -809,30 +865,34 @@ TEMPLATES: dict[str, dict] = {
                 "title": "Mechanische Eigenschaften",
                 "fields": [
                     _f("dichte", "Dichte", "tc:density", "Dichte", ftype="number", unit="kg/m³"),
-                    _f("biegung", "Biegung EN 338", "tc:bendingStrength", "Biegung EN 338", ftype="number", unit="N/mm²"),
-                    _f("zugFaser", "Zug in Faserrichtung EN 338", "tc:tensileStrengthParallel", "Zug in Faserrichtung EN 338", ftype="number", unit="N/mm²"),
-                    _f("zugRechtwinklig", "Zug rechtwinklig zur Faserrichtung EN 338", "tc:tensileStrengthPerpendicular", "Zug rechtwinklig zur Faserrichtung EN 338", ftype="number", unit="N/mm²"),
-                    _f("druckFaser", "Druck in Faserrichtung EN 338", "tc:compressiveStrengthParallel", "Druck in Faserrichtung EN 338", ftype="number", unit="N/mm²"),
-                    _f("druckRechtwinklig", "Druck rechtwinklig zur Faserrichtung EN 338", "tc:compressiveStrengthPerpendicular", "Druck rechtwinklig zur Faserrichtung EN 338", ftype="number", unit="N/mm²"),
-                    _f("schub", "Schub EN 338", "tc:shearStrength", "Schub EN 338", ftype="number", unit="N/mm²"),
-                    _f("eModul", "Mittelwert des Elastizitätsmoduls in Faserrichtung", "tc:elasticModulus", "Mittelwert des Elastizitätsmoduls in Faserrichtung", ftype="number", unit="kN/mm²"),
+                    _f("biegung", "Biegung EN 338", "tc:bendingStrength", "Biegung_EN_338", ftype="number", unit="N/mm²"),
+                    _f("zugFaser", "Zug in Faserrichtung EN 338", "tc:tensileStrengthParallel", "Zug_in_Faserrichtung _EN_338", ftype="number", unit="N/mm²"),
+                    _f("zugRechtwinklig", "Zug rechtwinklig zur Faserrichtung EN 338", "tc:tensileStrengthPerpendicular", "Zug_rechtwinklig_zur_Faserrichtung _EN_338", ftype="number", unit="N/mm²"),
+                    _f("druckFaser", "Druck in Faserrichtung EN 338", "tc:compressiveStrengthParallel", "Druck_in_Faserrichtung _EN_338", ftype="number", unit="N/mm²"),
+                    _f("druckRechtwinklig", "Druck rechtwinklig zur Faserrichtung EN 338", "tc:compressiveStrengthPerpendicular", "Druck_rechtwinklig_zur_Faserrichtung _EN_338", ftype="number", unit="N/mm²"),
+                    _f("schub", "Schub EN 338", "tc:shearStrength", "Schub_EN_338", ftype="number", unit="N/mm²"),
+                    _f("eModul", "Mittelwert des Elastizitätsmoduls in Faserrichtung", "tc:elasticModulus", "Mittelwert_des_Elastizitaetsmoduls_in_Faserrichtung", ftype="number", unit="kN/mm²"),
                 ],
             },
             {
                 "id": "toleranzen",
                 "title": "Allgemeine Toleranzen",
                 "fields": [
-                    _f("dickenBreitenToleranz", "Dicken- und Breitentoleranz EN 336", "tc:thicknessTolerance", "Dicken- und Breitentolreanz EN 336", unit="mm"),
+                    # EN 336 staffelt die zulaessige Abweichung nach der
+                    # Nennmasse; die ausgefuellte Leistungserklaerung fuehrt
+                    # deshalb zwei getrennte Felder statt eines einzelnen.
+                    _f("dickenBreitenToleranzBis100", "Dicken- und Breitentoleranz EN 336 (≤ 100 mm)", "tc:thicknessTolerance", "Dicken-_und_Breitentoleranz_EN_336_≤100_mm", unit="mm", demo="1"),
+                    _f("dickenBreitenToleranzUeber100", "Dicken- und Breitentoleranz EN 336 (> 100 ≤ 300 mm)", "tc:thicknessTolerance", "Dicken-_und_Breitentoleranz_EN_336_>100_≤300_mm", unit="mm", demo="1.5"),
                 ],
             },
             {
                 "id": "bauphysik",
                 "title": "Bauphysikalische Eigenschaften",
                 "fields": [
-                    _f("brandverhalten", "Brandklasse (EN 13501-1)", "tc:fireResistanceClass", "Brandklasse", ftype="select"),
-                    _f("feuerwiderstand", "Feuerwiderstandsklasse (DIN 4102)", "tc:fireResistanceClassNational", "Feuerwiderstandsklasse", ftype="select"),
-                    _f("dauerhaftigkeitPilze", "Natürliche Dauerhaftigkeit gegen holzzerstörende Pilze", "tc:durabilityClass", "Natürliche Dauherhaftigkeit gegen holzsterstörende Pilze", ftype="select"),
-                    _f("dauerhaftigkeitInsekten", "Biologische Dauerhaftigkeit gegen Insekten, Termiten, maritime Holzzerstörer", "tc:durabilityInsects", "Biologische Dauerhaftigkeit gegen Insekten, Termiten, maritime Holzzerstörer", ftype="select"),
+                    _f("brandverhalten", "Brandklasse (EN 13501-1)", "tc:fireResistanceClass", "Brandklasse_nach_EN_13501-1", ftype="select"),
+                    _f("feuerwiderstand", "Feuerwiderstandsklasse (DIN 4102)", "tc:fireResistanceClassNational", "Feuerwiderstandsklasse_nach_DIN_4102", ftype="select"),
+                    _f("dauerhaftigkeitPilze", "Natürliche Dauerhaftigkeit gegen holzzerstörende Pilze", "tc:durabilityClass", "Natuerliche_Dauerhaftigkeit_gegen_holzzerstoerende_Pilze", ftype="select"),
+                    _f("dauerhaftigkeitInsekten", "Biologische Dauerhaftigkeit gegen Insekten, Termiten, maritime Holzzerstörer", "tc:durabilityInsects", "Biologische_Dauerhaftigkeit_gegen_Insekten,_Termiten,_maritime_Holzzerstoerer", ftype="select"),
                 ],
             },
             {
@@ -840,7 +900,7 @@ TEMPLATES: dict[str, dict] = {
                 "title": "Allgemeine Eigenschaften",
                 "fields": [
                     _f("holzart", "Holzart", "tc:species", "Holzart", ftype="select"),
-                    _f("reach", "Abgabe von gefährlichen Stoffen", "tc:hazardousSubstanceEmission", "Abgabe von gefährlichen Stoffen"),
+                    _f("reach", "Abgabe von gefährlichen Stoffen", "tc:hazardousSubstanceEmission", "Abgabe_von_gefaehrlichen_Stoffen"),
                 ],
             },
         ],
@@ -872,7 +932,7 @@ TEMPLATES: dict[str, dict] = {
                     _f("transportNr", "Transportnummer", "tc:transportNumber", "Transportnummer", required=True),
                     _f("lieferungsnummern", "Lieferungsnummer", "tc:deliveryNumber", "Lieferungsnummer"),
                     _f("gedruckt", "Gedruckt", "tc:printedAt", "gedruckt"),
-                    _f("letzteAenderung", "Letzte Änderung", "tc:modifiedAt", "Letzte Änderung"),
+                    _f("letzteAenderung", "Letzte Änderung", "tc:modifiedAt", "Letzte_Aenderung"),
                 ],
             },
             {
@@ -902,13 +962,13 @@ TEMPLATES: dict[str, dict] = {
                 "id": "weitereAngaben",
                 "title": "Weitere Angaben",
                 "fields": [
-                    _f("messageRequired", "Message required", "tc:messageRequired", "Message required"),
+                    _f("messageRequired", "Message required", "tc:messageRequired", "Message_required"),
                     _f("beladestelle", "Beladestelle", "tc:loadingPointDescription", "Beladestelle"),
-                    _f("maxPreis", "Max. Preis", "tc:maxPrice", "Max. Preis", ftype="number", unit="€"),
-                    _f("actPreis", "Act. Preis", "tc:actualPrice", "Act._Preis", ftype="number", unit="€"),
+                    _f("maxPreis", "Max. Preis", "tc:maxPrice", "Max_Preis", ftype="number", unit="€"),
+                    _f("actPreis", "Act. Preis", "tc:actualPrice", "Act_Preis", ftype="number", unit="€"),
                     _f("transportAbgefertigt", "Transport abgefertigt", "tc:transportStatus", "Transport_abgefertigt"),
-                    _f("oceanSeaRtv", "Ocean/Sea RTV enabled", "tc:oceanTransportEnabled", "Ocean/Sea RTV enabled"),
-                    _f("tdlnrParam", "custom.tdlnr.param", "tc:reference", "custom.tdlnr.param"),
+                    _f("oceanSeaRtv", "Ocean/Sea RTV enabled", "tc:oceanTransportEnabled", "Ocean/Sea_RTV_enabled"),
+                    _f("tdlnrParam", "custom.tdlnr.param", "tc:reference", "custom_tdlnr_param"),
                 ],
             },
             {
@@ -930,7 +990,7 @@ TEMPLATES: dict[str, dict] = {
                     _f("entladeTel", "Entladestelle: Telefonnummer", "tc:phone", "Telefonnummer_Entladestelle"),
                     _f("datumEntladung", "Datum der Entladung", "tc:endDate", "Datum_Entladung"),
                     _f("incoterm", "Incoterm", "tc:incoterm", "Incoterm"),
-                    _f("gefahrenklasse", "Gefahrenklasse / Gefahrennr.", "tc:hazardClass", "Gefahrenklasse/ Gefahrennr"),
+                    _f("gefahrenklasse", "Gefahrenklasse / Gefahrennr.", "tc:hazardClass", "Gefahrenklasse/Gefahrennr"),
                     _f("purchaseOrderNo", "Purchase order no", "tc:orderNumber", "Purchase_order_no"),
                 ],
             },
@@ -967,13 +1027,22 @@ TEMPLATES: dict[str, dict] = {
                 "id": "kopf",
                 "title": "Zertifikat",
                 "fields": [
-                    _f("zertifikatNr", "Stammzertifikat-Nr.", "tc:identifier", "STAMMZERTIFIKATNR", required=True, demo="DE-NW-2026-04711"),
+                    _f("zertifikatNr", "Stammzertifikat-Nr.", "tc:identifier", "Stammzertifikat-Nr", required=True, demo="DE-NW-2026-04711"),
                     _f("verteilerErntegut", "Verteiler: Erntegut Original", "tc:distributionList", "Erntegut Original", ftype="checkbox", demo=True),
                     _f("verteilerWaldbesitzer", "Verteiler: Waldbesitzer Abdruck", "tc:distributionList", "Waldbesitzer Abdruck", ftype="checkbox", demo=True),
                     _f("verteilerBehoerde", "Verteiler: zust. Behörde Abdruck", "tc:distributionList", "zust Behörde Abdruck", ftype="checkbox"),
                     _f("verteilerKontrollstelle", "Verteiler: Kontrollstelle Abdruck", "tc:distributionList", "Kontrollstelle Abdruck", ftype="checkbox"),
                     _f("rechtEgRichtlinie", "Erzeugt gemäß EG-Richtlinie", "tc:guideline", "gemäß EG-Richtlinie", ftype="checkbox", demo=True),
                     _f("rechtUebergangsregelungen", "Erzeugt gemäß Übergangsregelungen", "tc:guideline", "gemäß Übergangsregelungen", ftype="checkbox"),
+                    # Die ausgefuellten Zertifikate tragen Verteiler und
+                    # Rechtsgrundlage NICHT als angekreuzte Kaestchen, sondern
+                    # als Textfeld mit der gewaehlten Angabe ("Erntegut
+                    # Original", "Gemaess EG-Richtlinie"). Beide Formen kommen
+                    # vor, deshalb stehen sie nebeneinander: die Checkboxen
+                    # oben fuer Vorlagen, diese beiden fuer die Dokumente der
+                    # ausstellenden Stellen.
+                    _f("verteiler", "Verteiler", "tc:distributionList", "Verteiler", demo="Erntegut Original"),
+                    _f("rechtsgrundlage", "Rechtsgrundlage der Erzeugung", "tc:guideline", "Richtlinie_Erzeugung_forstliches_Vermehrungsgut", demo="Gemäß EG-Richtlinie"),
                 ],
             },
             {
@@ -993,12 +1062,17 @@ TEMPLATES: dict[str, dict] = {
                 "title": "6.–9. Herkunft",
                 "fields": [
                     _f("registerzeichen", "6. Registerzeichen", "tc:registerSign", "Registerzeichen", demo="NW-840-05-2019"),
-                    _f("eigentuemerZulassungseinheit", "Eigentümer der Zulassungseinheit", "tc:admissionUnitOwner", "Eigentümer der Zulassungseinheit", demo="Landesbetrieb Wald und Holz NRW"),
+                    _f("eigentuemerZulassungseinheit", "Eigentümer der Zulassungseinheit", "tc:admissionUnitOwner", "Eigentuemer_der_Zulassungseinheit", demo="Landesbetrieb Wald und Holz NRW"),
                     _f("eigentuemerZulassungseinheit2", "Eigentümer der Zulassungseinheit (2)", "tc:admissionUnitOwner", "Eigentümer_der_Zulassungseinheit", demo="Landesbetrieb Wald und Holz NRW"),
                     _f("gebietsursprung", "7. Gebietsursprung", "tc:origin", "Gebietsursprung", ftype="select", demo="autochthon"),
                     _f("landAusgangsmaterial", "9. Land des Ausgangsmaterials", "tc:sourceMaterialCountry", "Land_des_Ausgangsmaterials", demo="Deutschland"),
                     _f("herkunftsgebietBezeichnung", "Bezeichnung des Herkunftsgebiets", "tc:provenanceRegionName", "Bezeichnung_Herkunftsgebiet_des_Ausgangsmaterials", demo="Sauerland und Bergisches Land"),
-                    _f("herkunftsgebietNr", "Nr. des Herkunftsgebiets", "tc:provenanceRegionNumber", "Nr._des_Herkunftsgebiets_des_Ausgangsmaterials", demo="84005"),
+                    _f("herkunftsgebietNr", "Nr. des Herkunftsgebiets", "tc:provenanceRegionNumber", "Nr_des_Herkunftsgebiets_des_Ausgangsmaterials", demo="84005"),
+                    # 8. Hoehenlage und Ursprung: stehen im ausgefuellten
+                    # Stammzertifikat als eigene Textfelder und gehoeren
+                    # fachlich zur Herkunft.
+                    _f("hoehenlage", "8. Höhenlage bzw. Höhenzone des Standorts", "tc:altitudeZone", "Hoehenlage_bzw_Hoehenzone_des_Standorts_des_Ausgangsmaterials", demo="120 bis 120"),
+                    _f("ursprungAusgangsmaterial", "Ursprung des Ausgangsmaterials (falls nicht autochthon)", "tc:sourceMaterialOrigin", "Ursprung_des_Ausgangsmaterials_falls_nicht_autochthon", demo="Landesbetrieb Wald und Holz NRW"),
                 ],
             },
             {
@@ -1010,6 +1084,9 @@ TEMPLATES: dict[str, dict] = {
                     _f("menge", "12. Menge des Vermehrungsgutes", "tc:amount", "Menge_des_Vermehrungsgutes", ftype="number", unit="kg", demo="12,5"),
                     _f("mengeInWorten", "Menge i.W.", "tc:amountInWords", "Menge_des_Vermehrungsgutes_in_Worten", demo="zwölf Komma fünf Kilogramm"),
                     _f("verpackungseinheiten", "Anzahl und Art der Verpackungseinheiten", "tc:count", "Anzahl_und_Art_der_Verpackungseinheiten", demo="5 Vakuumbeutel à 2,5 kg"),
+                    # Die ausgefuellten Zertifikate fuehren die reine Anzahl in
+                    # einem eigenen Feld, getrennt von "Anzahl und Art".
+                    _f("verpackungseinheitenAnzahl", "Anzahl der Verpackungseinheiten", "tc:count", "Anzahl_der_Verpackungseinheiten", ftype="number", datatype="xsd:integer", demo="48"),
                     _f("aufbereitungszustand", "Aufbereitungszustand", "tc:processingState", "Bei_Saatgut_Aufbereitungszustand", ftype="select", demo="maschinengereinigt"),
                     _f("anteilReinesSaatgut", "Anteil des reinen Saatguts an der Gesamtmenge", "tc:purity", "Anteil_des_reinen_Saatgutes_an_der_Gesamtmenge", ftype="number", unit="%", demo="98,4"),
                 ],
@@ -1018,7 +1095,7 @@ TEMPLATES: dict[str, dict] = {
                 "id": "partie",
                 "title": "13. Teilung einer größeren Partie",
                 "fields": [
-                    _f("teilungGroesserePartie", "13. Ergebnis der Teilung einer größeren Partie?", "tc:materialAuthenticity", "Teil_einer_größeren_Partie", ftype="select", demo="Ja"),
+                    _f("teilungGroesserePartie", "13. Ergebnis der Teilung einer größeren Partie?", "tc:materialAuthenticity", "Teil_einer_groeßeren_Partie", ftype="select", demo="Ja"),
                     _f("vorlaeuferZertifikatNr", "Nr. des Vorläufer-Zertifikates", "tc:predecessorCertificateNumber", "Nr._des_Vorläufer-Zertifikates", demo="DE-NW-2025-03980"),
                     _f("mengeAnfangspartie", "Menge der Anfangspartie", "tc:initialLotAmount", "Menge_der_Anfangspartie", demo="40 kg"),
                 ],
@@ -1031,7 +1108,7 @@ TEMPLATES: dict[str, dict] = {
                     _f("familien", "15. Anzahl vertretener Komponenten: Familien", "tc:familyCount", "Anzahl_der_vertretenden_Komponenten_Familien", ftype="number", datatype="xsd:integer", demo="32"),
                     _f("klone", "Anzahl vertretener Komponenten: Klone", "tc:cloneCount", "Anzahl_der_vertretenden_Komponenten_Klone", ftype="number", datatype="xsd:integer", demo="48"),
                     _f("gentechnik", "17. Mit Hilfe gentechnischer Verfahren erzeugt?", "tc:geneticModification", "Wurde_das_Ausgangsmaterial_mit_Hilfe_gentechnischer_Verfahren_erzeugt?", ftype="select", demo="Nein"),
-                    _f("kreuzungsmethode", "18. Kreuzungsmethode (bei Familieneltern)", "tc:crossingMethod", "Keurzungsmethode", demo="Polycross"),
+                    _f("kreuzungsmethode", "18. Kreuzungsmethode (bei Familieneltern)", "tc:crossingMethod", "Kreuzungsmethode", demo="Polycross"),
                     _f("komponentenfamilien", "Prozentuale Zusammensetzung von Komponentenfamilien", "tc:componentFamilyComposition", "Prozentuale_Zusammensetzung_von_Komponentenfamilien", demo="je Familie ca. 3 %"),
                     _f("vegetativVermehrt", "19. Bereits aus Samen erwachsenes Material vegetativ vermehrt?", "tc:vegetativePropagation", "Wurde_bereits_aus_Samen_erwachsenes_Material_vegetativ_vermehrt?", ftype="select", demo="Nein"),
                     _f("vermehrungsmethode", "Vermehrungsmethode", "tc:propagationMethod", "Vermehrungsmethode", demo="generativ (Saatgut)"),
@@ -1042,16 +1119,16 @@ TEMPLATES: dict[str, dict] = {
                 "id": "beteiligte",
                 "title": "20.–21. Beteiligte & Ausstellung",
                 "fields": [
-                    _f("empfaengerName", "Name des 1. Empfängers", "tc:firstRecipientName", "Name_des_Empfängers", demo="Forstbaumschule Sauerland GmbH"),
-                    _f("empfaengerAnschrift", "Anschrift des 1. Empfängers", "tc:firstRecipientAddress", "Anschrift_des_Empfängers", demo="Waldweg 12, 59821 Arnsberg"),
+                    _f("empfaengerName", "Name des 1. Empfängers", "tc:firstRecipientName", "Name_des_Empfaengers", demo="Forstbaumschule Sauerland GmbH"),
+                    _f("empfaengerAnschrift", "Anschrift des 1. Empfängers", "tc:firstRecipientAddress", "Anschrift_des_Empfaengers", demo="Waldweg 12, 59821 Arnsberg"),
                     _f("lieferantName", "21. Name des Lieferanten", "tc:supplierName", "Name_des_Lieferanten", demo="Landesbetrieb Wald und Holz NRW"),
                     _f("lieferantAnschrift", "Anschrift des Lieferanten", "tc:supplierAddress", "Anschrift_des_Lieferanten", demo="Albrecht-Thaer-Str. 34, 48147 Münster"),
                     _f("lieferantBetriebsnummer", "Betriebsnummer des Lieferanten", "tc:businessId", "Betriebsnummer_des_Lieferanten", demo="NW-05-1147"),
                     _f("landesstelleName", "Name der Landesstelle", "tc:stateAuthorityName", "Name_der_Landesstelle", demo="Landesbetrieb Wald und Holz NRW — Zentrum für Wald und Holzwirtschaft"),
                     _f("landesstelleAnschrift", "Anschrift der Landesstelle", "tc:stateAuthorityAddress", "Anschrift_der_Landesstelle", demo="Obereimer 13, 59821 Arnsberg"),
-                    _f("ort", "Ort", "tc:city", "Ort_an_dem_das_Stammzertifikat_ausgefüllt_wurde", demo="Arnsberg"),
+                    _f("ort", "Ort", "tc:city", "Ort_an_dem_das_Stammzertifikat_ausgefuellt_wurde", demo="Arnsberg"),
                     _f("datum", "Datum", "tc:date", "Datum_an_dem_das_Stammzertifikat_ausgefüllt_wurde_af_date", demo="2026-03-12"),
-                    _f("bevollmaechtigter", "Name des Bevollmächtigten", "tc:authorizedPersonName", "Name_des_Bevollmächtigten", demo="Dr. Andrea Sommer"),
+                    _f("bevollmaechtigter", "Name des Bevollmächtigten", "tc:authorizedPersonName", "Name_des_Bevollmaechtigten", demo="Dr. Andrea Sommer"),
                 ],
             },
         ],
@@ -1658,6 +1735,20 @@ def _coerce_number(raw: Any, label: str) -> float | int:
 _EMPTY_SELECT_RE = re.compile(r"^\s*-+\s*Ausw(ä|ae?)hlen\s*-+\s*$", re.IGNORECASE)
 _CHECKBOX_OFF = {"", "off", "false", "0", "no", "nein"}
 
+# Ausdrueckliche Nicht-Angabe in einem ausgefuellten Formular.
+#
+# Amtliche Vordrucke lassen ein Feld selten leer -- sie tragen "keine Angabe",
+# "entfaellt" oder einen Strich ein, um zu zeigen, dass die Frage gestellt und
+# bewusst nicht beantwortet wurde. Fuer die Datenuebernahme ist das dasselbe
+# wie ein leeres Feld: es gibt keinen Wert. Frueher lief so ein Eintrag in
+# einem Zahlenfeld ("15. Anzahl vertretener Komponenten: Familien" =
+# "keine Angabe") in _coerce_number und brach den GESAMTEN Upload ab, obwohl
+# das Dokument formal korrekt ausgefuellt war.
+_NO_VALUE_RE = re.compile(
+    r"^\s*(?:-+|/|k\.?\s*A\.?|keine\s+Angabe[n]?|entf(ä|ae)llt|n\.?\s*a\.?|nicht\s+zutreffend)\s*$",
+    re.IGNORECASE,
+)
+
 # GS1-EPC in URN-Form, wie ihn timber-event/ident_injector erzeugen:
 #   urn:epc:id:sgtin:<gcp>.<itemref>.<serial>      (Einzelstueck, hpr)
 #   urn:epc:class:lgtin:<gcp>.<itemref>.<lot>      (Los, eldat)
@@ -1903,6 +1994,11 @@ def _clean_value(field: dict, raw: Any) -> Any:
     if field["type"] == "sawings":
         return _clean_sawings(raw)
     if field["type"] == "number":
+        # "keine Angabe" ist keine kaputte Zahl, sondern gar keine. Nur hier
+        # ausgewertet, nicht bei Textfeldern: dort IST "keine Angabe" die
+        # Aussage des Ausstellers und gehoert uebernommen.
+        if isinstance(raw, str) and _NO_VALUE_RE.match(raw):
+            return None
         value = _coerce_number(raw, field["label"])
         if field.get("datatype") == "xsd:integer":
             return int(value)
@@ -2054,6 +2150,11 @@ def build_document_json(
                         out_fields[PLANTING_AREA_WKT_KEY] = derived["wkt"]
                         out_fields[PLANTING_AREA_LAT_KEY] = derived["lat"]
                         out_fields[PLANTING_AREA_LON_KEY] = derived["lon"]
+                    elif field["key"] == SEED_QUANTITY_KEY:
+                        # Die Einheit haengt an der Zahl, nicht am Formular:
+                        # ohne Menge auch keine Einheit, sonst stuende im Graph
+                        # ein "Gramm" ohne Bezugsgroesse.
+                        out_fields[SEED_QUANTITY_UOM_KEY] = SEED_QUANTITY_UOM
 
     if errors:
         raise PDFTemplateError("; ".join(errors))

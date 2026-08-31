@@ -105,11 +105,18 @@ describe('Verfuegbarkeit je Bauteil', () => {
     }
   });
 
-  it('erlaubt ohne Bauteil nur eigenstaendige Ansichten', () => {
-    expect(useCaseAvailability(uc('co2'), null).available).toBe(true);
-    const r = useCaseAvailability(uc('dbpp'), null);
-    expect(r.available).toBe(false);
-    expect(r.reason).toMatch(/Bauteil erfassen/i);
+  // Ohne Bauteil ist KEIN Anwendungsfall auswertbar -- ausnahmslos. Vorher
+  // waren CO2 und Herkunftsnachweis ueber ``standalone`` ausgenommen und
+  // zeigten dann Demo-Werte; das Flag ist entfallen, weil jeder Fall eine
+  // Aussage ueber ein bestimmtes Produkt trifft (Vorgabe 28.08.2026).
+  it('sperrt ohne Bauteil jeden Anwendungsfall', () => {
+    for (const useCase of USE_CASES) {
+      const r = useCaseAvailability(useCase, null);
+      expect(r.available, `${useCase.id} darf ohne Bauteil nicht offen sein`).toBe(
+        false,
+      );
+      expect(r.reason).toMatch(/Bauteil erfassen/i);
+    }
   });
 
   // Awf-Vorgabe (Rueckmeldung Anni, 18.08.2026): CO2-Bilanz nur fuer die

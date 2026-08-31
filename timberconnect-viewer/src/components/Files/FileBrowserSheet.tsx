@@ -89,7 +89,7 @@ export function FileBrowserSheet({ isOpen, onClose }: FileBrowserSheetProps) {
 
       // Schritt 2: Nur die zugänglichen Pods listen.
       setPhase('loading');
-      const entries = await listAccessibleFiles(result.accessible);
+      const entries = await listAccessibleFiles(result.accessible, role?.iri ?? null);
       setFiles(entries);
       setPhase('ready');
     } catch (e) {
@@ -136,6 +136,10 @@ export function FileBrowserSheet({ isOpen, onClose }: FileBrowserSheetProps) {
         return;
       }
       await downloadOriginalFile(file);
+      // Auch der Gratis-Fall ist ein Erwerb: ohne diesen Eintrag bleiben die
+      // Schluessel dauerhaft "neu" und ein spaeterer, bepreisbarer Abruf
+      // derselben Datei kassiert erneut.
+      await commitPurchase(webId, estimate);
     } catch (e) {
       setDownloadError(
         `${file.name}: ${e instanceof Error ? e.message : 'Download fehlgeschlagen'}`,

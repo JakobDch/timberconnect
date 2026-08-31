@@ -123,6 +123,18 @@ tc:gs1Uom a owl:DatatypeProperty ;
     rdfs:range xsd:string ;
     rdfs:comment "Maßeinheit (UN/CEFACT-Code, z.B. G26) der GS1-Menge eines LGTIN-Loses."@de .
 
+tc:appliedQuantity a owl:DatatypeProperty ;
+    rdfs:label "Ausgebrachte Menge"@de ;
+    rdfs:label "Applied quantity"@en ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Menge des Vermehrungsguts, die auf der zugehörigen Fläche tatsächlich ausgebracht wurde, in Gramm. Bewusst getrennt von tc:amount: jenes nennt die Menge der zertifizierten Partie laut Stammzertifikat (Punkt 12), diese die davon auf DIESER Fläche verstreute Teilmenge. Eine Partie wird in aller Regel auf mehrere Flächen verteilt — beide Zahlen sind verschieden und beide richtig. Als Mengenangabe zum klassenbezogenen Ident (LGTIN) des Saatguts geht der Wert zugleich als quantity/uom=GRM in die quantityList des ObjectEvents ein."@de .
+
+tc:appliedQuantityUom a owl:DatatypeProperty ;
+    rdfs:label "Einheit der ausgebrachten Menge"@de ;
+    rdfs:label "Applied quantity unit of measure"@en ;
+    rdfs:range xsd:string ;
+    rdfs:comment "UN/CEFACT-Maßeinheit der ausgebrachten Menge. Fest \"GRM\" (Gramm) — Forstsaatgut wird in dieser Größenordnung ausgebracht. Wird mitgeschrieben, damit die Zahl auch außerhalb des Erzeugungskontexts eindeutig bleibt."@de .
+
 # === Link-Properties ========================================================
 
 tc:bizTransaction a owl:ObjectProperty ;

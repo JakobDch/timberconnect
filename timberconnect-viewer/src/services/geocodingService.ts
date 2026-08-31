@@ -128,6 +128,88 @@ export async function geocodeAddress(address: string | null): Promise<Coordinate
 }
 
 /**
+ * Standort eines Akteurs aufloesen -- Firmenname und Anschrift getrennt.
+ *
+ * WARUM NICHT EIN EINZIGER STRING: Nominatim sucht die Bestandteile einer
+ * Anfrage konjunktiv. Beide Angaben in ein Feld zu werfen laesst die Suche
+ * daher genau dann scheitern, wenn eine der beiden nicht in OSM steht -- und
+ * das trifft in den echten Lieferkettendaten beide Richtungen:
+ *
+ *   - "Im Kissen 19, 59929" findet das Saegewerk; mit angehaengtem Firmennamen
+ *     ("... , Egger Saegewerk Brilon GmbH") kommt nichts zurueck, weil der
+ *     Betrieb dort nicht als benanntes Objekt erfasst ist.
+ *   - Beim Holzwerkstoffproduzenten ist es umgekehrt: die Hausnummer der
+ *     Industriestrasse fehlt in OSM, die Firma "Poppensieker & Derix" ist als
+ *     Objekt aber vorhanden und liefert den Treffer.
+ *
+ * Eine feste Reihenfolge kann das nicht loesen, deshalb werden mehrere
+ * Varianten der Reihe nach probiert -- von der genauesten zur groebsten:
+ *
+ *   1. Anschrift allein              (Hausnummer-genau, wenn erfasst)
+ *   2. Firmenname + Ort              (benanntes Objekt, ohne Hausnummer)
+ *   3. Firmenname allein
+ *   4. Ort/Postleitzahl aus der Anschrift  (Naeherung auf den Ort)
+ *
+ * Schritt 4 ist bewusst grob: ein Marker im richtigen Ort ist fuer den
+ * Herkunftsnachweis aussagekraeftiger als gar keiner. Alle Treffer aus dieser
+ * Kaskade sind ``approximate``, das Kennzeichen setzt der Aufrufer.
+ *
+ * Der Kaskade liegt derselbe Cache zugrunde wie `geocodeAddress`; zusaetzlich
+ * wird das Endergebnis unter einem eigenen Schluessel abgelegt, damit ein
+ * zweiter Aufruf nicht erneut durch alle Stufen laeuft.
+ */
+export async function geocodeActorLocation(
+  name: string | null,
+  address: string | null,
+): Promise<Coordinates | null> {
+  const cleanName = name?.trim() || null;
+  const cleanAddress = address?.trim() || null;
+  if (!cleanName && !cleanAddress) return null;
+
+  // Eigener Schluessel fuer das Gesamtergebnis der Kaskade.
+  const key = cacheKey(`actor|${cleanName ?? ''}|${cleanAddress ?? ''}`);
+  const cached = readCache(key);
+  if (cached.hit) return cached.value;
+
+  // Ortsteil aus der Anschrift: alles nach dem letzten Komma, also der Teil,
+  // der Postleitzahl und Ort traegt ("Im Kissen 19, 59929 Brilon" -> "59929
+  // Brilon"). Ohne Komma taugt die ganze Zeichenkette nur, wenn sie keine
+  // Hausnummer enthaelt -- sonst ist sie als Ortsangabe unbrauchbar.
+  const localityPart = cleanAddress?.includes(',')
+    ? cleanAddress.slice(cleanAddress.lastIndexOf(',') + 1).trim()
+    : cleanAddress && !/\d+\s*[a-zA-Z]?$/.test(cleanAddress)
+      ? cleanAddress
+      : null;
+
+  const attempts = [
+    cleanAddress,
+    cleanName && localityPart ? `${cleanName}, ${localityPart}` : null,
+    cleanName,
+    localityPart,
+  ].filter((q): q is string => !!q && q.length >= 3);
+
+  // Doppelte Varianten entfernen -- sonst geht dieselbe Anfrage mehrfach
+  // hinaus, und jede kostet nach der Nutzungsrichtlinie eine Sekunde.
+  const seen = new Set<string>();
+  for (const attempt of attempts) {
+    const normalized = attempt.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+
+    const position = await geocodeAddress(attempt);
+    if (position) {
+      writeCache(key, position);
+      return position;
+    }
+  }
+
+  // Keine Variante hat getroffen -- auch das wird gecacht, sonst laeuft die
+  // ganze Kaskade bei jedem Ansichtswechsel erneut.
+  writeCache(key, null);
+  return null;
+}
+
+/**
  * Mehrere Adressen nacheinander aufloesen (Reihenfolge bleibt erhalten).
  * Sequentiell, nicht parallel -- siehe Nutzungsrichtlinie im Kopfkommentar.
  */
@@ -139,4 +221,121 @@ export async function geocodeAll(
     results.push(await geocodeAddress(address));
   }
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// Ortssuche (Karte)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ein Suchtreffer der Ortssuche.
+ *
+ * Anders als `geocodeAddress` liefert die Suche MEHRERE Kandidaten samt
+ * Bounding-Box. Beides ist hier wesentlich:
+ *
+ *   - Mehrere Treffer, weil der Nutzer tippt statt eine gepflegte Adresse aus
+ *     den Daten zu uebergeben. "Arnsberg" ist mehrdeutig; die Auswahl gehoert
+ *     ihm, nicht dem ersten Ergebnis.
+ *   - Die Bounding-Box, weil ein Waldstueck eine Flaeche ist. Nur auf den
+ *     Mittelpunkt zu springen liesse offen, mit welchem Zoom -- bei einem
+ *     Forstort waere das entweder zu weit weg oder mitten im Bestand.
+ */
+export interface PlaceResult {
+  /** Anzeigename, wie Nominatim ihn liefert. */
+  label: string;
+  center: Coordinates;
+  /**
+   * Umschliessendes Rechteck [sued, nord, west, ost], falls vorhanden. Die
+   * Karte zoomt darauf; ohne Box bleibt nur der Mittelpunkt.
+   */
+  bbox: [number, number, number, number] | null;
+}
+
+/** Nominatim liefert die Box als Strings in der Reihenfolge [S, N, W, O]. */
+function parseBoundingBox(raw: unknown): [number, number, number, number] | null {
+  if (!Array.isArray(raw) || raw.length !== 4) return null;
+  const values = raw.map((v) => Number(v));
+  return values.every((v) => Number.isFinite(v))
+    ? (values as [number, number, number, number])
+    : null;
+}
+
+async function requestSearch(query: string, limit: number): Promise<PlaceResult[]> {
+  await respectRateLimit();
+  lastRequestAt = Date.now();
+
+  const params = new URLSearchParams({
+    format: 'json',
+    limit: String(limit),
+    countrycodes: 'de',
+    // Liefert die Bounding-Box mit -- ohne sie wuesste die Karte nicht, wie
+    // weit sie aufziehen soll.
+    addressdetails: '0',
+    q: query,
+  });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${NOMINATIM_URL}?${params}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      console.warn('[geocode] Ortssuche antwortete mit', response.status);
+      return [];
+    }
+
+    const results = (await response.json()) as Array<{
+      lat?: string;
+      lon?: string;
+      display_name?: string;
+      boundingbox?: unknown;
+    }>;
+
+    return (results ?? []).flatMap((entry) => {
+      const lat = Number(entry.lat);
+      const lng = Number(entry.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+      return [
+        {
+          label: entry.display_name?.trim() || `${lat}, ${lng}`,
+          center: { lat, lng },
+          bbox: parseBoundingBox(entry.boundingbox),
+        },
+      ];
+    });
+  } catch (err) {
+    // Abbruch, Netzfehler, CORS -- die Suche bleibt ohne Treffer, die Karte
+    // aber bedienbar. Von Hand suchen geht weiterhin.
+    console.warn('[geocode] Ortssuche fehlgeschlagen fuer', query, err);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Orte zu einer Sucheingabe finden.
+ *
+ * BEWUSST OHNE CACHE, im Gegensatz zu `geocodeAddress`: Dort werden gepflegte
+ * Adressen aus den Daten aufgeloest, hier tippt ein Mensch. Ein
+ * zwischengespeicherter Negativtreffer wuerde einen Tippfehler dauerhaft
+ * festhalten -- dieselbe Eingabe bliebe auch nach dem Korrigieren des
+ * Dienstes erfolglos, und niemand kaeme darauf, warum.
+ *
+ * Wirft nie: keine Treffer und kein Netz sind dasselbe Ergebnis -- eine leere
+ * Liste. Der Karten-Schritt darf daran nicht scheitern.
+ */
+export async function searchPlaces(query: string, limit = 5): Promise<PlaceResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return [];
+
+  // An dieselbe Warteschlange wie das Adress-Geocoding: Nominatim sieht nur
+  // EINEN Client, und das Limit von 1 Anfrage/Sekunde gilt fuer ihn als
+  // Ganzes -- nicht je Aufrufer.
+  const result = queue.then(() => requestSearch(trimmed, limit));
+  queue = result.catch(() => []);
+  return result;
 }

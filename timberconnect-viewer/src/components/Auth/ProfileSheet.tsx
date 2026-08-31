@@ -201,7 +201,7 @@ export function ProfileSheet({ isOpen, onClose }: ProfileSheetProps) {
               </div>
 
               {/* Inhalt */}
-              <div className="px-5 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto scroll-touch space-y-4">
+              <div className="px-5 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex-1 min-h-0 overflow-y-auto scroll-touch space-y-4">
                 {loading ? (
                   <div className="flex items-center justify-center gap-2 py-10 text-night-300">
                     <Loader2 className="w-5 h-5 animate-spin" />

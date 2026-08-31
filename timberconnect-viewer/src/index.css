@@ -52,6 +52,57 @@
   --color-acid-500: #CBD639;
   --color-acid-600: #A8B32C;
 
+  /* ------------------------------------------------------------------
+     Statusfarben (finale Palette Anni, 26.08.2026)
+     Die App verwendet in der Bedienoberflaeche ausschliesslich vier
+     Farben: Nachtblau (Flaechen), Acid Lime (Aktion/positiv),
+     Koralle (Warnung/Fehler/Pflicht) und Hellblau (Hinweis/neutral).
+     Tailwind-Standardtoene (red-*, amber-*, blue-*, emerald-*) sind
+     hier ersetzt -- sie brachten vier konkurrierende Buntwerte in
+     dieselbe Ansicht ("nicht so bunt", Folie 8).
+     Diagramme und Kartenmarker sind bewusst ausgenommen: dort
+     unterscheiden Farben Datenreihen, nicht Zustaende.
+     ------------------------------------------------------------------ */
+
+  /* Koralle - Warnung, Fehler, Pflichtangabe */
+  --color-coral-200: #FBC4BD;
+  --color-coral-300: #F8968B;
+  --color-coral-400: #F56A59;
+  --color-coral-500: #E14E3C;
+  --color-coral-600: #BC3A2A;
+
+  /* Tailwinds rote und bernsteinfarbene Skalen werden auf die Palette
+     umgebogen, statt ~200 Klassennamen einzeln zu ersetzen. Beide werden
+     in der Bedienoberflaeche ausschliesslich als Zustandsfarbe verwendet
+     (Muster: bg-*-500/10, border-*-500/30, text-*-300):
+       rot     -> Koralle  (Fehler, Pflichtangabe, Zerstoerendes)
+       amber   -> Hellblau (Hinweis, "Format folgt", Demo-Ansicht)
+     Amber und Rot standen bisher nebeneinander fuer zwei Abstufungen
+     derselben Sache; Hellblau trennt Hinweis sichtbar von Warnung. */
+  --color-red-200: #FBC4BD;
+  --color-red-300: #F8968B;
+  --color-red-400: #F56A59;
+  --color-red-500: #E14E3C;
+  --color-red-600: #BC3A2A;
+
+  --color-amber-100: #EAF3FD;
+  --color-amber-200: #DCEDFC;
+  --color-amber-300: #C1DEF9;
+  --color-amber-400: #9AC8F2;
+  --color-amber-500: #7FB4E8;
+
+  /* Sky - Hinweise, neutrale Badges, Sekundaerinformation
+     Ueberschreibt bewusst Tailwinds eigene sky-Skala: die 19 bereits
+     vorhandenen sky-Fundstellen sind ausnahmslos Hinweis- und
+     Ladezustaende (Anmeldung erforderlich, "Daten werden geladen"),
+     also genau die Rolle, die Hellblau in der Palette uebernimmt.
+     Sie ziehen damit ohne Einzelaenderung auf den neuen Ton um. */
+  --color-sky-200: #DCEDFC;
+  --color-sky-300: #C1DEF9;
+  --color-sky-400: #9AC8F2;
+  --color-sky-500: #7FB4E8;
+  --color-sky-600: #4B84BB;
+
   /* Shadow utilities */
   --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-soft-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(45, 150, 96, 0.1);
@@ -133,6 +184,19 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+/* Letzte Absicherung gegen seitliches Scrollen auf dem Telefon.
+   Bewusst `clip` und NICHT `hidden`: `overflow-x: hidden` auf html/body macht
+   das naechste scrollbare Element zum Scroll-Container und setzt damit
+   `position: sticky` ausser Kraft -- die Kopfzeile (Header.tsx, `sticky top-0`)
+   und die Kopfleisten der Anwendungsfaelle wuerden mitscrollen. `clip`
+   schneidet nur ab und laesst sticky unberuehrt.
+   Das ist ein Netz, kein Ersatz fuer die Korrekturen an den Komponenten
+   selbst: was hier abgeschnitten wird, ist im Zweifel unerreichbar. */
+html,
+body {
+  overflow-x: clip;
 }
 
 #root {

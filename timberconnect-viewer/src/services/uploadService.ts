@@ -387,6 +387,26 @@ async function convertFilesOnly(
 }
 
 /**
+ * Einen Bezeichner in ein taugliches Pfadsegment ueberfuehren.
+ *
+ * Die trace_id ist NICHT immer eine TC-Nummer: fuer hpr/eldat gibt der
+ * Konverter den ersten EPC der Datei zurueck (main.py, `trace_id=first_epc`),
+ * also ``urn:epc:id:sgtin:404711145.0100.12A3D4567``. Ungefiltert als
+ * Ordnername benutzt, entsteht daraus ein Pfad mit Doppelpunkten in jedem
+ * Segment -- der Container wird nie angelegt, der PUT landet in einem
+ * ungestempelten Verzeichnis und der Server antwortet mit 401. Die Meldung
+ * lautet dann "Authentifizierung fehlgeschlagen", obwohl die Session gilt:
+ * derselbe Durchgang legt das PDF daneben problemlos ab.
+ *
+ * Doppelpunkt und Schraegstrich sind die beiden Zeichen, die den Pfad
+ * zerlegen; alles Uebrige bleibt, damit der Ordnername lesbar und die
+ * Zuordnung zum Ident erkennbar bleibt.
+ */
+export function toPathSegment(id: string): string {
+  return id.replace(/[:/\\?#[\]@]/g, '_');
+}
+
+/**
  * Upload a file to the Solid Pod using authenticated fetch.
  */
 async function uploadToSolidPod(
@@ -444,7 +464,13 @@ export async function convertAndUploadWithSession(
   userName?: string | null,
   ownerWebId?: string | null,
   companyPrefix?: string | null,
-  ifcEpc?: string | null
+  ifcEpc?: string | null,
+  /**
+   * Container des Vorgangs, zu dem die Dateien gehoeren (record.containerUrl).
+   * Ist er gesetzt, wird dorthin abgelegt statt in einen eigenen Ordner je
+   * trace_id -- dieser Container traegt bereits die ACL des Vorgangs.
+   */
+  processContainerUrl?: string | null
 ): Promise<AutoUploadResult> {
   // Data lands in the pod of the logged-in uploader (derived from their WebID),
   // not the shared epcisrepository pod — only the owner may write there and
@@ -475,8 +501,23 @@ export async function convertAndUploadWithSession(
   // Data goes into a per-product container under data/, which is WAC-protected
   // (instead of the world-readable public/ folder). Raw files and RDF share the
   // container so a single container-level ACL governs them.
+  // Gehoert der Upload zu einem Vorgang, landen die Dateien in DESSEN
+  // Container. Der ist von createProcess bereits angelegt und per
+  // stampContainerAcl mit einer ACL versehen -- ein eigener Ordner je Datei
+  // waere ungestempelt, und genau daran scheiterte der HPR-Upload mit 401,
+  // waehrend das PDF desselben Vorgangs durchging.
+  //
+  // Ohne Vorgang bleibt es beim bisherigen Weg (eigener Ordner je trace_id),
+  // nur mit gesaeubertem Segment -- siehe toPathSegment.
+  //
+  // Der Vorgangscontainer wird nur uebernommen, wenn er wirklich unter
+  // ``podBase`` liegt: ein blindes replace() liesse sonst eine absolute URL
+  // stehen, die anschliessend hinter podBase geklebt wuerde.
   const traceId = convertResult.trace_id;
-  const dataFolder = `data/${traceId}`;
+  const dataFolder =
+    processContainerUrl && processContainerUrl.startsWith(podBase)
+      ? processContainerUrl.slice(podBase.length).replace(/\/$/, '')
+      : `data/${toPathSegment(traceId)}`;
 
   // Step 2: Upload each file to Solid Pod
   for (const fileData of convertResult.files) {

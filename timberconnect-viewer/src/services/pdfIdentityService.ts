@@ -43,6 +43,13 @@ const IDENT_FIELD_NAMES = [
   'EPC',
   'epc',
   'TimberConnectIdent',
+  // In den Demo-Vorlagen tatsaechlich vorkommende Schreibweisen: das
+  // Stammzertifikat fuehrt den Ident zusaetzlich als "epcClass" (die Vorlage
+  // nennt das Feld so, weil dort eine LGTIN steht), die BSP-Leistungs-
+  // erklaerung als "outputEPCList". Beide tragen denselben Wert wie
+  // "Identity" -- ohne sie zaehlte das Feld als nicht zugeordnet.
+  'epcClass',
+  'outputEPCList',
 ];
 
 /**
@@ -60,6 +67,19 @@ const INPUT_FIELD_NAMES = [
   'IdentInput',
   'InputEPC',
   'TimberConnectIdentInput',
+];
+
+/**
+ * Alle Feldnamen, die einen Ident tragen — Ausgang wie Vormaterial.
+ *
+ * Die Pruefansicht braucht sie, um diese Felder NICHT als "nicht zugeordnet"
+ * zu zaehlen: sie werden ausgewertet, nur eben ueber diesen Dienst statt ueber
+ * das Feld-Mapping der Vorlage. Ohne die Ausnahme meldete die Ansicht einen
+ * Fehlbestand, wo tatsaechlich alles gelesen wurde.
+ */
+export const IDENTITY_BEARING_FIELDS: readonly string[] = [
+  ...IDENT_FIELD_NAMES,
+  ...INPUT_FIELD_NAMES,
 ];
 
 /**
@@ -193,14 +213,22 @@ function candidateValues(entry: unknown): unknown[] {
   return values;
 }
 
-/** Erster Wert, der ein gueltiger EPC ist. */
+/**
+ * Erster gueltiger EPC aus einem moeglicherweise MEHRWERTIGEN Feld.
+ *
+ * Geht ueber `epcList` und nicht direkt gegen `EPC_URN_RE`: Ein Feld traegt
+ * haeufig eine ganze Liste -- der Fertigungsauftrag des Saegewerks nennt in
+ * "Identity" alle 168 erzeugten Lamellen, semikolongetrennt. Gegen den
+ * Gesamtwert geprueft passt dieses Muster nie, und der Ident galt als nicht
+ * vorhanden: der Upload meldete dann "Pflichtfeld 'Bezieht sich auf' fehlt",
+ * obwohl das Dokument die Idente mitbrachte.
+ *
+ * Bei mehreren steht der erste stellvertretend fuer das Dokument. Das ist
+ * dieselbe Wahl, die auch das Backend trifft; die uebrige Liste geht dabei
+ * nicht verloren -- sie wird an anderer Stelle als `epcs` weitergereicht.
+ */
 function firstEpc(values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value !== 'string') continue;
-    const trimmed = value.trim();
-    if (EPC_URN_RE.test(trimmed)) return trimmed;
-  }
-  return null;
+  return epcList(values)[0] ?? null;
 }
 
 /**
@@ -210,7 +238,7 @@ function firstEpc(values: unknown[]): string | null {
  * ueber alle Felder zurueck — ein Ident im richtigen Format ist auch dann
  * eindeutig als solcher erkennbar, wenn das Feld anders heisst.
  */
-function identityFromFields(
+export function identityFromFields(
   fieldObjects: Record<string, unknown>,
 ): PdfIdentity | null {
   // Saegevorgaenge zuerst: liegen nummerierte Feldpaare vor, beschreibt das

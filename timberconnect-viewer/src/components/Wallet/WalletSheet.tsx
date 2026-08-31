@@ -110,7 +110,7 @@ export function WalletSheet({ isOpen, onClose }: WalletSheetProps) {
               </button>
             </div>
 
-            <div className="px-5 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto scroll-touch space-y-5">
+            <div className="px-5 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex-1 min-h-0 overflow-y-auto scroll-touch space-y-5">
               {/* Guthaben */}
               <div className="bg-acid-400/10 border border-acid-400/30 rounded-2xl p-5 text-center">
                 <div className="flex items-center justify-center gap-2 text-night-300 text-xs uppercase tracking-[0.16em] font-bold mb-2">

@@ -44,6 +44,93 @@ PREFIX rdfs: <${NAMESPACES.rdfs}>
 `;
 
 /**
+ * Die Ident-Schranke der dokumentbezogenen Abfragen.
+ *
+ * ALLE PDF-Vorgaenge tragen ihren Materialbezug auf ``tc:epc`` (im Mapping:
+ * ``materialEpc``) -- Stammzertifikat, Pruefzertifikat, Leistungserklaerung,
+ * Transportauftrag, Klebstoffdatenblatt, Schnittbild. Das ist der gemeinsame
+ * Anker, an dem sich ein Dokument einem Bauteil zuordnen laesst.
+ *
+ * WARUM DAS NOETIG IST: Die Awf-Abfragen liefen ohne jeden Filter ueber ALLE
+ * geladenen Quellen -- und geladen wird der gesamte Katalog. Solange nur ein
+ * Stammzertifikat existierte, fiel das nicht auf. Beim zweiten haette der
+ * Herkunftsnachweis fremde Baumarten und Reifejahre als die eigenen
+ * ausgewiesen; dasselbe gilt fuer Rueckbaubarkeit, Dokumentation, Haftung,
+ * CO2-Bilanz und DBPP.
+ *
+ * ``epcs`` ist die Ident-Kette des Bauteils (gescannter EPC + Vorprodukte aus
+ * den EPCIS-Ereignissen). Ein leeres Array laesst die Schranke bewusst
+ * WEGFALLEN: dann ist keine Kette bekannt (Trace-Id-Pfad, Katalog ohne
+ * EPCIS), und ein Filter ohne Werte wuerde jede Zeile verwerfen -- die Awf
+ * waeren leer statt unscharf.
+ *
+ * Dokumente OHNE ``tc:epc`` bleiben erhalten (``!BOUND``): eine Datei, die
+ * ihren Bezug nicht angibt, gehoert zur einzigen Quelle, die sie liefert.
+ * Sie herauszufiltern haette bestehende Awf-Ansichten geleert.
+ */
+export function identGuard(epcs: string[], variable = '?epc'): string {
+  if (epcs.length === 0) return '';
+  const values = epcs.map((e) => `<${e}>`).join(', ');
+  return `  FILTER (!BOUND(${variable}) || ${variable} IN (${values}))`;
+}
+
+/**
+ * Die Ident-Schranke fuer Knoten OHNE eigenen ``tc:epc``.
+ *
+ * Drei Klassen tragen ihren Bezug nicht selbst, haengen aber ueber eine
+ * echte Kante an einem Knoten, der ihn traegt:
+ *
+ *   tc:Project    <- tc:belongsToProject     <- tc:BuildingElement
+ *   tc:Invoice    <- tc:hasInvoice           <- tc:Panel
+ *   tc:Declaration... -> tc:hasSawingProcess -> tc:SawingProcess (Saegewerk-Variante)
+ *
+ * Gefiltert wird ueber den Nachbarn. ``FILTER EXISTS`` statt eines Joins,
+ * damit die Sparte ihre eigene Ergebnisform behaelt -- der Nachbar soll die
+ * Zeile pruefen, nicht vervielfachen.
+ *
+ * ``inverse`` dreht die Kantenrichtung: normalerweise zeigt der Nachbar auf
+ * unseren Knoten (``?nachbar <kante> ?knoten``), bei tc:hasSawingProcess ist
+ * es umgekehrt.
+ */
+export function relatedIdentGuard(
+  epcs: string[],
+  node: string,
+  edge: string,
+  opts: { inverse?: boolean } = {},
+): string {
+  if (epcs.length === 0) return '';
+  const values = epcs.map((e) => `<${e}>`).join(', ');
+  const neighbour = `${node}_via`;
+  const triple = opts.inverse
+    ? `${node} ${edge} ${neighbour} .`
+    : `${neighbour} ${edge} ${node} .`;
+  return `  FILTER EXISTS { ${triple} ${neighbour} tc:epc ?e . FILTER(?e IN (${values})) }`;
+}
+
+/**
+ * Die Ident-Schranke der Leistungserklaerung -- ein Sonderfall mit ZWEI Ankern.
+ *
+ * Es gibt zwei Vorlagen: die BSP-Leistungserklaerung traegt ``tc:epc`` am
+ * Dokument selbst (pdf_leistungserklaerung_bsp.rml.ttl), die Saegewerk-Variante
+ * NICHT -- dort haengt der Bezug am Unterknoten ``tc:SawingProcess``, den das
+ * Dokument per ``tc:hasSawingProcess`` verlinkt (pdf_leistungserklaerung.rml.ttl).
+ *
+ * Beide muessen gelten, sonst faellt eine der beiden Vorlagen komplett aus der
+ * Ansicht -- schlimmer als der Leak, den wir schliessen wollen.
+ */
+export function dopIdentGuard(epcs: string[], node = '?dop'): string {
+  if (epcs.length === 0) return '';
+  const values = epcs.map((e) => `<${e}>`).join(', ');
+  const suffix = node.replace(/^\?/, '');
+  return (
+    `  FILTER (` +
+    `EXISTS { ${node} tc:epc ?e_${suffix} . FILTER(?e_${suffix} IN (${values})) } || ` +
+    `EXISTS { ${node} tc:hasSawingProcess ?sp_${suffix} . ` +
+    `?sp_${suffix} tc:epc ?spe_${suffix} . FILTER(?spe_${suffix} IN (${values})) })`
+  );
+}
+
+/**
  * Query for BSP Panel product data (final product)
  * Simplified query that works better with Comunica
  */
@@ -401,7 +488,7 @@ LIMIT 1
  * zusaetzlich gelesen. ?flatName/?flatStreet/?flatCity sind bereits sauber
  * getrennt -- sie brauchen die Rateheuristik nicht.
  */
-export function createTransportOrdersQuery(): string {
+export function createTransportOrdersQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?order ?delivery ?transportNumber ?spedition ?epc
        ?loadingAddress ?unloadingAddress ?startDate ?endDate
@@ -431,6 +518,7 @@ WHERE {
   OPTIONAL { ?order tc:pLZ ?flatPostcode }
   OPTIONAL { ?order tc:datum ?flatDate }
   OPTIONAL { ?order tc:lieferant_Forstamt ?supplier }
+${identGuard(epcs)}
 }
 `;
 }
@@ -443,7 +531,7 @@ WHERE {
  * mehrdeutig: das Pruefzertifikat schreibt die botanische UND die deutsche
  * Bezeichnung auf dasselbe Praedikat -- unterschieden wird clientseitig.
  */
-export function createCertificateDataQuery(): string {
+export function createCertificateDataQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?doc ?type ?species ?maturityYear ?reportNumber ?identifier ?registerSign ?epc
 WHERE {
@@ -456,6 +544,7 @@ WHERE {
   OPTIONAL { ?doc tc:identifier ?identifier }
   OPTIONAL { ?doc tc:registerSign ?registerSign }
   OPTIONAL { ?doc tc:epc ?epc }
+${identGuard(epcs)}
 }
 `;
 }
@@ -477,7 +566,7 @@ WHERE {
  * Der Kaeufer (I-27/I-28) steht im proprietaeren ERP-Vorgang des
  * Holzwerkstoffproduzenten als Rechnungsempfaenger.
  */
-export function createDeclarationQuery(): string {
+export function createDeclarationQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?doc ?title ?intendedUse ?typeNumber ?holzart ?strengthClass
        ?manufacturer ?epc
@@ -492,14 +581,18 @@ WHERE {
     OPTIONAL { ?doc tc:strengthClass ?strengthClass }
     OPTIONAL { ?doc tc:manufacturer ?manufacturer }
     OPTIONAL { ?doc tc:epc ?epc }
+${identGuard(epcs)}
   }
   UNION
   {
     # I-27/I-28: Rechnungsempfaenger aus dem ERP-Herstellungsvorgang.
+    # Die Rechnung traegt keinen eigenen Ident, haengt aber per tc:hasInvoice
+    # an der Platte, die einen hat (erp_bsp.rml.ttl).
     ?buyer a tc:Invoice .
     OPTIONAL { ?buyer tc:rechnungsempfaenger_Name ?buyerName }
     OPTIONAL { ?buyer tc:rechnungsempfaenger_Adresse ?buyerAddress }
     OPTIONAL { ?buyer tc:rechnungsempfaenger ?buyerName }
+${relatedIdentGuard(epcs, '?buyer', 'tc:hasInvoice')}
   }
 }
 `;
@@ -531,7 +624,7 @@ WHERE {
  * Mehrfachbindung zurueck und werden im Mapper getrennt -- siehe
  * splitHazardousValues() in deconstructionMapper.ts.
  */
-export function createDeconstructionQuery(): string {
+export function createDeconstructionQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?panel ?festigkeit ?produktionsdatum ?menge ?hoehe ?breite ?laenge
        ?schichten ?pefc ?anstrich ?artikel ?panelHolzart
@@ -542,6 +635,8 @@ SELECT ?panel ?festigkeit ?produktionsdatum ?menge ?hoehe ?breite ?laenge
 WHERE {
   {
     ?panel a tc:Panel .
+    OPTIONAL { ?panel tc:epc ?panelEpc }
+${identGuard(epcs, '?panelEpc')}
     OPTIONAL { ?panel tc:festigkeit__Material_Produkt ?festigkeit }
     OPTIONAL { ?panel tc:nettovolumen_Produkt ?menge }
     OPTIONAL { ?panel tc:hoehe__Staerke ?hoehe }
@@ -569,6 +664,7 @@ WHERE {
     OPTIONAL { ?dop tc:holzart ?dopHolzart }
     OPTIONAL { ?dop tc:strengthClass ?dopStrengthClass }
     OPTIONAL { ?dop tc:epc ?dopEpc }
+${identGuard(epcs, '?dopEpc')}
   }
   UNION
   {
@@ -577,6 +673,7 @@ WHERE {
     OPTIONAL { ?adhesive tc:labeling ?adhesiveLabeling }
     OPTIONAL { ?adhesive tc:type ?adhesiveType }
     OPTIONAL { ?adhesive tc:epc ?adhesiveEpc }
+${identGuard(epcs, '?adhesiveEpc')}
   }
 }
 `;
@@ -724,9 +821,13 @@ WHERE {
  * Material) und bewusst als EIGENE Query: die bestehenden Queries der
  * anderen Anwendungsfaelle werden nach Haus-Konvention nicht erweitert.
  */
-export function createLcaQuery(): string {
+export function createLcaQuery(epcs: string[] = []): string {
+  // Die Platte traegt ihren Ident auf tc:epc (erp_bsp.rml.ttl) -- daran haengt
+  // die Schranke. Die uebrigen Sparten (Transportauftrag, Leistungserklaerung,
+  // Klebstoff) binden hier keinen eigenen Ident und bleiben ungefiltert; sie
+  // haengen ueber ihre Subjekte an derselben Datei.
   return `${PREFIXES}
-SELECT ?panel ?nettovolumen ?nettogewicht ?gesamtmengeBsp ?hoehe ?breite ?laenge
+SELECT ?panel ?panelEpc ?nettovolumen ?nettogewicht ?gesamtmengeBsp ?hoehe ?breite ?laenge
        ?schichten ?oberflaeche ?produktnorm ?pefc ?holzart ?beschreibung ?artikel
        ?abholungPlz ?abholungOrt ?lieferungPlz ?lieferungOrt
        ?order ?ladezoneDistanz ?mengeFestmeter ?summeFestmeter ?orderVolume
@@ -742,6 +843,8 @@ WHERE {
     OPTIONAL { ?panel tc:hoehe__Staerke ?hoehe }
     OPTIONAL { ?panel tc:breite ?breite }
     OPTIONAL { ?panel tc:laenge_v3 ?laenge }
+    OPTIONAL { ?panel tc:epc ?panelEpc }
+${identGuard(epcs, '?panelEpc')}
     OPTIONAL { ?panel tc:anzahl_der_Schichten_innerhalb_einer_BSP_Platte ?schichten }
     OPTIONAL { ?panel tc:oberflaeche_einer_Plattenseite ?oberflaeche }
     OPTIONAL { ?panel tc:produktnorm ?produktnorm }
@@ -757,6 +860,8 @@ WHERE {
   UNION
   {
     ?order a tc:TransportOrder .
+    OPTIONAL { ?order tc:epc ?orderEpc }
+${identGuard(epcs, '?orderEpc')}
     # Rundholz-Vorlage (flach, deutsche Feldnamen)
     OPTIONAL { ?order tc:ladezone_Distanz ?ladezoneDistanz }
     OPTIONAL { ?order tc:menge_Festmeter ?mengeFestmeter }
@@ -777,11 +882,18 @@ WHERE {
     OPTIONAL { ?dop tc:manufacturer ?dopManufacturer }
     OPTIONAL { ?dop tc:intendedUse ?dopIntendedUse }
     OPTIONAL { ?dop tc:holzart ?dopHolzart }
+    # Zwei Vorlagen, zwei Anker: die BSP-Leistungserklaerung traegt tc:epc
+    # selbst, die Saegewerk-Variante haengt ihn an den tc:SawingProcess
+    # (pdf_leistungserklaerung.rml.ttl). Beide Wege gelten.
+    OPTIONAL { ?dop tc:epc ?dopEpc }
+${dopIdentGuard(epcs)}
   }
   UNION
   {
     ?adhesive a tc:Adhesive .
     OPTIONAL { ?adhesive tc:name ?adhesiveName }
+    OPTIONAL { ?adhesive tc:epc ?adhesiveEpc }
+${identGuard(epcs, '?adhesiveEpc')}
   }
 }
 `;
@@ -828,9 +940,12 @@ WHERE {
  * Anwendungsfaellen werden bestehende Queries nicht erweitert, damit ein
  * neuer Fall keinen alten veraendert.
  */
-export function createDocumentationQuery(): string {
+export function createDocumentationQuery(epcs: string[] = []): string {
+  // Die Platte traegt ihren Ident auf tc:epc (erp_bsp.rml.ttl) -- daran haengt
+  // die Schranke. Die IFC-Sparten (BuildingElement, Project) binden hier
+  // keinen eigenen Ident; sie kommen aus der Planungsdatei des Projekts.
   return `${PREFIXES}
-SELECT ?buildingElement ?ifcGlobalId ?ifcTyp ?planBezeichnung ?planMaterial
+SELECT ?buildingElement ?panelEpc ?ifcGlobalId ?ifcTyp ?planBezeichnung ?planMaterial
        ?planBauteil ?geschoss ?bauabschnitt ?teilgruppe ?einbau
        ?noProductionList ?sku ?abbundBvn ?sichtqualitaet
        ?ifcSchema ?planSourceFile
@@ -841,6 +956,8 @@ SELECT ?buildingElement ?ifcGlobalId ?ifcTyp ?planBezeichnung ?planMaterial
 WHERE {
   {
     ?buildingElement a tc:BuildingElement .
+    OPTIONAL { ?buildingElement tc:epc ?buildingElementEpc }
+${identGuard(epcs, '?buildingElementEpc')}
     OPTIONAL { ?buildingElement tc:ifcGlobalId ?ifcGlobalId }
     OPTIONAL { ?buildingElement tc:ifcClass ?ifcTyp }
     OPTIONAL { ?buildingElement tc:name ?planBezeichnung }
@@ -864,10 +981,13 @@ WHERE {
   }
   UNION
   {
+    # Das Projekt traegt keinen eigenen Ident, haengt aber per
+    # tc:belongsToProject am BuildingElement, das einen hat (ifc_planung.rml.ttl).
     ?project a tc:Project .
     OPTIONAL { ?project tc:projectNumber ?projektnummer }
     OPTIONAL { ?project tc:projectName ?projektname }
     OPTIONAL { ?project tc:projectPhase ?projektphase }
+${relatedIdentGuard(epcs, '?project', 'tc:belongsToProject')}
   }
   UNION
   {
@@ -876,6 +996,8 @@ WHERE {
     OPTIONAL { ?panel tc:oberflaeche_einer_Plattenseite ?oberflaeche }
     OPTIONAL { ?panel tc:produktnorm ?produktnorm }
     OPTIONAL { ?panel tc:beschreibung_Freitext ?beschreibung }
+    OPTIONAL { ?panel tc:epc ?panelEpc }
+${identGuard(epcs, '?panelEpc')}
   }
 }
 `;
@@ -929,7 +1051,7 @@ WHERE {
  * Bewusst OHNE traceId-Filter und als EIGENE Query -- Hauskonvention: ein
  * neuer Anwendungsfall veraendert keinen alten.
  */
-export function createLiabilityQuery(): string {
+export function createLiabilityQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?report ?reportEpc ?tester ?testDateTime ?printedAt
        ?sample ?sampleId ?sampleEpc ?maxForce ?testSpeed
@@ -947,6 +1069,7 @@ WHERE {
     # 1a. Pruefbericht Biegepruefung -- Kopfdaten (I-14, I-15)
     ?report a tc:TestReport .
     OPTIONAL { ?report tc:epc ?reportEpc }
+${identGuard(epcs, '?reportEpc')}
     OPTIONAL { ?report tc:testerName ?tester }
     OPTIONAL { ?report tc:dateTime ?testDateTime }
     OPTIONAL { ?report tc:printedAt ?printedAt }
@@ -957,6 +1080,7 @@ WHERE {
     ?sample a tc:BendingTest .
     OPTIONAL { ?sample tc:sampleId ?sampleId }
     OPTIONAL { ?sample tc:epc ?sampleEpc }
+${identGuard(epcs, '?sampleEpc')}
     OPTIONAL { ?sample tc:maxForce ?maxForce }
     OPTIONAL { ?sample tc:testSpeed ?testSpeed }
     OPTIONAL { ?sample tc:dateTime ?testDateTime }
@@ -968,6 +1092,7 @@ WHERE {
     ?dop a tc:DeclarationOfPerformance .
     ?dop tc:zertifikatsnummer ?zertifikatsnummer .
     OPTIONAL { ?dop tc:epc ?dopEpc }
+${identGuard(epcs, '?dopEpc')}
     OPTIONAL { ?dop tc:conformitySystem ?conformitySystem }
     OPTIONAL { ?dop tc:notifiedBody ?notifiedBody }
     OPTIONAL { ?dop tc:density ?dopDensity }
@@ -981,6 +1106,7 @@ WHERE {
     ?bspDop a tc:DeclarationOfPerformance .
     ?bspDop tc:moistureContent ?moistureContent .
     OPTIONAL { ?bspDop tc:epc ?bspEpc }
+${identGuard(epcs, '?bspEpc')}
     OPTIONAL { ?bspDop tc:delaminationResistance ?delamination }
     OPTIONAL { ?bspDop tc:bendingStrengthFlatwise ?bendingFlatwise }
     OPTIONAL { ?bspDop tc:rollingShearStrength ?rollingShear }
@@ -993,6 +1119,7 @@ WHERE {
     # 4. Technisches Datenblatt Klebstoff (I-18..I-21)
     ?adhesive a tc:Adhesive .
     OPTIONAL { ?adhesive tc:epc ?adhesiveEpc }
+${identGuard(epcs, '?adhesiveEpc')}
     OPTIONAL { ?adhesive tc:productName ?adhesiveProductName }
     OPTIONAL { ?adhesive tc:curingType ?curingType }
     OPTIONAL { ?adhesive tc:storageConditions ?storageConditions }
@@ -1003,6 +1130,8 @@ WHERE {
   {
     # 5. ERP-Fertigung (I-24 M-984, I-25 M-1026)
     ?panel a tc:Panel .
+    OPTIONAL { ?panel tc:epc ?panelEpc }
+${identGuard(epcs, '?panelEpc')}
     OPTIONAL { ?panel tc:zustaendiger_Mitarbeiter ?mitarbeiter }
     OPTIONAL { ?panel tc:qS_Kontrolle ?qsKontrolle }
   }
@@ -1011,6 +1140,7 @@ WHERE {
     # 6. Im Anwendungsfall erfasste Schadensmeldungen
     ?damage a tc:DamageReport .
     OPTIONAL { ?damage tc:epc ?damageEpc }
+${identGuard(epcs, '?damageEpc')}
     OPTIONAL { ?damage tc:damageDate ?damageDate }
     OPTIONAL { ?damage tc:damageKind ?damageKind }
     OPTIONAL { ?damage tc:description ?damageDescription }
@@ -1067,7 +1197,7 @@ WHERE {
  * Bewusst OHNE traceId-Filter -- eingegrenzt wird ueber die Auswahl der
  * abgefragten Quellen.
  */
-export function createDbppQuery(): string {
+export function createDbppQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?panel ?panelEpc ?panelDerivedFrom ?artikel
        ?panelHoehe ?panelBreite ?panelLaenge ?panelVolumen ?panelGewicht
@@ -1094,6 +1224,7 @@ WHERE {
     # 1. ERP-Fertigung: Identitaet, Geometrie, Materialkennwerte
     ?panel a tc:Panel .
     OPTIONAL { ?panel tc:epc ?panelEpc }
+${identGuard(epcs, '?panelEpc')}
     OPTIONAL { ?panel tc:derivedFrom ?panelDerivedFrom }
     OPTIONAL { ?panel tc:hoehe__Staerke ?panelHoehe }
     OPTIONAL { ?panel tc:breite ?panelBreite }
@@ -1124,6 +1255,7 @@ WHERE {
     ?bspDop a tc:DeclarationOfPerformance .
     ?bspDop tc:moistureContent ?bspMoisture .
     OPTIONAL { ?bspDop tc:epc ?bspEpc }
+${identGuard(epcs, '?bspEpc')}
     OPTIONAL { ?bspDop tc:strengthClass ?bspStrengthClass }
     OPTIONAL { ?bspDop tc:adhesiveType ?bspAdhesiveType }
     OPTIONAL { ?bspDop tc:delaminationResistance ?bspDelamination }
@@ -1149,6 +1281,7 @@ WHERE {
     ?dop a tc:DeclarationOfPerformance .
     ?dop tc:zertifikatsnummer ?dopZertifikatsnummer .
     OPTIONAL { ?dop tc:epc ?dopEpc }
+${identGuard(epcs, '?dopEpc')}
     OPTIONAL { ?dop tc:species ?dopSpecies }
     OPTIONAL { ?dop tc:density ?dopDensity }
     OPTIONAL { ?dop tc:bendingStrength ?dopBendingStrength }
@@ -1160,6 +1293,7 @@ WHERE {
     # 4. Klebstoff -- Materialzusammensetzung und Sicherheitshinweis
     ?adhesive a tc:Adhesive .
     OPTIONAL { ?adhesive tc:epc ?adhesiveEpc }
+${identGuard(epcs, '?adhesiveEpc')}
     OPTIONAL { ?adhesive tc:name ?adhesiveName }
     OPTIONAL { ?adhesive tc:productName ?adhesiveProductName }
     OPTIONAL { ?adhesive tc:type ?adhesiveType }
@@ -1171,6 +1305,8 @@ WHERE {
   {
     # 5. Ausfuehrungsplanung (IFC) -- Verortung im Gebaeude
     ?element a tc:BuildingElement .
+    OPTIONAL { ?element tc:epc ?elementEpc }
+${identGuard(epcs, '?elementEpc')}
     OPTIONAL { ?element tc:ifcGlobalId ?elementIfcId }
     OPTIONAL { ?element tc:ifcClass ?elementIfcClass }
     OPTIONAL { ?element tc:buildingStorey ?elementStorey }
@@ -1189,6 +1325,7 @@ WHERE {
     # 6. Stammzertifikat -- Herkunftsgebiet, Grundlage des EUDR-Nachweises
     ?certificate a tc:Certificate .
     OPTIONAL { ?certificate tc:epc ?certEpc }
+${identGuard(epcs, '?certEpc')}
     OPTIONAL { ?certificate tc:identifier ?certIdentifier }
     OPTIONAL { ?certificate tc:species ?certSpecies }
     OPTIONAL { ?certificate tc:provenanceRegionName ?certProvenanceName }

@@ -627,6 +627,9 @@ async def convert_files_only(
         # EPCIS service (no trace id). Provisional names until the hash is known.
         raw_filename = f"{detection.data_type}.{source_ext}"
         error = None
+        # Vorbelegt, weil die Zuweisung im try steht: bricht die Konvertierung
+        # vorher ab, wird der Name unten trotzdem gelesen.
+        epcis_result = None
 
         # The -u/--url base for the EPCIS document is the container the frontend
         # will upload to (the owner's pod); the EPCIS service appends the document
@@ -692,6 +695,10 @@ async def convert_files_only(
             rdf_content=rdf_content,
             rdf_filename=rdf_filename,
             triple_count=triple_count,
+            # Die erzeugten Idente mitgeben -- der Aufrufer braucht sie, um auf
+            # das entstandene Bauteil zeigen zu koennen (siehe trace_id unten).
+            epcs=list(epcis_result.output_epcs) if epcis_result else None,
+            input_epcs=list(epcis_result.consumed_epcs) if epcis_result else None,
             error=error
         ))
 
@@ -704,9 +711,26 @@ async def convert_files_only(
             + "; ".join(failed_files)
         )
 
+    # Bevorzugt der EPC des beschriebenen Bauteils, sonst der doc_hash.
+    #
+    # Der Aufrufer oeffnet damit "Produkt anzeigen"; gefragt ist also das
+    # BAUTEIL, nicht das Dokument. Der doc_hash identifiziert die hochgeladene
+    # DATEI -- als trace_id zurueckgegeben oeffnet er eine ID, unter der im
+    # Datenraum nichts liegt: die Ansicht findet keine Quelle ("Quelle nicht
+    # erreichbar") und faellt mangels Daten auf das Standardbild zurueck.
+    #
+    # Gilt fuer alle Dateiarten dieses Endpunkts, auch die Ausfuehrungsplanung:
+    # Die IFC erzeugt zwar kein EPCIS-Event -- sie beschreibt ein BESTEHENDES
+    # Bauteil --, traegt dessen Ident aber in `epcs`. Gerade dort ist die
+    # richtige ID entscheidend, denn das Bauteil existiert bereits und hat
+    # Daten, die angezeigt werden koennen.
+    first_epc = next(
+        (epc for f in converted_files for epc in (f.epcs or []) if epc),
+        None,
+    )
     return ConvertOnlyResponse(
         success=len([f for f in converted_files if f.rdf_content]) > 0,
-        trace_id=doc_hashes[0] if doc_hashes else "unknown",
+        trace_id=first_epc or (doc_hashes[0] if doc_hashes else "unknown"),
         files=converted_files,
         detection_warnings=detection_warnings,
         converted_at=datetime.utcnow().isoformat() + "Z"
@@ -766,6 +790,16 @@ async def convert_files_auto(
     # Files are identified solely by their canonical document hash (GS1 EPCIS),
     # filled in per file during conversion below.
     doc_hash_by_type: dict[str, str] = {}
+
+    # Die EPCs, die dieser Upload hervorbringt -- in Reihenfolge der Dateien.
+    #
+    # Sie sind die Antwort auf "welches Produkt ist eben entstanden?", der
+    # doc_hash ist es nicht: der identifiziert das DOKUMENT. Wird er als
+    # trace_id zurueckgegeben, oeffnet "Produkt anzeigen" eine ID, die im
+    # Datenraum kein Bauteil bezeichnet -- die Ansicht findet dann nichts und
+    # faellt auf das Standardbild der BSP-Platte zurueck, auch wenn ein Stamm
+    # hochgeladen wurde.
+    output_epcs_ordered: list[str] = []
 
     # Second pass: convert and upload files
     for upload_file, content, detection in file_detections:
@@ -910,6 +944,7 @@ async def convert_files_auto(
             if epcis_result:  # None only when EPCIS_ENABLED=false (operator switch)
                 rdf_content = inject_idents(rdf_content, epcis_result, content)
                 doc_hash = epcis_result.doc_hash or data_type
+                output_epcs_ordered.extend(epcis_result.output_epcs)
                 if not epcis_result.captured and epcis_result.capture_message:
                     detection_warnings.append(
                         f"{data_type}: EPCIS-Idente erzeugt, EPCAT-Capture: "
@@ -1005,9 +1040,21 @@ async def convert_files_auto(
                 except Exception as e:
                     logger.warning(f"Unexpected error during catalog registration for {data_type}: {e}")
 
+    # Bevorzugt der EPC des entstandenen Produkts, sonst der doc_hash.
+    #
+    # Der Aufrufer oeffnet damit "Produkt anzeigen"; gefragt ist also das
+    # BAUTEIL, nicht das Dokument. Bringt ein Vorgang mehrere hervor (ein
+    # Faellvorgang liefert alle Staemme eines Einsatzes), steht der erste
+    # stellvertretend -- ueber ihn findet die Ansicht denselben Vorgang und
+    # damit auch die uebrigen. Der doc_hash bleibt als Rueckfall, damit ein
+    # Upload ohne EPCIS (Betreiberschalter aus) weiterhin eine ID liefert.
     return AutoConvertResponse(
         success=success,
-        trace_id=next(iter(doc_hash_by_type.values()), "unknown"),
+        trace_id=(
+            output_epcs_ordered[0]
+            if output_epcs_ordered
+            else next(iter(doc_hash_by_type.values()), "unknown")
+        ),
         files=results,
         detection_warnings=detection_warnings,
         converted_at=datetime.utcnow().isoformat() + "Z",
@@ -1229,12 +1276,22 @@ async def get_pdf_template_file(template_id: str):
 # genuegt die Verknuepfung ueber den Ident, und ein zusaetzliches Event wuerde
 # denselben Vorgang mehrfach behaupten.
 #
-# Heute nur die Leistungserklaerung: sie traegt in ihren versteckten
-# AcroForm-Feldern (Identity_<n> / IdentityInput_<n>) die n:m-Zuordnung
-# Rundholz -> Lamellen und ist damit die einzige PDF-Quelle, aus der ein
-# TransformationEvent entstehen kann.
+# Die Leistungserklaerung traegt in ihren versteckten AcroForm-Feldern
+# (Identity_<n> / IdentityInput_<n>) die n:m-Zuordnung Rundholz -> Lamellen
+# und ist damit die PDF-Quelle, aus der ein TransformationEvent entsteht.
+#
+# Das Stammzertifikat kam am 26.08.2026 dazu. Es beschreibt den Beginn der
+# Kette -- das Ausbringen des Vermehrungsguts auf einer Flaeche -- und ist
+# damit sehr wohl ein Vorgang der Lieferkette. Der seed-Treiber erzeugt daraus
+# einen ObjectEvent (bizStep creating_class_instance) mit dem LGTIN des
+# Saatguts in der quantityList; seit der Erhebung der ausgebrachten Menge
+# steht dort auch quantity/uom=GRM, statt eines Loses ohne Mengenangabe.
+#
+# Ohne diesen Eintrag blieb der Pflanzvorgang ereignislos: die Daten lagen im
+# Pod, aber die erste Stufe fehlte in jeder EPCIS-Abfrage.
 EPCIS_PDF_DATA_TYPES = {
     "pdf_leistungserklaerung": "leistungserklaerung",
+    "pdf_stammzertifikat": "stammzertifikat",
 }
 
 

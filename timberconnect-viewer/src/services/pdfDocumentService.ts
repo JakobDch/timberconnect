@@ -126,6 +126,21 @@ export type PdfExtraFields = Record<string, unknown>;
 /** Registry-Key der auf der Karte gezeichneten Pflanzflaeche. */
 export const PLANTING_AREA_KEY = 'pflanzflaeche';
 
+/**
+ * Registry-Key der auf der Flaeche ausgebrachten Saatgutmenge, in Gramm.
+ *
+ * NICHT dasselbe wie das AcroForm-Feld "menge" (Punkt 12 des
+ * Stammzertifikats): Jenes nennt die Menge der zertifizierten Partie, dieses
+ * die davon auf DIESER Flaeche ausgebrachte Teilmenge. Eine Partie wird in
+ * aller Regel auf mehrere Flaechen verteilt — die beiden Zahlen sind darum
+ * verschieden und beide richtig.
+ *
+ * Der Wert ist zugleich die Mengenangabe zur LGTIN des Saatguts und wird vom
+ * seed-Treiber als quantity/uom in die quantityList des ObjectEvents
+ * uebernommen.
+ */
+export const SEED_QUANTITY_KEY = 'ausgebrachteMenge';
+
 /** Registry-Key des im Viewer gewaehlten Materialbezugs (GS1-EPC). */
 export const MATERIAL_REF_KEY = 'materialEpc';
 
@@ -511,6 +526,8 @@ export async function uploadPdfDocument(
    * ein PDF nicht tragen kann — er wird vor dem Upload separat erhoben.
    */
   plantingArea?: unknown,
+  /** Auf dieser Flaeche ausgebrachte Saatgutmenge in Gramm. */
+  seedQuantityGrams?: number | null,
 ): Promise<PdfDocumentResult> {
   const outcome = await uploadPdfOriginal(file, authenticatedFetch, ownerWebId);
 
@@ -524,7 +541,12 @@ export async function uploadPdfDocument(
   // Ohne jeden Wert gibt es nichts zu materialisieren. Ein eingebetteter Ident
   // oder eine gezeichnete Flaeche sind aber fuer sich schon Aussagen — dann
   // wird konvertiert, auch wenn das Formular selbst leer blieb.
-  if (outcome.fieldCount === 0 && !outcome.identity && !plantingArea) {
+  if (
+    outcome.fieldCount === 0 &&
+    !outcome.identity &&
+    !plantingArea &&
+    !seedQuantityGrams
+  ) {
     return {
       outcome,
       published: null,
@@ -534,6 +556,7 @@ export async function uploadPdfDocument(
 
   const { extraFields, epcSource } = extraFieldsFromIdentity(outcome.identity);
   if (plantingArea) extraFields[PLANTING_AREA_KEY] = plantingArea;
+  if (seedQuantityGrams) extraFields[SEED_QUANTITY_KEY] = seedQuantityGrams;
 
   try {
     const published = await publishPdfForm(

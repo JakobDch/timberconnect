@@ -1,13 +1,18 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Leaf,
   Nfc,
   Upload,
-  Info,
   Handshake,
 } from 'lucide-react';
 import { SupplyChainGraphic } from './SupplyChainGraphic';
-import { USE_CASES, isAvailable } from '../../config/useCases';
+import { UseCaseIcon, UseCaseInfoSheet } from '../UseCases';
+import {
+  USE_CASES,
+  isAvailable,
+  type UseCaseDefinition,
+} from '../../config/useCases';
 
 interface LandingViewProps {
   onScanClick: () => void;
@@ -24,6 +29,10 @@ export function LandingView({
   onPartnersClick,
   onUseCaseClick,
 }: LandingViewProps) {
+  // Der Anwendungsfall, dessen Infoblock offen ist. Auf der Startseite fuehrt
+  // die Kachel bewusst hierhin und nicht direkt zum Scanner (Vorgabe Anni).
+  const [infoUseCase, setInfoUseCase] = useState<UseCaseDefinition | null>(null);
+
   return (
     <div className="flex-1 bg-night-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
@@ -42,11 +51,11 @@ export function LandingView({
               Lieferkettentransparenz
             </span>
 
-            {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight text-white">
-              Lückenlose
-              <span className="block text-acid-400">Lieferketten-</span>
-              Transparenz
+            {/* Headline (Titelvorgabe Anni, 26.08.2026). "Wertschöpfungskette"
+                traegt die Aussage und bekommt deshalb die Akzentfarbe. */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-[1.12] tracking-tight text-white">
+              Transparenz und Datendurchgängigkeit in der{' '}
+              <span className="text-acid-400">Wertschöpfungskette Holz</span>
             </h1>
 
             {/* Subline */}
@@ -60,30 +69,23 @@ export function LandingView({
               <SupplyChainGraphic />
             </div>
 
-            {/* CTAs */}
-            <div className="space-y-3 max-w-xl">
-              <button
-                onClick={onScanClick}
-                className="btn btn-acid btn-lg w-full"
-              >
+            {/* CTAs -- beide Wege sind gleichwertig (Vorgabe Anni,
+                26.08.2026): Daten abrufen und Daten einspeisen sind zwei
+                Haelften derselben Anwendung, keine Haupt- und Nebenhandlung.
+                Vorher war "Produkt scannen" breit und lime, "Vorgang
+                registrieren" halb so breit und dunkel.
+                "Mehr erfahren" ist von hier ins Seitenmenue gewandert -- es
+                fuehrt aus der Anwendung heraus auf die Projektwebseite und
+                gehoert damit nicht neben die beiden Haupthandlungen. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+              <button onClick={onScanClick} className="btn btn-acid btn-lg">
                 <Nfc className="w-5 h-5" />
                 <span>Produkt scannen</span>
               </button>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button onClick={onUploadClick} className="btn btn-night">
-                  <Upload className="w-5 h-5" />
-                  <span>Vorgang registrieren</span>
-                </button>
-                <a
-                  href="https://timberconnect.2e94cc17.nip.io/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-night"
-                >
-                  <Info className="w-5 h-5" />
-                  <span>Mehr erfahren</span>
-                </a>
-              </div>
+              <button onClick={onUploadClick} className="btn btn-acid btn-lg">
+                <Upload className="w-5 h-5" />
+                <span>Vorgang registrieren</span>
+              </button>
             </div>
           </motion.div>
 
@@ -116,42 +118,35 @@ export function LandingView({
 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto">
             {USE_CASES.map((useCase) => {
-              // Jeder fertige Fall ist waehlbar. Fehlt das Produkt, fuehrt
-              // App.tsx erst zum Scan und danach direkt in die Ansicht.
               const openable = isAvailable(useCase);
               const Tag = openable ? 'button' : 'div';
               return (
                 <Tag
                   key={useCase.id}
-                  onClick={openable ? () => onUseCaseClick(useCase.id) : undefined}
+                  // Oeffnet den Infoblock statt direkt den Scanner: auf der
+                  // Startseite ist die offene Frage "was ist das?", nicht
+                  // "welches Bauteil?".
+                  onClick={openable ? () => setInfoUseCase(useCase) : undefined}
                   className={`relative bg-night-800 border rounded-2xl p-4 sm:p-5 flex flex-col text-left transition-colors ${
                     openable
                       ? 'border-white/10 hover:border-acid-400/40 cursor-pointer'
                       : 'border-white/5'
                   }`}
                 >
-                  <span className="absolute top-3 right-3 w-6 h-6 rounded-full border border-white/10 flex items-center justify-center">
-                    <Info className="w-3.5 h-3.5 text-night-400" />
-                  </span>
-                  <div
-                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border flex items-center justify-center mb-3 sm:mb-4 ${
-                      isAvailable(useCase)
-                        ? 'bg-acid-400/15 border-acid-400/30'
-                        : 'bg-night-700 border-white/5'
-                    }`}
-                  >
-                    <useCase.icon
-                      className={`w-5 h-5 ${
-                        isAvailable(useCase) ? 'text-acid-300' : 'text-night-400'
-                      }`}
-                    />
-                  </div>
+                  {/* Kein Untertitel und kein Info-Icon mehr (Vorgabe Anni,
+                      26.08.2026): weitere Informationen erst beim Anklicken.
+                      Das Icon war ohnehin nur Dekoration -- es lag im
+                      Karten-Button, ein Klick darauf oeffnete die Ansicht
+                      statt einer Erklaerung. */}
+                  <UseCaseIcon
+                    useCase={useCase}
+                    size="md"
+                    muted={!openable}
+                    className="mb-3 sm:mb-4"
+                  />
                   <h3 className="text-sm sm:text-base font-semibold text-night-200 leading-snug">
                     {useCase.title}
                   </h3>
-                  <p className="text-xs sm:text-sm text-night-400 mt-0.5">
-                    {useCase.description}
-                  </p>
                   <span
                     className={`mt-3 self-start inline-flex px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-medium ${
                       openable
@@ -176,6 +171,18 @@ export function LandingView({
           </button>
         </motion.section>
       </div>
+
+      {/* Infoblock zum Anwendungsfall. "Jetzt Produkt scannen" uebergibt an
+          denselben Weg wie bisher: App.tsx merkt sich den Fall, oeffnet den
+          Scanner und springt nach dem Scan direkt in die Ansicht. */}
+      <UseCaseInfoSheet
+        useCase={infoUseCase}
+        onClose={() => setInfoUseCase(null)}
+        onScan={(id) => {
+          setInfoUseCase(null);
+          onUseCaseClick(id);
+        }}
+      />
     </div>
   );
 }

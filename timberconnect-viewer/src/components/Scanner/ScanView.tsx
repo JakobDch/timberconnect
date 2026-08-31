@@ -124,8 +124,8 @@ export function ScanView({
                 <span className="block text-acid-400">identifizieren</span>
               </h1>
               <p className="text-night-300 mt-3 max-w-sm leading-relaxed">
-                RFID-Tag, DotCode oder Barcode mit der Scan-Taste des Geräts
-                erfassen — oder die ID von Hand eingeben.
+                Dotcode, Barcode oder RFID-Tag scannen oder die ID händisch
+                eingeben.
               </p>
 
               {targetUseCaseTitle && (
@@ -171,7 +171,7 @@ export function ScanView({
                   className="relative w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-acid-400 text-night-950 flex flex-col items-center justify-center gap-1.5 px-3 text-center shadow-[0_0_60px_rgba(223,233,75,0.35)] disabled:cursor-wait"
                   whileHover={{ scale: isLoading ? 1 : 1.04 }}
                   whileTap={{ scale: isLoading ? 1 : 0.97 }}
-                  aria-label="Bauteil erfassen"
+                  aria-label="Produkt erfassen"
                 >
                   {isLoading ? (
                     <>
@@ -182,7 +182,7 @@ export function ScanView({
                     <>
                       <ScanLine className="w-8 h-8" />
                       <span className="text-xs font-bold leading-tight">
-                        Bauteil erfassen
+                        Produkt erfassen
                       </span>
                     </>
                   )}
@@ -311,12 +311,17 @@ export function ScanView({
                       <div className="w-10 h-10 rounded-xl bg-night-700 border border-white/5 flex items-center justify-center flex-shrink-0">
                         <Layers className="w-5 h-5 text-acid-300" />
                       </div>
+                      {/* Name oben, ID darunter -- nicht umgekehrt. Die Liste
+                          zeigt Bauteile; die Material-ID ist ihr Merkmal,
+                          nicht ihr Name. Vorher stand die rohe ID als Titel
+                          und darunter die Beschreibung der Datei, aus der sie
+                          stammte (Rueckmeldung Anni, 26.08.2026). */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-mono font-semibold text-white truncate">
-                          {product.id}
+                        <p className="text-sm font-semibold text-white truncate">
+                          {product.name}
                         </p>
-                        <p className="text-xs text-night-400 mt-0.5 truncate">
-                          {product.description}
+                        <p className="text-xs font-mono text-night-400 mt-0.5 truncate">
+                          {product.id}
                         </p>
                       </div>
                     </button>

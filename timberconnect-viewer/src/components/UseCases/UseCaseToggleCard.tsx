@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
 import { ToggleSwitch } from '../UI/ToggleSwitch';
-import { DEFAULT_USE_CASE_ICON, type UseCaseDefinition } from '../../config/useCases';
+import { UseCaseIcon } from './UseCaseIcon';
+import { type UseCaseDefinition } from '../../config/useCases';
 
 interface UseCaseToggleCardProps {
   useCase: UseCaseDefinition;
@@ -23,7 +24,6 @@ export function UseCaseToggleCard({
   available = true,
   unavailableReason,
 }: UseCaseToggleCardProps) {
-  const Icon = useCase.icon ?? DEFAULT_USE_CASE_ICON;
   const isInteractive = available && isEnabled;
 
   // Auf dem Touchscreen gibt es kein Hovern — deshalb laesst sich der Grund
@@ -55,19 +55,12 @@ export function UseCaseToggleCard({
         />
       </div>
 
-      <div
-        className={`
-          w-12 h-12 rounded-xl flex items-center justify-center mb-4 border
-          ${isEnabled && available
-            ? 'bg-acid-400 border-acid-300 shadow-lg shadow-acid-400/20'
-            : 'bg-night-700 border-white/5'
-          }
-        `}
-      >
-        <Icon
-          className={`w-6 h-6 ${isEnabled && available ? 'text-night-950' : 'text-night-400'}`}
-        />
-      </div>
+      <UseCaseIcon
+        useCase={useCase}
+        size="lg"
+        muted={!(isEnabled && available)}
+        className="mb-4"
+      />
 
       <h3
         className={`font-bold mb-1.5 text-base pr-12 ${

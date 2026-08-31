@@ -239,72 +239,80 @@ export async function queryBusinessPartners(
  * Liefert ein Kreuzprodukt der Adressliterale -- siehe Query-Kommentar.
  */
 export async function queryTransportOrders(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createTransportOrdersQuery();
+  const query = createTransportOrdersQuery(epcs);
   console.log('[SPARQL] Querying transport orders');
   return executeQuery(query, sources);
 }
 
 /** Query certificates + test reports (Herkunftsnachweis I-5/I-6/I-7). */
 export async function queryCertificateData(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createCertificateDataQuery();
+  const query = createCertificateDataQuery(epcs);
   console.log('[SPARQL] Querying certificates / test reports');
   return executeQuery(query, sources);
 }
 
 /** Leistungserklaerung + Rechnungsempfaenger (I-1/I-2, I-27/I-28). */
 export async function queryDeclarations(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createDeclarationQuery();
+  const query = createDeclarationQuery(epcs);
   console.log('[SPARQL] Querying declarations of performance / invoice');
   return executeQuery(query, sources);
 }
 
 /** ERP-Panel + Leistungserklaerung + Klebstoff (Rueckbaubarkeit I-29..I-56). */
 export async function queryDeconstruction(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createDeconstructionQuery();
+  const query = createDeconstructionQuery(epcs);
   console.log('[SPARQL] Querying deconstruction data (panel / DoP / adhesive)');
   return executeQuery(query, sources);
 }
 
 /** Verortung im Gebaeude + Gewicht/Norm (Awf "Dokumentation" I-57..I-89). */
 export async function queryDocumentation(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createDocumentationQuery();
+  const query = createDocumentationQuery(epcs);
   console.log('[SPARQL] Querying documentation data (building part / project / panel)');
   return executeQuery(query, sources);
 }
 
 /** Pruefwerte, Konformitaet und Verantwortung (Awf "Nachweis der Haftung" I-1..I-44). */
 export async function queryLiability(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createLiabilityQuery();
+  const query = createLiabilityQuery(epcs);
   console.log('[SPARQL] Querying liability data (test report / DoP / adhesive / panel)');
   return executeQuery(query, sources);
 }
 
 /** Eingangsgroessen + Zusatzinfos der CO2-Bilanz (Awf "CO2-Bilanz"). */
 export async function queryLca(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createLcaQuery();
+  const query = createLcaQuery(epcs);
   console.log('[SPARQL] Querying LCA data (panel / transport orders / DoP / adhesive)');
   return executeQuery(query, sources);
 }
 
 /** Produktpass-Angaben nach CPR Art. 76 / ESPR (Awf "DBPP"). */
 export async function queryDbpp(
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createDbppQuery();
+  const query = createDbppQuery(epcs);
   console.log('[SPARQL] Querying DBPP data (panel / DoP / adhesive / IFC / certificate)');
   return executeQuery(query, sources);
 }
@@ -356,6 +364,20 @@ export interface ProductDataResult {
       loadProductData): der Pass fasst Angaben zusammen, die dort bereits
       gezaehlt werden -- sonst zahlte man denselben Datenpunkt zweimal. */
   dbpp: SparqlBinding[];
+  /**
+   * Treffer aus ``createEpcQuery`` fuer AUSSCHLIESSLICH den gescannten Ident.
+   *
+   * ``product`` traegt beim EPC-Abruf die Treffer ALLER Idente der Kette --
+   * beim Scan einer BSP-Platte also auch die ihrer 169 Lamellen, weil
+   * ``collectEpcs`` die ``inputEPCList`` des TransformationEvents mitliest.
+   * Fuer Aussagen ueber das erfasste Bauteil selbst (Produktart!) ist diese
+   * verschmolzene Liste unbrauchbar: sie enthaelt die Typen der Vormaterialien
+   * gleichberechtigt neben denen der Platte.
+   *
+   * Dieses Feld haelt die Herkunft fest. Nur beim EPC-zentrischen Abruf
+   * gesetzt; beim traceId-Abruf gibt es keinen gescannten Ident.
+   */
+  scannedEpc?: SparqlBinding[];
   sourceStatus: SourceStatus[];
   errors: string[];
   epcisInfo?: EpcisInfo;
@@ -502,20 +524,76 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
   }
 
   // 4. For each EPC, query the pod for the bearing subject + its product data.
-  const epcBindings = (
-    await Promise.all(
-      [...epcs].map((e) =>
-        executeQuery(createEpcQuery(e), available).catch((err) => {
-          console.error('[SPARQL] EPC query failed for', e, err);
-          return [] as SparqlBinding[];
-        }),
-      ),
-    )
-  ).flat();
+  //
+  // Die Treffer des GESCANNTEN Idents werden dabei getrennt gehalten. ``epcs``
+  // enthaelt naemlich die ganze Kette: ``collectEpcs`` liest die
+  // ``inputEPCList`` der Events mit, beim Scan einer BSP-Platte sind das ihre
+  // 169 Lamellen. Verschmilzt man alle Treffer zu einer Liste, laesst sich der
+  // Platte nicht mehr ansehen, welche Zeile ihr gehoert und welche ihrem
+  // Vormaterial -- die Produktart wurde so zur "Lamelle", weil die
+  // Leistungserklaerung der Lamellen ``tc:SawingProcess`` beisteuert.
+  const perEpc = await Promise.all(
+    [...epcs].map(async (e) => ({
+      epc: e,
+      bindings: await executeQuery(createEpcQuery(e), available).catch((err) => {
+        console.error('[SPARQL] EPC query failed for', e, err);
+        return [] as SparqlBinding[];
+      }),
+    })),
+  );
+  const epcBindings = perEpc.flatMap((r) => r.bindings);
+  const scannedEpcBindings = perEpc.find((r) => r.epc === epc)?.bindings ?? [];
 
-  // 5. Run the regular product/stem/sawmill/bsp queries unfiltered over the same
-  //    sources so the product pass renders with full detail. The id is the EPC,
-  //    which is not a trace-id, so these queries run without an in-file filter.
+  // Nachvollziehbar machen, woran die Produktart haengt: welche Typen der
+  // GESCANNTE Ident hergibt und -- falls keine -- ob die Quelle ueberhaupt
+  // in der Liste stand. Ohne diese Zeile ist von aussen nicht zu
+  // unterscheiden, ob der Typ fehlt oder die Datei nicht geladen wurde.
+  const scannedTypes = scannedEpcBindings
+    .map((row) => row.type?.value)
+    .filter((t): t is string => !!t);
+  console.log(
+    `[SPARQL] Gescannter Ident ${epc}: ${scannedEpcBindings.length} Treffer, Typen:`,
+    scannedTypes.length ? scannedTypes : '(keine)',
+  );
+  if (!scannedTypes.length) {
+    console.warn(
+      '[SPARQL] Keine Typangabe am gescannten Ident — die Produktart bleibt leer. ' +
+        'Geladene Quellen:',
+      available,
+    );
+  }
+  // Welche Subjekte tragen den Ident, und welche Quelle liefert sie? Mehrere
+  // Dokumente duerfen denselben tc:epc fuehren (die Leistungserklaerung
+  // verweist per materialEpc auf dieselbe Platte wie der ERP-Auszug). Erst
+  // diese Aufstellung zeigt, ob eine erwartete Quelle FEHLT oder nur ihr
+  // Subjekt keinen Typ traegt.
+  console.log(
+    '[SPARQL] Subjekte am gescannten Ident:',
+    scannedEpcBindings.map((row) => ({
+      subject: row.subject?.value,
+      type: row.type?.value,
+    })),
+  );
+  console.log(
+    '[SPARQL] Quellen mit "herstellung" in der Liste:',
+    available.filter((u) => u.includes('herstellung')),
+  );
+
+  // 5. Die Abfragen laufen ueber dieselben Quellen -- die dokumentbezogenen
+  //    aber MIT Ident-Schranke.
+  //
+  //    Frueher liefen sie ungefiltert. Da die Quellenliste den ganzen Katalog
+  //    umfasst (Schritt 3), lieferte z.B. queryCertificateData ALLE
+  //    Stammzertifikate aller Bauteile. Mit genau einem hochgeladenen
+  //    Zertifikat fiel das nicht auf; beim zweiten haette der
+  //    Herkunftsnachweis fremde Baumarten und Reifejahre als die eigenen
+  //    ausgewiesen -- ebenso Rueckbaubarkeit, Dokumentation, Haftung,
+  //    CO2-Bilanz und DBPP.
+  //
+  //    ``chainEpcs`` ist die Kette dieses Bauteils (gescannter Ident +
+  //    Vorprodukte aus den EPCIS-Ereignissen, Schritt 2). Genau daran haengen
+  //    die PDF-Vorgaenge ueber tc:epc (im Mapping: materialEpc).
+  const chainEpcs = [...epcs];
   const [
     product,
     stem,
@@ -540,14 +618,14 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
     queryBspWerkSource(epc, available).catch(() => []),
     querySupplyChain(epc, available).catch(() => []),
     queryBusinessPartners(epc, available).catch(() => []),
-    queryTransportOrders(available).catch(() => []),
-    queryCertificateData(available).catch(() => []),
-    queryDeclarations(available).catch(() => []),
-    queryDeconstruction(available).catch(() => []),
-    queryDocumentation(available).catch(() => []),
-    queryLiability(available).catch(() => []),
-    queryLca(available).catch(() => []),
-    queryDbpp(available).catch(() => []),
+    queryTransportOrders(available, chainEpcs).catch(() => []),
+    queryCertificateData(available, chainEpcs).catch(() => []),
+    queryDeclarations(available, chainEpcs).catch(() => []),
+    queryDeconstruction(available, chainEpcs).catch(() => []),
+    queryDocumentation(available, chainEpcs).catch(() => []),
+    queryLiability(available, chainEpcs).catch(() => []),
+    queryLca(available, chainEpcs).catch(() => []),
+    queryDbpp(available, chainEpcs).catch(() => []),
   ]);
 
   return {
@@ -566,6 +644,7 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
     liability,
     lca,
     dbpp,
+    scannedEpc: scannedEpcBindings,
     sourceStatus: available.map((url) => ({ url, available: true, pod: extractPodHost(url) })),
     errors,
     epcisInfo,
@@ -734,6 +813,11 @@ export async function fetchProductData(
         console.error('[SPARQL] Business partners query failed:', e);
         return [];
       }),
+      // Ohne Ident-Schranke, und das ist hier richtig: der Trace-Id-Pfad
+      // kennt keine EPC-Kette. Die Quellen stammen aus dem Katalogeintrag
+      // GENAU DIESER Trace-Id, sind also bereits auf ein Bauteil begrenzt --
+      // anders als im EPC-Pfad, der den ganzen Katalog laedt. Eine leere
+      // Ident-Liste laesst identGuard() bewusst entfallen.
       queryTransportOrders(available).catch((e) => {
         console.error('[SPARQL] Transport orders query failed:', e);
         return [];

@@ -15,7 +15,7 @@ import {
   type ActorKind,
   type ProvenanceActor,
 } from '../../services/provenanceMapper';
-import { geocodeAddress } from '../../services/geocodingService';
+import { geocodeActorLocation } from '../../services/geocodingService';
 import { ActorLocationMap, ACTOR_COLORS, ACTOR_LABELS, type ActorMarker } from '../Map';
 import { DocumentDownloadSection } from '../Documents';
 
@@ -90,15 +90,14 @@ export function OriginProofView({
   useEffect(() => {
     let cancelled = false;
 
-    const pending = provenance.actors.filter((a) => !a.coordinates && a.address);
+    // Auch Akteure ohne Anschrift kommen mit: ueber den Firmennamen allein ist
+    // ein Standort oft noch auffindbar (siehe geocodeActorLocation).
+    const pending = provenance.actors.filter((a) => !a.coordinates && (a.address || a.name));
     if (pending.length === 0) return;
 
     (async () => {
       for (const actor of pending) {
-        const position = await geocodeAddress(
-          // Der Firmenname hilft Nominatim, wenn die Strasse fehlt.
-          [actor.address, actor.name].filter(Boolean).join(', '),
-        );
+        const position = await geocodeActorLocation(actor.name, actor.address);
         if (cancelled) return;
         setGeocoded((prev) => ({ ...prev, [actor.id]: position }));
       }

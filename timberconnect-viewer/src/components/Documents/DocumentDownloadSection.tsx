@@ -79,7 +79,7 @@ export function DocumentDownloadSection({
     setDocError(null);
     try {
       const access = await checkFileAccess(webId, role?.iri ?? null);
-      const all = await listAccessibleFiles(access.accessible);
+      const all = await listAccessibleFiles(access.accessible, role?.iri ?? null);
 
       // Gescannte Produkte tragen eine EPC-URN als Id -- die trifft nie einen
       // Containernamen. Dann ueber die geladenen Quell-URLs eingrenzen.
@@ -122,6 +122,8 @@ export function DocumentDownloadSection({
         return;
       }
       await downloadOriginalFile(file);
+      // Auch der Gratis-Fall ist ein Erwerb -- siehe FileBrowserSheet.
+      await commitPurchase(webId, estimate);
     } catch (e) {
       setDocError(`${file.name}: ${e instanceof Error ? e.message : 'Download fehlgeschlagen'}`);
     } finally {

@@ -219,7 +219,7 @@ export function ScanInputModal({
                   <ScanLine className="w-5 h-5 text-acid-300" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-white">Bauteil erfassen</h2>
+                  <h2 className="text-base font-bold text-white">Produkt erfassen</h2>
                   <p className="text-xs text-night-300 mt-0.5">
                     Scannen oder ID eingeben
                   </p>

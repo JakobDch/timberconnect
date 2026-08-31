@@ -17,7 +17,18 @@ interface PartnerSheetProps {
   onClose: () => void;
 }
 
-/** Weiße Logo-Kachel; fällt bei fehlender Bilddatei auf ein Initialen-Monogramm zurück. */
+/**
+ * Weiße Logo-Kachel.
+ *
+ * Die Kachel ist bewusst grosszuegig und quadratisch: die Partnerlogos sind
+ * teils breit (EGGER, Wald und Holz NRW), teils hoch (Baues Wunder). Eine
+ * flache Kachel schnitt die einen klein und liess die anderen verschwinden.
+ * Weisser Grund, weil fast alle Logos dunkel auf transparent vorliegen und
+ * auf dem Nachtblau sonst nicht lesbar waeren.
+ *
+ * Das Initialen-Monogramm bleibt als Rueckfall, falls eine Datei fehlt --
+ * angezeigt werden soll aber ueberall das Logo (Rueckmeldung Anni).
+ */
 function PartnerLogo({ partner }: { partner: Partner }) {
   const [failed, setFailed] = useState(false);
   const initials = partner.name
@@ -28,7 +39,7 @@ function PartnerLogo({ partner }: { partner: Partner }) {
     .toUpperCase();
 
   return (
-    <div className="w-14 h-11 rounded-lg bg-white flex items-center justify-center overflow-hidden flex-shrink-0 p-1.5">
+    <div className="w-24 h-16 rounded-xl bg-white flex items-center justify-center overflow-hidden flex-shrink-0 p-1.5">
       {failed ? (
         <span className="text-night-800 font-extrabold text-sm">{initials}</span>
       ) : (
@@ -114,19 +125,18 @@ export function PartnerSheet({ isOpen, onClose }: PartnerSheetProps) {
             {/* Förderhinweis */}
             <div className="px-5 sm:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-white/5">
               <div className="flex items-center justify-center gap-3">
-                <div className="bg-white rounded-lg px-2.5 py-1.5">
+                <div className="bg-white rounded-lg px-3 py-2">
                   <img
                     src={logoEuKofinanziert}
                     alt="Kofinanziert von der Europäischen Union"
-                    className="h-8 w-auto object-contain"
+                    className="h-9 w-auto object-contain"
                   />
                 </div>
-                <div className="w-px h-8 bg-white/15" />
-                <div className="bg-white rounded-lg px-2.5 py-1.5">
+                <div className="bg-white rounded-lg px-3 py-2">
                   <img
                     src={logoNrwMunv}
                     alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-                    className="h-8 w-auto object-contain"
+                    className="h-12 w-auto object-contain"
                   />
                 </div>
               </div>

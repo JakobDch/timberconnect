@@ -2,15 +2,8 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
-  Package,
   CheckCircle2,
-  TreePine,
-  Shield,
-  ExternalLink,
   Verified,
-  MapPin,
-  Calendar,
-  Hash,
   AlertCircle,
   Loader2,
 } from 'lucide-react';
@@ -22,7 +15,7 @@ import {
   type UseCaseDefinition,
 } from '../../config/useCases';
 import { UseCaseToggleCard } from './UseCaseToggleCard';
-import { detectProductStage } from '../../services/productImageService';
+import { detectProductStage, productImageFor } from '../../services/productImageService';
 import { ProductImageSection } from '../Dashboard';
 import type { Product, SupplyChainStep } from '../../types';
 import type { ProductDataResult } from '../../services/sparqlService';
@@ -100,9 +93,15 @@ export function UseCaseGrid({
     certifications: [],
   };
 
-  const certifications = displayProduct.certifications || [];
-  const origin = displayProduct.origin?.region || 'Unbekannt';
-  const harvestDate = displayProduct.harvestDate || '-';
+  /**
+   * Produktart als Text -- die einzige Sachangabe, die vor dem Kauf sichtbar
+   * ist. Sie stammt aus derselben Erkennung wie das Bild und wird bewusst
+   * NICHT geraten: ohne belegten RDF-Typ bleibt die Kachel ohne Beschriftung
+   * (siehe productImageService), statt eine Produktart zu behaupten.
+   */
+  const productTypeLabel = product
+    ? (productImageFor(product, productData)?.label ?? null)
+    : null;
 
   // Count enabled active use cases
   const enabledCount = USE_CASES.filter(
@@ -197,10 +196,14 @@ export function UseCaseGrid({
             </motion.div>
           )}
 
-          {/* Bauteil-Steckbrief. Frueher stand rechts daneben der Chat; er ist
-              inzwischen ein eigener Anwendungsfall ("Sprich mit deinem Bauteil")
-              und gehoert nicht auf den Bildschirm, auf dem man den Fall erst
-              auswaehlt. Deshalb hier volle Breite statt 3 von 5 Spalten. */}
+          {/* Kurzinfo zum erfassten Bauteil.
+              BEWUSST MINIMAL: Der Scan ist kostenlos, also darf hier auch
+              nichts stehen, wofuer man zahlen muesste. Gezeigt wird nur, was
+              der Nutzer ohnehin selbst mitgebracht hat -- die gescannte ID --
+              und die Produktart mit Bild, damit er sieht, dass das richtige
+              Bauteil erkannt wurde. Holzart, Qualitaet, Herkunft und Einschlag
+              standen hier frueher frei sichtbar; das waren genau jene
+              Datenpunkte, die die Anwendungsfaelle verkaufen. */}
           <div className="mb-10">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -208,119 +211,43 @@ export function UseCaseGrid({
               transition={{ delay: 0.1 }}
               className="bg-night-800 rounded-2xl border border-white/5 overflow-hidden"
             >
-              {/* Header */}
-              <div className="relative bg-night-950 px-6 py-5">
-                <div className="absolute inset-0">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-acid-400/5 rounded-full blur-[80px]" />
-                </div>
-                <div className="relative flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-acid-400/15 border border-acid-400/30 flex items-center justify-center">
-                    <TreePine className="w-7 h-7 text-acid-300" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-acid-400/15 text-acid-300 text-xs font-medium rounded-full border border-acid-400/30">
-                        <Verified className="w-3 h-3" />
-                        Verifiziert
-                      </span>
-                      {certifications.map((cert) => (
-                        <span
-                          key={cert}
-                          className="px-2 py-0.5 bg-white/10 text-white/80 text-xs font-medium rounded-full"
-                        >
-                          {cert}
-                        </span>
-                      ))}
-                    </div>
-                    <h1 className="text-xl font-bold text-white">{displayProduct.name}</h1>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content with Image and Facts */}
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Product Image */}
+              <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-5">
+                {/* Bild bleibt bewusst klein: es ist ein Wiedererkennungs-
+                    zeichen, nicht der Inhalt der Seite. Feste, moderate
+                    Kachelgroesse statt einer halben Rasterspalte. */}
+                <div className="w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0 mx-auto sm:mx-0">
                   <ProductImageSection
                     product={product}
                     productData={productData}
                     productType={product?.productType}
                     productName={displayProduct.name}
+                    variant="compact"
                   />
+                </div>
 
-                  {/* Product Facts */}
-                  <div className="flex flex-col">
-                    {displayProduct.description && (
-                      <p className="text-night-300 mb-4 text-sm">{displayProduct.description}</p>
+                <div className="min-w-0 flex-1 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-acid-400/15 text-acid-300 text-xs font-medium rounded-full border border-acid-400/30">
+                      <Verified className="w-3 h-3" />
+                      Erfasst
+                    </span>
+                    {productTypeLabel && (
+                      <span className="px-2 py-0.5 bg-white/10 text-white/80 text-xs font-medium rounded-full truncate max-w-[55vw] sm:max-w-none">
+                        {productTypeLabel}
+                      </span>
                     )}
-
-                    {/* Product Details */}
-                    <div className="grid grid-cols-2 gap-3 flex-1">
-                      <div className="flex items-center gap-3 p-3 bg-night-700/50 border border-white/5 rounded-xl">
-                        <Package className="w-5 h-5 text-acid-300 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-xs text-night-300 uppercase tracking-wide">
-                            Holzart
-                          </div>
-                          <div className="font-semibold text-white truncate">
-                            {displayProduct.woodType}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 bg-night-700/50 border border-white/5 rounded-xl">
-                        <Shield className="w-5 h-5 text-acid-300 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-xs text-night-300 uppercase tracking-wide">
-                            Qualität
-                          </div>
-                          <div className="font-semibold text-white truncate">
-                            {displayProduct.quality || '-'}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 bg-night-700/50 border border-white/5 rounded-xl">
-                        <MapPin className="w-5 h-5 text-acid-300 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-xs text-night-300 uppercase tracking-wide">
-                            Herkunft
-                          </div>
-                          <div className="font-semibold text-white truncate">{origin}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 bg-night-700/50 border border-white/5 rounded-xl">
-                        <Calendar className="w-5 h-5 text-acid-300 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-xs text-night-300 uppercase tracking-wide">
-                            Einschlag
-                          </div>
-                          <div className="font-semibold text-white truncate">
-                            {harvestDate}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Product ID Section */}
-                    <div className="pt-4 mt-4 border-t border-white/5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Hash className="w-4 h-4 text-night-300 flex-shrink-0" />
-                          <div className="min-w-0">
-                            <div className="text-xs text-night-300 uppercase tracking-wide mb-0.5">
-                              Produkt-ID
-                            </div>
-                            <code className="block text-xs font-mono text-night-100 bg-night-900 px-2 py-1 rounded truncate">
-                              {productId}
-                            </code>
-                          </div>
-                        </div>
-                        <button className="inline-flex items-center gap-1.5 text-xs font-medium text-night-300 hover:text-white transition-colors flex-shrink-0">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Solid Pod</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
+
+                  <div className="text-xs text-night-300 uppercase tracking-wide mb-1">
+                    Erfasste ID
+                  </div>
+                  <code className="block text-sm font-mono text-night-100 bg-night-900 px-3 py-2 rounded-lg break-all">
+                    {productId}
+                  </code>
+
+                  <p className="text-xs text-night-400 mt-3">
+                    Details werden im jeweiligen Anwendungsfall angezeigt.
+                  </p>
                 </div>
               </div>
             </motion.div>

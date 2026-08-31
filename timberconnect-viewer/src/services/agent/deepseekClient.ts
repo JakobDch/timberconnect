@@ -31,11 +31,38 @@ export interface ToolCall {
 export type ChatMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string }
-  | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
+  | {
+      role: 'assistant';
+      content: string | null;
+      /**
+       * Der Denkkanal der vorherigen Runde.
+       *
+       * Im Werkzeugmodus verlangt DeepSeek, dass er vollstaendig
+       * zurueckgegeben wird -- auch in Runden ohne Werkzeugaufruf. Fehlt er,
+       * lehnt die API die Folgeanfrage mit 400 ab. Er wandert also durch den
+       * Verlauf, ohne je in die Anzeige zu geraten.
+       */
+      reasoning_content?: string;
+      tool_calls?: ToolCall[];
+    }
   | { role: 'tool'; tool_call_id: string; content: string };
 
 export interface CompletionResult {
+  /** Die Antwort -- das, was fuer den Nutzer bestimmt ist. */
   content: string;
+  /**
+   * Das Nachdenken -- ein EIGENER Kanal, nicht Teil der Antwort.
+   *
+   * DeepSeek liefert die Gedankenkette im Denkmodus als ``reasoning_content``
+   * auf derselben Ebene wie ``content``. Genau diese Trennung wollen wir: was
+   * hier landet, ist per Definition intern und erreicht die Anzeige nie --
+   * unabhaengig davon, welche Worte das Modell waehlt. Ein Textfilter waere
+   * eine Wette darauf, wie es formuliert; ein eigenes Feld ist es nicht.
+   *
+   * Muss im Werkzeugmodus vollstaendig zurueckgegeben werden, sonst lehnt die
+   * API die Folgeanfrage mit 400 ab -- siehe reasoningFor() in agentLoop.
+   */
+  reasoningContent: string;
   toolCalls: ToolCall[];
   finishReason: string | null;
 }
@@ -176,6 +203,7 @@ export async function complete(options: CompletionOptions): Promise<CompletionRe
   const decoder = new TextDecoder();
   const toolCalls = new Map<number, ToolCall>();
   let content = '';
+  let reasoningContent = '';
   let finishReason: string | null = null;
   let buffer = '';
 
@@ -201,6 +229,9 @@ export async function complete(options: CompletionOptions): Promise<CompletionRe
             choices?: Array<{
               delta?: {
                 content?: string;
+                // Der Denkkanal. Beim Streaming tropft er genau wie
+                // ``content`` ein, nur eben getrennt davon.
+                reasoning_content?: string;
                 tool_calls?: Array<Parameters<typeof mergeToolCallDelta>[1]>;
               };
               finish_reason?: string | null;
@@ -216,6 +247,11 @@ export async function complete(options: CompletionOptions): Promise<CompletionRe
           const choice = parsed.choices?.[0];
           if (!choice) continue;
           if (choice.finish_reason) finishReason = choice.finish_reason;
+
+          // Die beiden Kanaele bleiben getrennt. onDelta bekommt NUR den
+          // Antwortkanal -- das Nachdenken wird gesammelt, nie durchgereicht.
+          const reasoning = choice.delta?.reasoning_content;
+          if (reasoning) reasoningContent += reasoning;
 
           const text = choice.delta?.content;
           if (text) {
@@ -234,6 +270,7 @@ export async function complete(options: CompletionOptions): Promise<CompletionRe
 
   return {
     content,
+    reasoningContent,
     // Nach index sortieren, damit die Reihenfolge der Aufrufe der des Modells
     // entspricht -- die Zitatnummern haengen daran.
     toolCalls: [...toolCalls.entries()]

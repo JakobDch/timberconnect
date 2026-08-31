@@ -65,8 +65,19 @@ export interface ProcessType {
   icon: 'sprout' | 'axe' | 'saw' | 'factory' | 'blueprint';
   /** Das Pflichtdokument dieses Vorgangs. */
   leadDoc: {
-    /** Anzeigename, z.B. "Logscom StanForD Datei". */
+    /** Anzeigename, z.B. "Harvesterprotokoll". */
     label: string;
+    /**
+     * Erwartete Dateiendung als Klartext, z.B. ".hpr".
+     *
+     * Bewusst getrennt vom Label und nicht hineingeschrieben: das Label
+     * steht auch mitten in Saetzen ("Nicht als Harvesterprotokoll erkannt",
+     * "Die Pflichtdatei ... muss ein PDF sein"). Mit angehaengter Endung
+     * lesen sich diese Meldungen wie ein Dateiname. Angezeigt wird die
+     * Endung dort, wo sie hilft: in der Vorgangsliste hinter dem Namen
+     * (Vorgabe Anni, 26.08.2026).
+     */
+    fileExt: string;
     /** Warum diese Datei zwingend ist. */
     note: string;
     status: LeadDocStatus;
@@ -92,14 +103,14 @@ export interface ProcessType {
    */
   suggestedTemplates: string[];
   /**
-   * Rollen-IDs (aus config/roles.ts), die diesen Vorgang typischerweise
-   * durchfuehren.
+   * Rollen-IDs (aus config/roles.ts), die diesen Vorgang durchfuehren duerfen.
    *
-   * BEWUSST nur eine Sortier-/Anzeigehilfe, keine Sperre: Betriebe decken in
-   * der Praxis mehrere Stufen ab (integrierte Saegewerke pflanzen und ernten
-   * selbst), und wer den Vorgang tatsaechlich registriert, kann von der
-   * Idealtypik abweichen. Eine harte Bindung wuerde solche Faelle blockieren,
-   * ohne dass die Daten dadurch richtiger wuerden.
+   * SPERRE, nicht nur Sortierung: Wer den Vorgang fachlich nicht umsetzt, soll
+   * ihn gar nicht erst sehen. Ein Fachplaner, der einen Faellvorgang
+   * registriert, erzeugt Daten, fuer die er nicht die ausstellende Stelle ist —
+   * das Dokument im Datenraum behauptet dann eine Urheberschaft, die es nicht
+   * gibt. Wer mehrere Stufen abdeckt (integriertes Saegewerk), traegt das ueber
+   * die Rollenliste hier ein, statt die Grenze im Formular aufzuweichen.
    */
   typicalRoles: string[];
 }
@@ -108,11 +119,12 @@ export const PROCESS_TYPES: ProcessType[] = [
   {
     id: 'pflanzung',
     label: 'Pflanzvorgang',
-    description: 'Herkunft und Anpflanzung des Vermehrungsguts.',
+    description: 'Anpflanzen des forstlichen Vermehrungsguts.',
     order: 1,
     icon: 'sprout',
     leadDoc: {
       label: 'Stammzertifikat',
+      fileExt: '.pdf',
       note: 'Enthält die Verknüpfung zur Material-ID des Vermehrungsguts.',
       status: 'template',
       expectedDataType: 'dokument',
@@ -123,16 +135,17 @@ export const PROCESS_TYPES: ProcessType[] = [
     suggestedTemplates: ['pdf_pruefzertifikat'],
     // Das Stammzertifikat fuer Vermehrungsgut stellt der Forstbetrieb aus,
     // der die Flaeche begruendet.
-    typicalRoles: ['Forst'],
+    typicalRoles: ['Forstbetrieb'],
   },
   {
     id: 'faellung',
     label: 'Fällvorgang',
-    description: 'Holzernte im Bestand, Aufarbeitung und Vermessung der Stämme.',
+    description: 'Ernte der Bäume und Bereitstellen des Rundholz.',
     order: 2,
     icon: 'axe',
     leadDoc: {
-      label: 'Logscom StanForD Datei',
+      label: 'Harvesterprotokoll',
+      fileExt: '.hpr',
       note: 'Enthält Stamm-Idente (StemKey), aus denen die EPCIS-Events gebaut werden.',
       status: 'machine',
       expectedDataType: 'forst',
@@ -141,16 +154,19 @@ export const PROCESS_TYPES: ProcessType[] = [
     // Der Transportauftrag Rundholz begleitet die Abfuhr vom Polter --
     // laut Uebersichtstabelle Teil des Faellvorgangs.
     suggestedTemplates: ['pdf_transportauftrag_rundholz'],
-    typicalRoles: ['Forst'],
+    // Das Forstunternehmen erntet im Auftrag und registriert den Vorgang
+    // in der Praxis genauso oft wie der Forstbetrieb selbst.
+    typicalRoles: ['Forstbetrieb', 'Forstunternehmen'],
   },
   {
     id: 'aufsaegung',
     label: 'Aufsägevorgang',
-    description: 'Einschnitt der Stämme zu Schnittholz im Sägewerk.',
+    description: 'Verarbeitung des Rundholz zu Schnittholzlamellen im Sägewerk.',
     order: 3,
     icon: 'saw',
     leadDoc: {
-      label: 'Leistungserklärung',
+      label: 'Leistungserklärung Schnittholzlamelle',
+      fileExt: '.pdf',
       note: 'Enthält die Verknüpfung des Schnittholzes zur Material-ID.',
       status: 'template',
       expectedDataType: 'dokument',
@@ -173,49 +189,61 @@ export const PROCESS_TYPES: ProcessType[] = [
   {
     id: 'herstellung',
     label: 'Herstellungsvorgang',
-    description: 'Produktion des Bauteils, z.B. Brettsperrholz im BSP-Werk.',
+    description:
+      'Produktion des Holzbauteils z.B. Brettsperrholz beim Holzwerkstoffproduzenten.',
     order: 4,
     icon: 'factory',
     leadDoc: {
-      label: 'ERP-Excel-Datei',
+      label: 'ERP-Export',
+      fileExt: '.xlsx',
       note: 'Enthält im Blatt "Identifikation" die Material-ID des hergestellten Bauteils (Identity) und die Lamellen-Idente aus dem Aufsägevorgang (IdentityInput).',
       status: 'machine',
       expectedDataType: 'herstellung',
       accept: '.xlsx',
     },
     suggestedTemplates: ['pdf_klebstoffdatenblatt', 'pdf_leistungserklaerung_bsp'],
-    typicalRoles: ['BspWerk'],
+    typicalRoles: ['Holzwerkstoffproduzent'],
   },
   {
     id: 'planung',
     label: 'Ausführungsplanung',
-    description: 'Verortung des Bauteils im Gebäude aus dem Planungsmodell (IFC).',
+    description: 'Digitales Modell der Arbeitsvorbereitung.',
     order: 5,
     icon: 'blueprint',
     leadDoc: {
-      label: 'IFC-Datei (Auszug)',
+      label: 'Werk- und Montageplanung',
+      fileExt: '.ifc',
       note: 'Bauteilbezogener Auszug des Planungsmodells. Anders als die übrigen Vorgänge entsteht hier KEIN neues Bauteil — die Planung beschreibt ein bestehendes. Deshalb trägt die Datei keinen Ident: die Material-ID des Bauteils wird beim Upload angegeben.',
       status: 'machine',
       expectedDataType: 'planung',
       accept: '.ifc',
     },
     suggestedTemplates: [],
-    typicalRoles: ['Holzbauplanung'],
+    typicalRoles: ['FachplanerHolzbau', 'Holzbauunternehmen'],
   },
 ];
 
 /**
- * Vorgaenge nach Passung zur eigenen Rolle sortiert: die typischen zuerst.
+ * Die Vorgaenge, die diese Rolle registrieren darf — und nur diese.
  *
- * Reine Anzeigehilfe — die Liste bleibt vollstaendig. Ohne Rolle (oder bei
- * einer Rolle ohne eigenen Vorgang, z.B. Haendler/Behoerde) bleibt es bei der
- * Reihenfolge der Produktlebenslinie.
+ * Vorgaenge, die eine andere Rolle umsetzt, werden gar nicht erst angezeigt.
+ * Der Grund ist inhaltlich: Ein Vorgang belegt einen Abschnitt im Leben des
+ * Produkts, und wer ihn registriert, tritt als die Stelle auf, die ihn
+ * durchgefuehrt hat. Eine Auswahl, die das nicht abbildet, erzeugt Daten mit
+ * falscher Urheberschaft.
+ *
+ * Ohne Rolle (noch nicht registriert) bleibt die Liste vollstaendig — die
+ * Rollenwahl folgt ohnehin unmittelbar nach dem Login, und eine hier leere
+ * Liste waere an dieser Stelle nur verwirrend.
+ *
+ * Eine Rolle OHNE eigenen Vorgang (die Mehrzahl der 25 — Versicherer,
+ * Finanzamt, Forschung) bekommt bewusst eine leere Liste zurueck: sie
+ * registriert keine Vorgaenge, sie liest sie. Die UI erklaert das, statt eine
+ * Auswahl anzubieten, die fachlich keine ist.
  */
 export function processTypesForRole(roleId: string | null | undefined): ProcessType[] {
   if (!roleId) return PROCESS_TYPES;
-  const matches = PROCESS_TYPES.filter((t) => t.typicalRoles.includes(roleId));
-  if (matches.length === 0) return PROCESS_TYPES;
-  return [...matches, ...PROCESS_TYPES.filter((t) => !t.typicalRoles.includes(roleId))];
+  return PROCESS_TYPES.filter((t) => t.typicalRoles.includes(roleId));
 }
 
 export function getProcessType(id: ProcessTypeId): ProcessType {

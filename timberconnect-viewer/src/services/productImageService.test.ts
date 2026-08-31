@@ -36,10 +36,17 @@ const epcRow = (type: string) => ({
 const data = (opts: {
   product?: Array<Record<string, { value: string }>>;
   stem?: Array<Record<string, { value: string }>>;
+  scannedEpc?: Array<Record<string, { value: string }>>;
+  /** Zahl der ueber EPCIS aufgeloesten Idente (>1 = Vorkette geladen). */
+  epcsResolved?: number;
 }) =>
   ({
     product: opts.product ?? [],
     stem: opts.stem ?? [],
+    ...(opts.scannedEpc ? { scannedEpc: opts.scannedEpc } : {}),
+    ...(opts.epcsResolved !== undefined
+      ? { epcisInfo: { epc: ID, eventsReturned: 1, eventsFilteredOut: 0, epcsResolved: opts.epcsResolved } }
+      : {}),
     forest: [],
     sawmill: [],
     // Plattendaten sind bei JEDEM Scan dabei — sie duerfen nicht abfaerben.
@@ -111,5 +118,101 @@ describe('Produktart — echte Datenform aus der Konsole', () => {
     expect(detectProductStage(product(ID), data({}))).toBeNull();
     expect(detectProductStage(null, data({}))).toBeNull();
     expect(detectProductStage(product(ID), null)).toBeNull();
+  });
+});
+
+/**
+ * Der gemeldete Fall: eine BSP-Platte wurde als "Schnittholz / Lamelle"
+ * ausgewiesen.
+ *
+ * Beim Scan der Platte loest die EPCIS-Abfrage ihr TransformationEvent auf;
+ * ``collectEpcs`` liest daraus auch die ``inputEPCList`` — die 169 Lamellen,
+ * aus denen sie gepresst wurde. Fuer JEDEN dieser Idente lief createEpcQuery,
+ * und alle Treffer landeten in einer gemeinsamen Liste. Darin steht der
+ * ``tc:SawingProcess`` der Lamellen gleichberechtigt neben dem ``tc:Panel``
+ * der Platte — und weil PROCESS_TO_STAGE griff, gewann die Lamelle.
+ */
+describe('Produktart — gescannter Ident vs. Vorkette', () => {
+  const PANEL = 'urn:epc:id:sgtin:404711148.0401.143138262901';
+
+  it('meldet die BSP-Platte trotz Lamellen-Treffern in der Kette', () => {
+    const d = data({
+      // Nur der Ident der Platte: tc:Panel aus dem ERP-Herstellungsvorgang.
+      scannedEpc: [epcRow(`${TC}Panel`), epcRow(`${TC}EpcisDocument`)],
+      // Die verschmolzene Liste ueber alle 170 Idente der Kette. Genau hier
+      // stand die Ursache: der Saegevorgang der Lamellen.
+      product: [
+        epcRow(`${TC}Panel`),
+        epcRow(`${TC}SawingProcess`),
+        epcRow(`${TC}EpcisDocument`),
+      ],
+      stem: [{ stemNumber: { value: '1' }, dbh: { value: '32' } }],
+      epcsResolved: 170,
+    });
+    expect(detectProductStage(product(PANEL), d)).toBe('clt-panel');
+  });
+
+  it('wertet ausschliesslich den gescannten Ident aus', () => {
+    // Selbst wenn die Kette NUR Lamellen-Belege liefert, darf daraus fuer die
+    // Platte nichts folgen: ohne eigenen Typ lieber keine Angabe.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}EpcisDocument`)],
+      product: [epcRow(`${TC}SawingProcess`)],
+      epcsResolved: 170,
+    });
+    expect(detectProductStage(product(PANEL), d)).toBeNull();
+  });
+
+  it('haelt die Stammdaten der Vorkette von der Platte fern', () => {
+    // Zu jeder Platte gehoeren die Stammdaten ihrer Vorkette. Solange eine
+    // Kette aufgeloest wurde, darf Stufe 3 daraus kein Rundholz ableiten.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}EpcisDocument`)],
+      stem: [{ stemNumber: { value: '4711' }, dbh: { value: '32' } }],
+      epcsResolved: 170,
+    });
+    expect(detectProductStage(product(PANEL), d)).toBeNull();
+  });
+
+  it('erkennt ein Rundholz weiterhin, wenn keine Kette aufgeloest wurde', () => {
+    // Gegenprobe: ohne Vorkette (epcsResolved = 1, nur der Ident selbst)
+    // gehoeren die Stammdaten zum gescannten Stamm.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}EpcisDocument`)],
+      stem: [{ stemNumber: { value: '4711' }, dbh: { value: '32' } }],
+      epcsResolved: 1,
+    });
+    expect(detectProductStage(product(ID), d)).toBe('stem');
+  });
+
+  it('laesst die Leistungserklaerung die Platte nicht verdecken', () => {
+    // Der zweite gemeldete Fall: Am Ident der Platte haengen ZWEI Subjekte --
+    // der ERP-Knoten (tc:Panel) und die Leistungserklaerung, die per
+    // materialEpc auf dieselbe Platte verweist. Welches zuerst kommt, haengt
+    // an der Reihenfolge der Quellen; die Produktart darf davon nicht
+    // abhaengen.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}DeclarationOfPerformance`), epcRow(`${TC}Panel`)],
+      epcsResolved: 170,
+    });
+    expect(detectProductStage(product(PANEL), d)).toBe('clt-panel');
+  });
+
+  it('meldet nichts, wenn NUR Belegdokumente den Ident tragen', () => {
+    // Genau der beobachtete Zustand: die Leistungserklaerung kam an, der
+    // ERP-Auszug nicht. Eine Leistungserklaerung ist keine Produktart --
+    // dann lieber keine Angabe als eine erfundene.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}DeclarationOfPerformance`)],
+      epcsResolved: 170,
+    });
+    expect(detectProductStage(product(PANEL), d)).toBeNull();
+  });
+
+  it('faellt ohne scannedEpc auf product zurueck', () => {
+    // traceId-Abruf und aeltere Aufrufer setzen das Feld nicht; dort ist die
+    // Liste nicht vermischt und bleibt die richtige Quelle.
+    const d = data({ product: [epcRow(`${TC}Panel`)] });
+    expect(detectProductStage(product(PANEL), d)).toBe('clt-panel');
   });
 });

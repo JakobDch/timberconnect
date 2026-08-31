@@ -64,7 +64,7 @@ export function UserMenu() {
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+        className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors flex-shrink-0"
       >
         <div className="w-8 h-8 rounded-full bg-acid-400 flex items-center justify-center overflow-hidden flex-shrink-0">
           {userPhoto ? (
@@ -75,8 +75,10 @@ export function UserMenu() {
             <User className="w-4 h-4 text-night-950" />
           )}
         </div>
+        {/* Der Name kostet bis zu 120px -- auf dem Telefon genuegt das
+            Avatarbild, der Name steht ohnehin im aufgeklappten Menue. */}
         <span
-          className={`text-sm font-medium max-w-[120px] truncate ${
+          className={`hidden sm:block text-sm font-medium max-w-[120px] truncate ${
             hasName ? "text-white" : "text-night-300 italic"
           }`}
         >

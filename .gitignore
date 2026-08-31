@@ -41,3 +41,20 @@ nul
 
 # Large binary files (download separately)
 *.jar
+
+# Arbeitsdateien im Wurzelverzeichnis — Demo-Eingaben, Debug-Mitschnitte und
+# Zwischenablagen aus der Entwicklung. Sie gehoeren nicht zum Quellstand:
+# der Konverter liest sie zur Laufzeit, gebaut wird ohne sie. Bewusst nur
+# das Wurzelverzeichnis (fuehrender /), damit Testdaten und Assets innerhalb
+# der Dienste weiterhin versioniert werden.
+/demo-dateien/
+/demo-dateien_v*/
+/doku-kollege/
+/*.zip
+/*.hpr
+/*.pdf
+/*.png
+/*.json
+/*.txt
+/Awf*/
+/Cadddyfile live

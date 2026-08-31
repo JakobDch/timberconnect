@@ -154,6 +154,35 @@ const TYPE_TO_STAGE: Array<{ classes: string[]; stage: ProductStage }> = [
 ];
 
 /**
+ * Klassen, die den Ident zwar tragen, aber nichts ueber die Produktart sagen.
+ *
+ * Ein Ident haengt an MEHREREN Subjekten: am Erzeugnis selbst (``tc:Panel``
+ * aus dem ERP-Auszug) und an jedem Dokument, das sich darauf bezieht. Die
+ * Leistungserklaerung etwa fuehrt ihren Materialbezug ueber ``tc:epc``
+ * (``materialEpc``) und ist damit unter demselben Ident auffindbar -- das ist
+ * so gewollt, sonst faende ein Scan die zugehoerigen Papiere nicht.
+ *
+ * Fuer die Produktart sind diese Traeger aber ohne Aussage: eine
+ * Leistungserklaerung IST keine Produktart, sie BESCHREIBT eine. Welches
+ * Subjekt zuerst in den Bindings steht, haengt an der Reihenfolge der
+ * geladenen Quellen -- ohne diese Liste entschiede der Zufall, ob eine Platte
+ * als "BSP-Platte" oder als gar nichts gilt.
+ */
+const NON_PRODUCT_CLASSES = [
+  'declarationofperformance',
+  'epcisdocument',
+  'testreport',
+  'certificate',
+  'deliveryorder',
+  'transportorder',
+  'invoice',
+  'article',
+  'warehouse',
+  'carrier',
+  'deliverycondition',
+];
+
+/**
  * Vorgangstypen, die am Ident haengen.
  *
  * Die Idente tragen nicht immer eine Produktklasse — haeufig haengt an ihnen
@@ -190,16 +219,28 @@ function stageFromMasterData(
 ): ProductStage | null {
   if (!id || !data) return null;
 
-  // `data.product` traegt beim EPC-Abruf die Treffer aus createEpcQuery.
-  // Diese Abfrage fragt GEZIELT nach dieser einen ID (``?subject tc:sgtin
-  // <epc>``) — jede Zeile gehoert also bereits zum erfassten Bauteil. Eine
-  // zusaetzliche Ident-Pruefung waere nicht nur ueberfluessig, sie schlaegt
-  // fehl: die Spalten heissen ``subject``/``type``/``epcisDoc``/
-  // ``bizTransaction``, ein Feld ``epc`` gibt es dort nicht.
-  const types = (data.product ?? [])
+  // Nur die Treffer des GESCANNTEN Idents auswerten.
+  //
+  // ``data.product`` taugt dafuer nicht: Beim EPC-Abruf laeuft createEpcQuery
+  // fuer jeden Ident der Kette, und alle Treffer landen in EINER Liste. Beim
+  // Scan einer BSP-Platte stehen darin auch die Typen ihrer 169 Lamellen --
+  // die Leistungserklaerung der Lamellen steuert ``tc:SawingProcess`` bei,
+  // und damit galt die Platte als "Schnittholz / Lamelle".
+  //
+  // ``scannedEpc`` enthaelt ausschliesslich die Treffer zu ``<epc>`` selbst.
+  // Fehlt das Feld (traceId-Abruf, aeltere Aufrufer), bleibt ``data.product``
+  // die Rueckfallebene -- dort ist die Liste nicht vermischt, weil ohne
+  // EPCIS-Kette nur ein Ident abgefragt wurde.
+  const rows = data.scannedEpc ?? data.product ?? [];
+  const types = rows
     .map((row) => row.type?.value)
     .filter((t): t is string => !!t)
-    .map(localName);
+    .map(localName)
+    // Belegdokumente aussortieren: sie tragen den Ident, sagen aber nichts
+    // ueber die Produktart. Ohne diesen Schritt entschiede die Reihenfolge der
+    // geladenen Quellen, ob die Platte erkannt wird -- kommt die
+    // Leistungserklaerung zuerst, bliebe die Angabe leer.
+    .filter((t) => !NON_PRODUCT_CLASSES.includes(t));
 
   // 1. Produktklasse am Ident (tc:Stem, tc:SawnTimber, tc:CLT ...).
   for (const { classes, stage } of TYPE_TO_STAGE) {
@@ -213,10 +254,16 @@ function stageFromMasterData(
 
   // 3. Stammdaten des Rundholzes. `createStemQuery` bindet ``?stem a tc:Stem``
   //    und liefert die Messwerte eines einzelnen Stammes (Durchmesser,
-  //    Erntedatum, Stammnummer). Beim EPC-Abruf laeuft sie zwar ohne
-  //    Ident-Filter, greift aber nur, wenn zu 1. und 2. nichts vorlag — dann
-  //    ist ein Stamm der einzige Beleg, den die Daten hergeben.
-  if ((data.stem?.length ?? 0) > 0) return 'stem';
+  //    Erntedatum, Stammnummer).
+  //
+  //    Nur zulaessig, wenn der Scan KEINE Kette aufgeloest hat. Beim EPC-Abruf
+  //    laeuft diese Abfrage ohne Ident-Filter ueber alle geladenen Quellen --
+  //    zu jeder BSP-Platte gehoeren auch die Stammdaten ihrer Vorkette, sonst
+  //    gaelte jede Platte ohne eigene Typangabe als Rundholz. Ohne Kette
+  //    stammen die Quellen dagegen von genau diesem Ident, und ein Stamm ist
+  //    dann der einzige Beleg, den die Daten hergeben.
+  const chainResolved = (data.epcisInfo?.epcsResolved ?? 0) > 1;
+  if (!chainResolved && (data.stem?.length ?? 0) > 0) return 'stem';
 
   return null;
 }
