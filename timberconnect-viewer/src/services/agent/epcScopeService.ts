@@ -25,12 +25,8 @@
  * Assistent.
  */
 
-import {
-  queryEpcisEvents,
-  collectEpcs,
-  collectBizTransactions,
-  type EpcisEvent,
-} from '../epcisService';
+import { type EpcisEvent } from '../epcisService';
+import { walkChain, MAX_CHAIN_DEPTH } from '../supplyChainWalk';
 import {
   sourcesFromBizTransactions,
   filterAvailableSources,
@@ -93,7 +89,9 @@ export async function buildEpcScope(epc: string): Promise<EpcScope> {
 
   if (isGs1) {
     try {
-      const walk = await walkSupplyChain(epc);
+      // Der Assistent sieht bewusst die GANZE Kette: eine Frage kann sich
+      // ebenso auf die Herkunft wie auf die Verwendung beziehen.
+      const walk = await walkChain(epc, 'full');
       events = walk.events;
       eventsReturned = walk.eventsReturned;
       eventsFilteredOut = walk.eventsFilteredOut;
@@ -288,115 +286,9 @@ export async function buildEpcScope(epc: string): Promise<EpcScope> {
   };
 }
 
-/** Wie viele Verarbeitungsstufen rueckwaerts verfolgt werden. */
-const MAX_CHAIN_DEPTH = 4;
-/** Hoechstzahl EPCIS-Abfragen je Stufe -- Schutz gegen 169 Lamellen auf einmal. */
-const MAX_QUERIES_PER_LEVEL = 8;
-
-/**
- * Der GS1-Itemreference-Teil eines EPC (urn:epc:id:sgtin:GCP.ITEMREF.SERIAL).
- *
- * Er kennzeichnet die Produktart und damit die Verarbeitungsstufe: 0401 =
- * BSP-Platte, 0212 = Lamelle, 0100 = Stamm. Genau die richtige Koernung, um
- * pro Stufe einen Vertreter weiterzuverfolgen.
- */
-function itemRefOf(epc: string): string {
-  return epc.split(':')[4]?.split('.')[1] ?? epc;
-}
-
-/**
- * Die Lieferkette rueckwaerts verfolgen -- ueber MEHRERE Stufen.
- *
- * Eine einzelne EPCIS-Abfrage reicht nicht: die BSP-Produktion ist ein
- * TransformationEvent (169 Lamellen rein, eine Platte raus), und die Lamellen
- * stammen ihrerseits aus einem TransformationEvent im Saegewerk (Staemme rein,
- * Lamellen raus). An den STAEMMEN haengen die Forstdaten -- Forstamt, Revier,
- * Einschlagdatum.
- *
- * Wer nur eine Stufe aufloest, endet bei den Lamellen. Genau das war der Fall:
- * der Assistent fand die Vorprodukte, aber nie den Wald, und musste ehrlich
- * "keine Herkunftsdaten" antworten, obwohl sie zwei Stufen weiter im
- * Saegewerks-Pod liegen.
- *
- * Zwei Begrenzungen halten den Aufwand im Rahmen:
- *   - je Stufe nur EIN Vertreter pro Produktart (itemRef). Alle 169 Lamellen
- *     stammen aus demselben Vorgang; die 169. Abfrage liefert dieselben Pods
- *     wie die erste.
- *   - MAX_CHAIN_DEPTH Stufen. Die reale Kette (Platte -> Lamelle -> Stamm)
- *     braucht drei; vier laesst Luft, ohne ins Uferlose zu laufen.
- */
-async function walkSupplyChain(startEpc: string): Promise<{
-  events: EpcisEvent[];
-  eventsReturned: number;
-  eventsFilteredOut: number;
-  epcs: Set<string>;
-  bizTxUrls: string[];
-}> {
-  const epcs = new Set<string>([startEpc]);
-  const bizTx = new Set<string>();
-  const allEvents: EpcisEvent[] = [];
-  const queried = new Set<string>();
-  let eventsReturned = 0;
-  let eventsFilteredOut = 0;
-  let frontier = [startEpc];
-
-  for (let depth = 0; depth < MAX_CHAIN_DEPTH && frontier.length > 0; depth++) {
-    const batch = frontier.filter((e) => !queried.has(e)).slice(0, MAX_QUERIES_PER_LEVEL);
-    if (batch.length === 0) break;
-
-    const results = await Promise.all(
-      batch.map(async (candidate) => {
-        queried.add(candidate);
-        try {
-          return await queryEpcisEvents(candidate);
-        } catch (err) {
-          // Eine einzelne Stufe darf die Kette nicht abreissen lassen: die
-          // bereits gefundenen Stufen bleiben gueltig.
-          console.debug('[agent] EPCIS-Abfrage fehlgeschlagen für', candidate, err);
-          return null;
-        }
-      }),
-    );
-
-    const discovered: string[] = [];
-    for (const result of results) {
-      if (!result) continue;
-      // Nur die erste Stufe zaehlt fuer die Anzeige "N Ereignisse gefunden" --
-      // sie beschreibt das gescannte Bauteil, nicht die halbe Lieferkette.
-      if (depth === 0) {
-        eventsReturned = result.returned;
-        eventsFilteredOut = result.filteredOut;
-      }
-      allEvents.push(...result.events);
-      for (const url of collectBizTransactions(result.events)) bizTx.add(url);
-      for (const found of collectEpcs(result.events)) {
-        if (!epcs.has(found)) discovered.push(found);
-        epcs.add(found);
-      }
-    }
-
-    // Je Produktart nur einen Vertreter weiterverfolgen.
-    const byItemRef = new Map<string, string>();
-    for (const found of discovered) {
-      const ref = itemRefOf(found);
-      if (!byItemRef.has(ref)) byItemRef.set(ref, found);
-    }
-    frontier = [...byItemRef.values()];
-  }
-
-  console.debug(
-    `[agent] Lieferkette: ${epcs.size} EPCs über ${queried.size} Abfragen, ` +
-      `${bizTx.size} Dokumentlink(s)`,
-  );
-
-  return {
-    events: allEvents,
-    eventsReturned,
-    eventsFilteredOut,
-    epcs,
-    bizTxUrls: [...bizTx],
-  };
-}
+// Die mehrstufige Kettentraversierung liegt jetzt in ../supplyChainWalk.ts --
+// gemeinsam mit dem Produktpass genutzt und gerichtet. Vorher stand sie nur
+// hier, und der Produktpass loeste bloss eine Ebene auf.
 
 /**
  * Welche der Kandidatenquellen fuehren einen der Idente wirklich?

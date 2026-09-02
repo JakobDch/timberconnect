@@ -18,10 +18,13 @@ import { findUseCase, isAvailable, type UseCaseDefinition } from './config/useCa
 import { PartnerSheet } from './components/Partners';
 import {
   fetchProductData,
+  fetchScanPreview,
+  invalidateSourceCache,
   type SourceStatus,
   type ProductDataResult,
   type SparqlBinding,
 } from './services/sparqlService';
+import type { ChainScope } from './services/supplyChainWalk';
 import { mapToProduct, mapToSupplyChain } from './services/productMapper';
 import { addRecentScan } from './services/recentActivity';
 import { initializeCatalog, refreshCatalog } from './config/solidPods';
@@ -118,9 +121,24 @@ function App() {
   // Ansicht oeffnet erst nach Bestaetigung + Token-Transfer.
   const [pendingUseCaseCost, setPendingUseCaseCost] = useState<UseCaseDefinition | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  // Welcher Anwendungsfall wird gerade geoeffnet?
+  //
+  // Zwischen Klick und Ansicht liegen das Nachladen der vollstaendigen
+  // Pod-Daten und die Kostenberechnung -- je nach Umfang der Kette dauert das
+  // spuerbar. Ohne Rueckmeldung an der Kachel wirkt der Klick folgenlos. Es ist
+  // die ID und nicht nur ein Flag, weil der Spinner an DER angeklickten Kachel
+  // stehen muss, nicht an allen.
+  const [openingUseCaseId, setOpeningUseCaseId] = useState<string | null>(null);
   // Anwendungsfaelle, die in dieser Sitzung schon bezahlt (oder gratis
   // freigeschaltet) wurden -- ein zweiter Aufruf oeffnet ohne Nachfrage.
+  //
+  // Der Schluessel traegt den Umfang mit: nach einer Erweiterung der Kette
+  // enthaelt derselbe Fall MEHR Datenpunkte. Ohne den Umfang im Schluessel
+  // oeffnete er ungeprueft und die hinzugekommenen Punkte blieben unbezahlt.
   const [unlockedUseCases, setUnlockedUseCases] = useState<Set<string>>(new Set());
+  // Wie weit die Kette geladen wird. Voreinstellung ist die ganze Kette --
+  // erst wer sieht, was vorhanden ist, kann sinnvoll einschraenken.
+  const [chainScope, setChainScope] = useState<ChainScope>('full');
   const [isPaying, setIsPaying] = useState(false);
   // Mehrere Tags aus einem RFID-Sweep, aus denen der Nutzer waehlt.
   const [scanSession, setScanSession] = useState<ParsedIdentifier[] | null>(null);
@@ -152,17 +170,35 @@ function App() {
     return true;
   }, [pendingUseCase]);
 
+  /**
+   * Daten eines Bauteils laden.
+   *
+   * ``preview`` holt nur, was die Scan-Ansicht zeigt: Ident und Produktart.
+   * Das ist der Normalfall nach dem Erfassen -- der Scan ist kostenlos, und
+   * die Daten der Anwendungsfaelle werden erst gebraucht, wenn einer davon
+   * geoeffnet wird. Ohne diese Trennung lief nach jedem Scan die volle
+   * Abfrage ueber den ganzen Katalog, samt Kettenverfolgung.
+   */
   const loadProductData = useCallback(
-    async (traceId: string): Promise<Product | null> => {
+    async (
+      traceId: string,
+      scope: ChainScope = 'full',
+      preview = false,
+    ): Promise<Product | null> => {
       setIsLoading(true);
       setError(null);
       setWarnings([]);
       setSourceStatus([]);
 
       try {
-        console.log('[App] Loading product data for traceId:', traceId);
+        console.log(
+          `[App] Loading product data for traceId: ${traceId} ` +
+            `(${preview ? 'nur Kurzinfo' : `Umfang: ${scope}`})`,
+        );
 
-        const data = await fetchProductData(traceId);
+        const data = preview
+          ? await fetchScanPreview(traceId)
+          : await fetchProductData(traceId, undefined, scope);
 
         console.log('[App] Received data:', data);
 
@@ -315,7 +351,9 @@ function App() {
   const handleProductScanned = async (id: string) => {
     setProductId(id);
     setUnlockedUseCases(new Set());
-    const mapped = await loadProductData(id);
+    // Nur die Kurzinfo: Ident und Produktart. Die Daten der Anwendungsfaelle
+    // folgen erst beim Oeffnen -- vorher weiss niemand, welche gebraucht werden.
+    const mapped = await loadProductData(id, 'full', true);
     if (mapped) {
       addRecentScan({ id, name: mapped.name });
       // Der Scan ist kostenlos -- es geht immer direkt weiter. Die
@@ -397,19 +435,6 @@ function App() {
     scanInputRef.current = scanInput;
   }, [scanInput]);
 
-  // Upload-Flow: wie der Scan -- vorgewaehlter Fall gewinnt, sonst das Raster.
-  const handleUploadSuccess = async (traceId: string) => {
-    setUploadOpen(false);
-    setProductId(traceId);
-    const mapped = await loadProductData(traceId);
-    if (mapped) {
-      addRecentScan({ id: traceId, name: mapped.name });
-      if (!consumePendingUseCase()) setCurrentView('usecases');
-    } else if (!pendingUseCase) {
-      setCurrentView('usecases');
-    }
-  };
-
   /**
    * Anwendungsfall waehlen -- unabhaengig davon, ob schon ein Produkt da ist.
    *
@@ -434,7 +459,12 @@ function App() {
       setPendingUseCase(null);
 
       // In dieser Sitzung schon freigeschaltet -> direkt oeffnen.
-      if (unlockedUseCases.has(useCase.id)) {
+      //
+      // Der Umfang gehoert in den Schluessel: nach einer Erweiterung der Kette
+      // zeigt derselbe Fall MEHR Datenpunkte, die noch nicht bezahlt sind.
+      // Ohne ihn oeffnete er hier ungeprueft.
+      const unlockKey = `${useCase.id}:${chainScope}`;
+      if (unlockedUseCases.has(unlockKey)) {
         setCurrentView(useCase.view);
         return;
       }
@@ -443,34 +473,72 @@ function App() {
       // tatsaechlich aus den Pod-Daten liest -- und davon nur, was der Nutzer
       // nicht ohnehin schon besitzt.
       const target = useCase.view;
+      setOpeningUseCaseId(useCase.id);
       void (async () => {
-        let estimate: CostEstimate | null = null;
         try {
-          estimate = await estimateExtractionCost(
-            useCaseDatapointKeys(useCase.id, productData),
-            sourceStatus.filter((s) => s.available).map((s) => s.url),
-            webId,
-          );
-        } catch (err) {
-          // Eine kaputte Kostenberechnung darf den Anwendungsfall nicht
-          // verschlucken -- dann wird er kostenlos gezeigt.
-          console.warn('[App] Kostenberechnung fehlgeschlagen:', err);
-        }
+          // Erst JETZT die vollstaendigen Daten holen. Nach dem Scan liegt nur
+          // die Kurzinfo vor (Ident + Produktart) -- das reicht fuer die
+          // Kachelanzeige, nicht fuer den Anwendungsfall und nicht fuer die
+          // Kostenberechnung.
+          let data = productData;
+          if (!data?.loadedFully) {
+            data = await fetchProductData(productId, undefined, chainScope).catch((err) => {
+              console.error('[App] Nachladen fehlgeschlagen:', err);
+              return null;
+            });
+            if (!data) {
+              setError('Die Daten zu diesem Bauteil konnten nicht geladen werden.');
+              return;
+            }
+            setProductData(data);
+            setSourceStatus(data.sourceStatus);
+            const nachgeladen = mapToProduct(data.product, data.stem, data.forest, data.bspWerk);
+            if (nachgeladen) setProduct({ ...nachgeladen, id: nachgeladen.id || productId });
+            setSupplyChain(
+              mapToSupplyChain(
+                data.forest,
+                data.sawmill,
+                data.bspWerk,
+                data.supplyChain,
+                data.businessPartners,
+                data.stem,
+              ),
+            );
+          }
 
-        if (estimate && estimate.totalTokens > 0) {
-          setPendingUseCaseCost(useCase);
-          setCostEstimate(estimate);
-          return;
-        }
+          let estimate: CostEstimate | null = null;
+          try {
+            estimate = await estimateExtractionCost(
+              useCaseDatapointKeys(useCase.id, data),
+              (data.sourceStatus ?? []).filter((s) => s.available).map((s) => s.url),
+              webId,
+            );
+          } catch (err) {
+            // Eine kaputte Kostenberechnung darf den Anwendungsfall nicht
+            // verschlucken -- dann wird er kostenlos gezeigt.
+            console.warn('[App] Kostenberechnung fehlgeschlagen:', err);
+          }
 
-        // Gratis -- trotzdem als Erwerb verbuchen, sonst gelten dieselben
-        // Datenpunkte spaeter wieder als neu.
-        if (estimate) await commitPurchase(webId, estimate);
-        setUnlockedUseCases((prev) => new Set(prev).add(useCase.id));
-        setCurrentView(target);
+          if (estimate && estimate.totalTokens > 0) {
+            setPendingUseCaseCost(useCase);
+            setCostEstimate(estimate);
+            return;
+          }
+
+          // Gratis -- trotzdem als Erwerb verbuchen, sonst gelten dieselben
+          // Datenpunkte spaeter wieder als neu.
+          if (estimate) await commitPurchase(webId, estimate);
+          setUnlockedUseCases((prev) => new Set(prev).add(unlockKey));
+          setCurrentView(target);
+        } finally {
+          // In JEDEM Fall zuruecksetzen -- auch bei den frueheren return-Wegen
+          // (Ladefehler, Kostenbestaetigung). Bliebe der Spinner dort stehen,
+          // liefe er weiter, waehrend der Kaufdialog auf eine Antwort wartet.
+          setOpeningUseCaseId(null);
+        }
       })();
     },
-    [product, productData, sourceStatus, webId, unlockedUseCases],
+    [product, productData, sourceStatus, webId, unlockedUseCases, chainScope],
   );
 
   // Ziel kommt aus der Registry -- keine if-Kette, die beim naechsten
@@ -514,6 +582,28 @@ function App() {
     // Datenpunkte. Das Kaufregister im Pod sorgt dafuer, dass wirklich
     // gekaufte Punkte trotzdem gratis bleiben.
     setUnlockedUseCases(new Set());
+    setChainScope('full');
+  };
+
+  /**
+   * Umfang der Kette wechseln -- laedt das Bauteil neu.
+   *
+   * Ein reines Filtern der vorhandenen Daten genuegt nicht: der Umfang
+   * bestimmt schon, WELCHE Idente ueberhaupt abgefragt werden. "Nur dieses
+   * Produkt" spart bei einer Platte mit 169 Lamellen entsprechend viele
+   * Abfragen -- und genau das macht es guenstiger und schneller.
+   */
+  const handleScopeChange = (next: ChainScope) => {
+    if (next === chainScope || !productId) return;
+    setChainScope(next);
+    // KEIN Nachladen hier. Der Umfang wirkt erst, wenn ein Anwendungsfall
+    // geoeffnet wird -- dort wird ohnehin geladen, und zwar genau einmal mit
+    // dem dann gueltigen Umfang. Sofort nachzuladen hiess, bei jedem Tippen
+    // auf den Schalter die volle Abfrage ueber den Katalog zu starten, deren
+    // Ergebnis in der Kachelansicht gar nicht sichtbar wird.
+    //
+    // Bereits geladene Daten verwerfen: sie gehoeren zum alten Umfang.
+    setProductData((prev) => (prev ? { ...prev, loadedFully: false } : prev));
   };
 
   const handleBackToScanner = () => {
@@ -582,10 +672,13 @@ function App() {
               supplyChain={supplyChain}
               onSelectUseCase={handleSelectUseCase}
               onBack={handleBackToScanner}
+              openingUseCaseId={openingUseCaseId}
               isLoading={isLoading}
               error={error}
               warnings={warnings}
               sourcePods={sourceStatus.filter((s) => s.available).map((s) => s.pod)}
+              scope={chainScope}
+              onScopeChange={handleScopeChange}
             />
           </div>
         )}
@@ -682,8 +775,13 @@ function App() {
       {/* Upload Bottom-Sheet (Startseite "Daten hochladen") */}
       <UploadSheet
         isOpen={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        onUploadSuccess={handleUploadSuccess}
+        onClose={() => {
+          setUploadOpen(false);
+          // Nach einem Upload koennen neue Tripel in bestehenden Quellen
+          // stehen. Der Cache haelt sonst bis zu fuenf Minuten den alten
+          // Stand, und das frisch Hochgeladene bliebe unsichtbar.
+          invalidateSourceCache();
+        }}
         isLoading={isLoading}
       />
 
@@ -701,6 +799,9 @@ function App() {
         isOpen={resetOpen}
         onClose={() => setResetOpen(false)}
         onResetComplete={() => {
+          // Auch die geladenen Tripel verwerfen: sie stammen aus Dateien, die
+          // es gerade nicht mehr gibt.
+          invalidateSourceCache();
           refreshCatalog().catch(() => {
             // Der Reset selbst ist durch; ein fehlgeschlagener Neuaufbau des
             // Katalogs kostet hoechstens eine veraltete Liste bis zum Reload.

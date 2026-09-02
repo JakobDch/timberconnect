@@ -37,6 +37,7 @@ import {
   type PdfFormValues,
   type PdfIdentity,
 } from './pdfIdentityService';
+import { containerForPdf } from './podPaths';
 
 const getConverterApiUrl = () => {
   if (typeof window !== 'undefined') {
@@ -294,11 +295,17 @@ export async function uploadPdfOriginal(
   file: File,
   authenticatedFetch: typeof fetch,
   ownerWebId: string,
+  /**
+   * Container des Vorgangs, zu dem dieses PDF gehoert. Gesetzt heisst: Das
+   * Dokument landet dort statt in einem eigenen Ordner je Dokument-Hash.
+   * Die Regel samt Begruendung steht in `containerForPdf` (podPaths.ts).
+   */
+  processContainerUrl?: string | null,
 ): Promise<PdfUploadOutcome> {
   const buffer = await file.arrayBuffer();
   const docId = await computeDocId(buffer);
   const podBase = podBaseFromWebId(ownerWebId);
-  const containerUrl = `${podBase}data/${docId}/`;
+  const containerUrl = containerForPdf(podBase, docId, processContainerUrl);
   const pdfUrl = `${containerUrl}${docId}_dokument.pdf`;
 
   // Formularwerte und Ident aus dem Original lesen, bevor der Puffer
@@ -316,10 +323,19 @@ export async function uploadPdfOriginal(
 
   // Gleiches Zugriffsmodell wie beim maschinenlesbaren Upload: Owner-Control,
   // Read fuer die vom Owner freigegebenen Rollen.
+  //
+  // Nur fuer den EIGENEN Container des Dokuments. Liegt das PDF im Container
+  // eines Vorgangs, traegt der seine ACL bereits aus createProcess — ihn hier
+  // erneut zu stempeln waere nicht nur ueberfluessig, sondern wuerde eine
+  // inzwischen gesetzte dokumentweise Freigabe wieder platt schreiben.
   try {
     const pod = podBaseFromUrl(containerUrl);
     const allowedRoles = await getAllowedRoles(pod);
-    await stampContainerAcl(containerUrl, ownerWebId, allowedRoles);
+    if (!processContainerUrl) {
+      await stampContainerAcl(containerUrl, ownerWebId, allowedRoles);
+    }
+    // Die EPCIS-Einwilligung haengt am Nutzer, nicht am Container — sie gilt
+    // unabhaengig davon, wo das Dokument liegt.
     await writeEpcisConsent(ownerWebId, allowedRoles);
   } catch (err) {
     console.warn('[pdf-upload] ACL konnte nicht gesetzt werden:', err);
@@ -528,8 +544,18 @@ export async function uploadPdfDocument(
   plantingArea?: unknown,
   /** Auf dieser Flaeche ausgebrachte Saatgutmenge in Gramm. */
   seedQuantityGrams?: number | null,
+  /**
+   * Container des Vorgangs. Gesetzt heisst: Das Dokument gehoert zu diesem
+   * Vorgang und wird dort abgelegt, statt einen eigenen Container zu bekommen.
+   */
+  processContainerUrl?: string | null,
 ): Promise<PdfDocumentResult> {
-  const outcome = await uploadPdfOriginal(file, authenticatedFetch, ownerWebId);
+  const outcome = await uploadPdfOriginal(
+    file,
+    authenticatedFetch,
+    ownerWebId,
+    processContainerUrl,
+  );
 
   if (!template) {
     return {

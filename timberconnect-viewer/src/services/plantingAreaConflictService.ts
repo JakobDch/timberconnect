@@ -16,8 +16,8 @@
  * SPARQL bliebe wirkungslos.
  */
 
-import { getAllProductsAsync } from '../config/solidPods';
 import { queryPlantingAreas } from './sparqlService';
+import { resolvePlantingSources } from './plantingLookupService';
 import { ringAreaHectares } from './geoService';
 import { findOverlaps, type OverlapHit, type Ring } from './polygonOverlap';
 
@@ -40,18 +40,24 @@ export interface ConflictResult {
 /**
  * Alle bereits registrierten Pflanzflächen laden.
  *
- * Breit über alle Katalog-Quellen, nicht nur den eigenen Pod: Eine Fläche kann
- * von einem anderen Forstbetrieb registriert worden sein, und genau der Fall
- * ist der interessante. Nur die eigenen Flächen zu prüfen würde die
+ * Breit über alle Quellen, nicht nur den eigenen Pod: Eine Fläche kann von
+ * einem anderen Forstbetrieb registriert worden sein, und genau der Fall ist
+ * der interessante. Nur die eigenen Flächen zu prüfen würde die
  * Doppelbelegung erst recht zulassen.
+ *
+ * Die Quellen kommen aus `resolvePlantingSources` und damit ausdrücklich NICHT
+ * aus dem Produktkatalog. Der verwirft Datensätze ohne lesbare Bauteil-ID —
+ * also gerade die Stammzertifikate, um die es hier geht. Über Produkte gesucht
+ * blieben frisch registrierte Flächen unsichtbar, und die Prüfung meldete
+ * "frei" für eine längst vergebene Fläche: der Fehler, den zu verhindern ihr
+ * einziger Zweck ist.
  *
  * Wirft nie: Ist der Katalog nicht erreichbar, kommt eine leere Liste zurück.
  * Das ist eine bewusste Entscheidung — siehe `checkAreaConflicts`.
  */
 export async function loadOccupiedAreas(): Promise<OccupiedArea[]> {
   try {
-    const products = await getAllProductsAsync();
-    const sources = Array.from(new Set(products.flatMap((p) => p.sources)));
+    const sources = await resolvePlantingSources();
     if (sources.length === 0) return [];
 
     const areas = await queryPlantingAreas(sources);

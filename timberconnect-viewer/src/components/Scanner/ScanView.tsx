@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ScanLine, Layers, Loader2, RefreshCw, AlertCircle, Target } from 'lucide-react';
+import {
+  ScanLine,
+  Layers,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+  Target,
+  MapPin,
+} from 'lucide-react';
 import {
   getAllProductsAsync,
   getCatalogError,
@@ -12,15 +20,25 @@ import {
   type RecentScan,
 } from '../../services/recentActivity';
 import { ScanInputModal } from './ScanInputModal';
+import { LocationScanSheet } from './LocationScanSheet';
 import type { ScanSource } from '../../services/identifiers';
 import type { Product } from '../../types';
 
 /**
  * Scan-Screen "Holzbauteil identifizieren".
  *
- * Erfasst wird ueber genau einen Weg: die Eingabe im ScanInputModal. Dort
- * landet sowohl ein Geraete-Scan (RFID, DotCode, Barcode — die Geraete geben
- * ihn als Tastatureingabe aus) als auch eine getippte ID.
+ * Zwei Wege zur ID, weil es zwei Arten von Gegenstaenden gibt:
+ *
+ *   * Code — ein Bauteil traegt seinen Ident als DotCode, Barcode oder
+ *     RFID-Tag. Erfasst wird er im ScanInputModal; die Zebra-Geraete geben
+ *     ihn als Tastatureingabe aus, getippt werden kann er ebenso.
+ *   * Standort — eine PFLANZUNG traegt kein Etikett. Sie ist ueber ihre auf
+ *     der Karte gezeichnete Flaeche bestimmt: Wer darauf steht, hat sie
+ *     identifiziert. Das uebernimmt das LocationScanSheet, das aus der
+ *     Position den EPC des Vermehrungsguts ermittelt.
+ *
+ * Beide muenden in denselben onProductScanned-Aufruf — was danach passiert,
+ * unterscheidet sich nicht.
  *
  * Der frueher vorhandene Kamera-/QR-Scanner ist entfallen: im Projekt werden
  * keine QR-Codes verwendet, das Scannen uebernehmen die Zebra-Geraete, und
@@ -55,10 +73,14 @@ export function ScanView({
   onInputOpenChange,
 }: ScanViewProps) {
   const [isInputOpen, setIsInputOpen] = useState(false);
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
 
+  // Der globale Hardware-Scan pausiert, solange EINER der beiden Dialoge offen
+  // ist. Im Standort-Sheet steckt die Ortssuche mit einem Textfeld — ein
+  // Tastendruck dort darf nicht als Geraete-Scan gedeutet werden.
   useEffect(() => {
-    onInputOpenChange?.(isInputOpen);
-  }, [isInputOpen, onInputOpenChange]);
+    onInputOpenChange?.(isInputOpen || isLocationOpen);
+  }, [isInputOpen, isLocationOpen, onInputOpenChange]);
   const [recentScans, setRecentScans] = useState<RecentScan[]>([]);
 
   const [products, setProducts] = useState<ProductConfig[]>([]);
@@ -70,11 +92,13 @@ export function ScanView({
     loadProducts();
   }, []);
 
-  // Verlauf aktualisieren und Erfassung schliessen, sobald ein Treffer da ist.
+  // Verlauf aktualisieren und die Erfassung schliessen, sobald ein Treffer da
+  // ist — gleich ueber welchen der beiden Wege er kam.
   useEffect(() => {
     if (scannedProduct) {
       setRecentScans(getRecentScans());
       setIsInputOpen(false);
+      setIsLocationOpen(false);
     }
   }, [scannedProduct]);
 
@@ -108,6 +132,23 @@ export function ScanView({
     onDismissError?.();
   };
 
+  const openLocation = () => {
+    if (isLoading) return;
+    onDismissError?.();
+    setIsLocationOpen(true);
+  };
+
+  /**
+   * Eine ueber den Standort gefundene Pflanzung uebernehmen.
+   *
+   * Ab hier ist kein Unterschied mehr zum Scan: Der EPC ist eine kanonische
+   * URN und laeuft durch denselben Weg. Als Quelle gilt 'manual' — die ID
+   * wurde nicht von einem Geraet gelesen.
+   */
+  const handleLocationSelect = (epc: string) => {
+    onProductScanned(epc, 'manual');
+  };
+
   return (
     <div className="flex-1 bg-night-900">
       <div className="max-w-md lg:max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
@@ -125,7 +166,8 @@ export function ScanView({
               </h1>
               <p className="text-night-300 mt-3 max-w-sm leading-relaxed">
                 Dotcode, Barcode oder RFID-Tag scannen oder die ID händisch
-                eingeben.
+                eingeben. Eine Pflanzung hat keinen Code — sie lässt sich über
+                ihren Standort finden.
               </p>
 
               {targetUseCaseTitle && (
@@ -188,6 +230,35 @@ export function ScanView({
                   )}
                 </motion.button>
               </div>
+            </motion.div>
+
+            {/* Der zweite Weg: Standort statt Code. Bewusst unter dem
+                Scan-Knopf und flacher gestaltet — der Scan bleibt der
+                Regelfall, die Standortsuche gilt der Pflanzung, die als
+                einzige Station der Kette kein Etikett tragen kann. */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.22, duration: 0.4 }}
+              className="flex justify-center -mt-2 mb-8"
+            >
+              <button
+                onClick={openLocation}
+                disabled={isLoading}
+                className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-night-800 hover:bg-night-700 border border-white/10 transition-colors disabled:opacity-60 text-left"
+              >
+                <span className="w-9 h-9 rounded-xl bg-night-700 border border-white/5 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-4.5 h-4.5 text-acid-300" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-white">
+                    Pflanzung über Standort finden
+                  </span>
+                  <span className="block text-xs text-night-400 mt-0.5">
+                    GPS oder Ort auf der Karte
+                  </span>
+                </span>
+              </button>
             </motion.div>
 
             {/* Fehler, wenn die Erfassung geschlossen ist (sonst steht er dort) */}
@@ -342,6 +413,13 @@ export function ScanView({
         onSubmit={onProductScanned}
       />
 
+      {/* Der Weg ohne Code: Standort -> Flaeche -> EPC der Pflanzung */}
+      <LocationScanSheet
+        isOpen={isLocationOpen}
+        isLoading={isLoading}
+        onClose={() => setIsLocationOpen(false)}
+        onSelect={handleLocationSelect}
+      />
     </div>
   );
 }

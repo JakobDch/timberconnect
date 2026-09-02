@@ -11,7 +11,7 @@ import {
   queryPlantingAreaByEpc,
   type PlantingAreaResult,
 } from '../../services/sparqlService';
-import { getAllProductsAsync } from '../../config/solidPods';
+import { resolvePlantingSources } from '../../services/plantingLookupService';
 import type { Coordinates } from '../../types';
 
 /**
@@ -29,13 +29,17 @@ import type { Coordinates } from '../../types';
  */
 
 /**
- * Alle bekannten Pod-Quellen aus dem Katalog. Stammzertifikate koennen in
- * einem anderen Pod liegen als das Produkt (Baumschule vs. Saegewerk), daher
- * wird breit gesucht und nicht nur in den Quellen des Produkts.
+ * Alle Quellen, in denen eine Pflanzflaeche liegen kann. Stammzertifikate
+ * koennen in einem anderen Pod liegen als das Produkt (Baumschule vs.
+ * Saegewerk), daher wird breit gesucht und nicht nur in den Quellen des
+ * Produkts.
+ *
+ * Ueber den Produktkatalog zu gehen waere hier falsch: Er fuehrt nur
+ * Datensaetze mit lesbarer Bauteil-ID, ein Stammzertifikat hat keine.
+ * Siehe resolvePlantingSources.
  */
 async function resolveSources(): Promise<string[]> {
-  const products = await getAllProductsAsync();
-  return Array.from(new Set(products.flatMap((p) => p.sources)));
+  return resolvePlantingSources();
 }
 
 interface PlantingAreaCardProps {

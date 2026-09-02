@@ -17,14 +17,45 @@ const EPCIS_BASE =
   import.meta.env.VITE_EPCIS_SERVICE_URL ||
   (typeof window !== 'undefined' ? `${window.location.origin}/api/epcis` : '/api/epcis');
 
+/** Mengenbehaftete Idente (LGTIN) stehen als epcClass in eigenen Listen. */
+interface QuantityEntry {
+  epcClass: string;
+  quantity?: number;
+  uom?: string;
+}
+
 export interface EpcisEvent {
   type?: string;
   eventTime?: string;
   bizStep?: string;
   epcList?: string[];
-  quantityList?: Array<{ epcClass: string; quantity?: number; uom?: string }>;
+  quantityList?: QuantityEntry[];
   bizTransactionList?: Array<{ type?: string; bizTransaction?: string }>;
+  // Die Listen des TransformationEvents. Sie liefen frueher nur ueber die
+  // Index-Signatur unten -- jede Auswertung war damit eine Kette von
+  // as-Casts ohne Compiler-Schutz, obwohl genau an diesen Feldern die
+  // Materialrichtung haengt.
+  inputEPCList?: string[];
+  outputEPCList?: string[];
+  inputQuantityList?: QuantityEntry[];
+  outputQuantityList?: QuantityEntry[];
+  // AggregationEvent. Wird heute von keinem Treiber erzeugt (siehe
+  // classifyEpcs) und ist deshalb ungeprueft.
+  childEPCs?: string[];
+  parentID?: string;
   [key: string]: unknown;
+}
+
+/** Lage eines Idents relativ zum Bezugs-Ident. */
+export type EpcDirection = 'upstream' | 'downstream' | 'sibling';
+
+export interface ClassifiedEpcs {
+  /** Vormaterial: woraus der Bezugs-Ident entstanden ist. */
+  upstream: string[];
+  /** Erzeugnis: was aus dem Bezugs-Ident entstanden ist. */
+  downstream: string[];
+  /** Gleiche Stufe bzw. Richtung nicht bestimmbar. */
+  sibling: string[];
 }
 
 export interface EventQueryResult {
@@ -113,6 +144,71 @@ export function collectEpcs(events: EpcisEvent[]): string[] {
     }
   }
   return [...epcs];
+}
+
+/** Idente einer EPC-Liste + der zugehoerigen Mengenliste. */
+function sideOf(list?: string[], quantities?: QuantityEntry[]): string[] {
+  const out = [...(list ?? [])];
+  for (const q of quantities ?? []) if (q.epcClass) out.push(q.epcClass);
+  return out;
+}
+
+/**
+ * Die Idente eines Ereignisses nach ihrer Lage ZUM BEZUGS-IDENT einteilen.
+ *
+ * WARUM RELATIV: Die Listenzugehoerigkeit allein sagt die Richtung nicht. Der
+ * EPCIS-Server matcht positionsunabhaengig (``MATCH_anyEPC``) -- fragt man nach
+ * einer Lamelle, kommen BEIDE Ereignisse zurueck, in denen sie vorkommt: das
+ * Saegewerks-Ereignis, das sie erzeugt hat (sie steht im Output), und das
+ * BSP-Ereignis, das sie verbraucht (sie steht im Input). Erst der Vergleich
+ * mit dem Bezugs-Ident macht daraus eine Richtung:
+ *
+ *   Bezug im Output -> die Inputs sind sein Vormaterial   (upstream)
+ *   Bezug im Input  -> die Outputs sind sein Erzeugnis    (downstream)
+ *
+ * Richtung ist damit eine Eigenschaft der KANTE, nicht des Idents. Sie laesst
+ * sich aus einer flachen Ident-Menge (collectEpcs) nicht rekonstruieren.
+ *
+ * ObjectEvent traegt keine Richtung: seine Idente sind Geschwister auf
+ * derselben Stufe (Erfassung, kein Materialfluss). Sie gelten als ``sibling``
+ * und duerfen die Kette nicht weiter aufspannen -- sonst liefe der Walk von
+ * einer Lamelle ueber ihre 168 Geschwister in fremde Chargen.
+ *
+ * AggregationEvent (parentID/childEPCs) wird von keinem Treiber erzeugt --
+ * die BSP-Produktion ist bewusst als Transformation modelliert, weil aus den
+ * Lamellen eine Platte WIRD und sie nicht darin enthalten sind. Die Regel ist
+ * hier der Vollstaendigkeit halber umgesetzt (Behaelter = downstream, Inhalt =
+ * upstream), aber mangels Daten ungeprueft.
+ */
+export function classifyEpcs(event: EpcisEvent, refEpc: string): ClassifiedEpcs {
+  const empty: ClassifiedEpcs = { upstream: [], downstream: [], sibling: [] };
+
+  const inputs = sideOf(event.inputEPCList, event.inputQuantityList);
+  const outputs = sideOf(event.outputEPCList, event.outputQuantityList);
+
+  if (inputs.length || outputs.length) {
+    const inInput = inputs.includes(refEpc);
+    const inOutput = outputs.includes(refEpc);
+    // Beides waere ein Zyklus, keines heisst: das Ereignis kam ueber einen
+    // ANDEREN Ident herein (moeglich, weil ein Walk mehrere Idente abfragt).
+    // In beiden Faellen ist keine Aussage moeglich -- lieber nichts behaupten.
+    if (inInput === inOutput) return { ...empty, sibling: [...inputs, ...outputs] };
+    return inOutput
+      ? { ...empty, upstream: inputs }
+      : { ...empty, downstream: outputs };
+  }
+
+  const children = event.childEPCs ?? [];
+  const parent = event.parentID;
+  if (children.length || parent) {
+    if (parent && parent === refEpc) return { ...empty, upstream: children };
+    if (children.includes(refEpc)) {
+      return { ...empty, downstream: parent ? [parent] : [] };
+    }
+    return { ...empty, sibling: [...children, ...(parent ? [parent] : [])] };
+  }
+
+  return { ...empty, sibling: sideOf(event.epcList, event.quantityList) };
 }
 
 /**

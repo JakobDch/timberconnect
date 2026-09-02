@@ -25,6 +25,7 @@ import { getSolidDataset, getThing, getStringNoLocale, getUrl } from "@inrupt/so
 import { FOAF, VCARD } from "@inrupt/vocab-common-rdf";
 import { setAuthFetch, setCurrentRole } from "../services/authFetch";
 import { getOwnSetup, setOwnRole } from "../services/accessControlService";
+import { invalidateCompanyPrefixes } from "../services/companyPrefixService";
 import {
   ensureRegisteredInFederation,
   refreshOwnGroupDocs,
@@ -184,6 +185,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const webId = authState.webId;
       if (!webId) throw new Error("Cannot set role: not logged in");
       const effectivePrefix = await setOwnRole(webId, role, companyPrefix);
+      // Der Prefix bestimmt die Scan-Auflösung mit (companyPrefixService liest
+      // ihn aus allen Pods der Föderation). Ohne Invalidierung zählte ein
+      // frisch registrierter Teilnehmer bis zu fünf Minuten lang nicht mit —
+      // seine eigenen Barcodes lösten so lange auf die falsche Lesart auf.
+      invalidateCompanyPrefixes();
       setCurrentRole(role.iri);
       setAuthState((prev) => ({
         ...prev,

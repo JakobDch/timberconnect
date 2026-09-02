@@ -8,14 +8,16 @@ vi.mock('../sparqlService', () => ({
   filterAvailableSources: (...a: unknown[]) => filterAvailableSources(...a),
   sourcesFromBizTransactions: (...a: unknown[]) => sourcesFromBizTransactions(...a),
 }));
+// Nur die NETZ-Abfrage mocken. classifyEpcs, collectBizTransactions und der
+// Walk selbst bleiben echt -- an ihnen haengt die Richtungslogik, und ein
+// nachgebauter Mock davon wuerde die Tests gruen halten und blind machen.
+// (Genau das war der Fall: der alte collectEpcs-Mock war ungerichtet und
+// unvollstaendig -- ohne childEPCs und ohne die Mengenlisten.)
 const queryEpcisEvents = vi.fn();
-vi.mock('../epcisService', () => ({
-  queryEpcisEvents: (...a: unknown[]) => queryEpcisEvents(...a),
-  collectEpcs: (evs: Array<Record<string, string[]>>) =>
-    evs.flatMap((e) => [...(e.inputEPCList ?? []), ...(e.outputEPCList ?? []), ...(e.epcList ?? [])]),
-  collectBizTransactions: (evs: Array<{ bizTransactionList?: Array<{ bizTransaction?: string }> }>) =>
-    evs.flatMap((e) => (e.bizTransactionList ?? []).map((b) => b.bizTransaction).filter(Boolean)),
-}));
+vi.mock('../epcisService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../epcisService')>();
+  return { ...actual, queryEpcisEvents: (...a: unknown[]) => queryEpcisEvents(...a) };
+});
 vi.mock('../accessControlService', () => ({
   filterSourcesByRole: (s: string[]) => Promise.resolve({ allowed: s }),
 }));
@@ -139,7 +141,11 @@ describe('Lieferkette über mehrere Stufen', () => {
     queryEpcisEvents.mockImplementation((epc: string) =>
       Promise.resolve(
         epc === PANEL
-          ? { events: [{ inputEPCList: [LAMELLE] }], returned: 2, filteredOut: 5 }
+          ? {
+              events: [{ inputEPCList: [LAMELLE], outputEPCList: [PANEL] }],
+              returned: 2,
+              filteredOut: 5,
+            }
           : { events: [], returned: 99, filteredOut: 99 },
       ),
     );
@@ -153,7 +159,15 @@ describe('Lieferkette über mehrere Stufen', () => {
   it('bricht die Kette nicht ab, wenn eine Stufe fehlschlägt', async () => {
     queryEpcisEvents.mockImplementation((epc: string) =>
       epc === PANEL
-        ? Promise.resolve({ events: [{ inputEPCList: [LAMELLE] }], returned: 1, filteredOut: 0 })
+        ? Promise.resolve({
+            // Beide Seiten noetig: die Richtung wird relativ zum gefragten
+            // Ident bestimmt. Ohne outputEPCList kaeme die Platte im Ereignis
+            // gar nicht vor -- dann ist "die Lamelle liegt davor" keine
+            // ableitbare Aussage, sondern eine Vermutung.
+            events: [{ inputEPCList: [LAMELLE], outputEPCList: [PANEL] }],
+            returned: 1,
+            filteredOut: 0,
+          })
         : Promise.reject(new Error('EPCAT nicht erreichbar')),
     );
     filterAvailableSources.mockResolvedValue({ available: [] });

@@ -1,5 +1,7 @@
 export { PlantingAreaMap, polygonAreaHectares } from './PlantingAreaMap';
 export type { PolygonGeoJson } from './PlantingAreaMap';
+export { LocationPickMap } from './LocationPickMap';
+export type { AreaOutline } from './LocationPickMap';
 export { PlantingAreaCard } from './PlantingAreaCard';
 export { ActorLocationMap } from './ActorLocationMap';
 export type { ActorMarker } from './ActorLocationMap';

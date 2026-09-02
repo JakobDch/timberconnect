@@ -334,6 +334,25 @@ function upsertProcess(record: ProcessRecord): void {
   writeProcesses(list);
 }
 
+/**
+ * Vorgaenge aus dem lokalen Index entfernen, deren Container geloescht wurde.
+ *
+ * Der Index liegt im localStorage und weiss nichts davon, dass im Pod etwas
+ * verschwunden ist. Ohne diesen Abgleich zeigte die Vorgangssuche nach dem
+ * Loeschen weiter Eintraege an, deren Dateien 404 liefern — und schlimmer: ein
+ * neuer Upload desselben Vorgangs stuende doppelt in der Liste.
+ *
+ * Verglichen wird ueber `containerUrl`, weil genau die der Loeschdienst kennt.
+ * Gibt die Zahl der entfernten Eintraege zurueck.
+ */
+export function forgetProcessesByContainer(containerUrls: string[]): number {
+  const gone = new Set(containerUrls);
+  const before = readProcesses();
+  const after = before.filter((p) => !gone.has(p.containerUrl));
+  if (after.length !== before.length) writeProcesses(after);
+  return before.length - after.length;
+}
+
 /** Dateien zu einem bestehenden Vorgang nachtragen. */
 export function appendProcessFiles(processId: string, files: ProcessFileRef[]): ProcessRecord | null {
   const record = getProcess(processId);

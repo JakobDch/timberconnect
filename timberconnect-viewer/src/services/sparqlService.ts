@@ -5,6 +5,7 @@
  */
 
 import { QueryEngine } from '@comunica/query-sparql';
+import { Parser, Store, type Quad } from 'n3';
 import {
   DEFAULT_SOURCES,
   getSourcesForProduct,
@@ -14,12 +15,9 @@ import {
 } from '../config/solidPods';
 import { getAuthFetch, getCurrentRole } from './authFetch';
 import { filterSourcesByRole, podBaseFromUrl } from './accessControlService';
-import {
-  queryEpcisEvents,
-  collectEpcs,
-  collectBizTransactions,
-  type EpcisEvent,
-} from './epcisService';
+import { type EpcisEvent } from './epcisService';
+import { walkChain, type ChainScope } from './supplyChainWalk';
+
 import {
   createProductQuery,
   createStemQuery,
@@ -55,11 +53,121 @@ let engine: QueryEngine | null = null;
 // Timeout for source availability checks (ms)
 const SOURCE_CHECK_TIMEOUT = 5000;
 
+/**
+ * Zeitgrenze fuer das Laden EINER Quelle.
+ *
+ * Bewusst knapp: Die Quellen werden parallel geholt, aber der Browser laesst
+ * je Gegenstelle nur sechs Verbindungen gleichzeitig zu -- lange Zeitgrenzen
+ * addieren sich deshalb ueber die Warteschlange. Eine Quelle, die laenger
+ * braucht, fehlt lieber in der Ansicht, als sie zum Stehen zu bringen.
+ */
+const SOURCE_FETCH_TIMEOUT = 4000;
+
+/** Wie lange eine geladene Quelle wiederverwendet wird. */
+const STORE_CACHE_TTL = 5 * 60 * 1000;
+
 function getEngine(): QueryEngine {
   if (!engine) {
     engine = new QueryEngine();
   }
   return engine;
+}
+
+// ---------------------------------------------------------------------------
+// Quellen-Cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Geladene und geparste Quellen, damit sie nicht je Abfrage neu geholt werden.
+ *
+ * WARUM: Comunica bekommt bei jedem ``queryBindings`` eine Liste von URLs und
+ * laedt sie samt Parsen JEDES MAL neu. Ein Anwendungsfall stoesst 15 Abfragen
+ * an, und die Quellenliste umfasst den ganzen Katalog -- das waren 15 x N
+ * Downloads derselben Dateien. Genau daran hing die Ansicht.
+ *
+ * Hier wird jede Quelle EINMAL geholt, geparst und als Tripel-Menge behalten.
+ * Die 15 Abfragen laufen danach gegen den Speicher, ohne Netz.
+ *
+ * Der Cache ist bewusst kurzlebig (STORE_CACHE_TTL): frisch hochgeladene
+ * Dokumente sollen ohne Neuladen der Seite sichtbar werden.
+ */
+interface CachedSource {
+  quads: Quad[];
+  loadedAt: number;
+}
+const sourceCache = new Map<string, CachedSource>();
+const inFlightSources = new Map<string, Promise<Quad[]>>();
+
+/** Cache leeren -- nach einem Upload, damit neue Dokumente sofort erscheinen. */
+export function invalidateSourceCache(): void {
+  sourceCache.clear();
+  inFlightSources.clear();
+  console.log('[SPARQL] Quellen-Cache geleert');
+}
+
+/**
+ * Eine Quelle laden und parsen -- hoechstens einmal gleichzeitig.
+ *
+ * Faellt eine Quelle aus (404, Zeitgrenze, kaputtes Turtle), liefert sie eine
+ * leere Tripelmenge statt zu werfen: eine unerreichbare Datei darf die
+ * Ansicht nicht verhindern, sie fehlt dann eben darin.
+ */
+async function loadSource(url: string): Promise<Quad[]> {
+  const cached = sourceCache.get(url);
+  if (cached && Date.now() - cached.loadedAt < STORE_CACHE_TTL) return cached.quads;
+
+  const laufend = inFlightSources.get(url);
+  if (laufend) return laufend;
+
+  const promise = (async (): Promise<Quad[]> => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SOURCE_FETCH_TIMEOUT);
+      const response = await getAuthFetch()(url, {
+        headers: { Accept: 'text/turtle, application/trig;q=0.9, */*;q=0.1' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) return [];
+
+      const text = await response.text();
+      const quads = new Parser({ baseIRI: url }).parse(text);
+      sourceCache.set(url, { quads, loadedAt: Date.now() });
+      return quads;
+    } catch (err) {
+      console.debug('[SPARQL] Quelle nicht ladbar:', url, err);
+      sourceCache.set(url, { quads: [], loadedAt: Date.now() });
+      return [];
+    } finally {
+      inFlightSources.delete(url);
+    }
+  })();
+
+  inFlightSources.set(url, promise);
+  return promise;
+}
+
+/**
+ * Alle Quellen in EINEN Speicher laden.
+ *
+ * Der Speicher wird anschliessend allen Abfragen als einzige Quelle
+ * uebergeben. Comunica sieht dann eine fertige Tripelmenge statt einer Liste
+ * von URLs -- kein Netz, kein Parsen, kein Warten je Abfrage.
+ */
+async function buildStore(sources: string[]): Promise<Store> {
+  const start = Date.now();
+  const alleQuads = await Promise.all(sources.map(loadSource));
+  const store = new Store();
+  for (const quads of alleQuads) store.addQuads(quads);
+  const frisch = sources.filter((u) => {
+    const c = sourceCache.get(u);
+    return c && Date.now() - c.loadedAt < 1000;
+  }).length;
+  console.log(
+    `[SPARQL] ${store.size} Tripel aus ${sources.length} Quelle(n) in ${Date.now() - start} ms ` +
+      `(${sources.length - frisch} aus dem Cache)`,
+  );
+  return store;
 }
 
 /**
@@ -90,11 +198,23 @@ export async function filterAvailableSources(sources: string[]): Promise<{
   available: string[];
   unavailable: string[];
 }> {
+  // Die Quelle GLEICH LADEN statt sie erst per HEAD anzuklopfen.
+  //
+  // Frueher lief hier ein HEAD je Quelle, und unmittelbar danach holte
+  // Comunica dieselbe Datei noch einmal -- zwei Runden ueber dieselbe
+  // Warteschlange (der Browser laesst je Gegenstelle nur sechs Verbindungen
+  // zu). Der Ladevorgang beantwortet die Frage "erreichbar?" ohnehin mit,
+  // und sein Ergebnis wird im Cache behalten, sodass die anschliessenden
+  // Abfragen gar nicht mehr ans Netz muessen.
+  //
+  // "Erreichbar" heisst hier: geladen UND mindestens ein Tripel. Eine leere
+  // Datei traegt zu keiner Abfrage etwas bei, und sie als Quelle zu fuehren
+  // haette nur die Statusanzeige beschoenigt.
   const results = await Promise.all(
     sources.map(async (source) => ({
       source,
-      available: await checkSourceAvailability(source),
-    }))
+      available: (await loadSource(source)).length > 0,
+    })),
   );
 
   return {
@@ -118,8 +238,13 @@ export async function executeQuery(
   const queryEngine = getEngine();
 
   try {
+    // Gegen den vorgeladenen Speicher statt gegen die URL-Liste: sonst holt
+    // und parst Comunica bei JEDER Abfrage alle Quellen erneut. Bei 15
+    // Abfragen eines Anwendungsfalls war das der Unterschied zwischen
+    // Sekunden und Minuten.
+    const store = await buildStore(sources);
     const bindingsStream = await queryEngine.queryBindings(query, {
-      sources: sources,
+      sources: [store],
       // Authenticated fetch so Comunica can read WAC-protected pod sources.
       // Falls back to the global fetch when no Solid session is active.
       fetch: getAuthFetch(),
@@ -151,86 +276,88 @@ export async function executeQuery(
 }
 
 /**
- * Query product data (BSP Panel) by traceId
+ * Stammdaten der Platte.
+ *
+ * Alle folgenden Abfragen wurden auf das v6-Vokabular umgestellt und nehmen
+ * deshalb die Ident-Kette statt einer Trace-Id: die v5-Klassen (vlex:BSPPanel,
+ * tc:ForestSource, tc:SawmillSource, tc:BSPWerkSource, eldat:Polter) werden von
+ * keinem aktuellen Upload mehr erzeugt, und ``tc:traceId`` existiert in v6
+ * nicht. Ohne die Umstellung lieferten sie beim Ident-Pfad ausnahmslos nichts.
  */
 export async function queryProduct(
-  traceId: string,
+  epcs: string[] = [],
   sources: string[] = DEFAULT_SOURCES
 ): Promise<SparqlBinding[]> {
-  const query = createProductQuery(traceId);
-  console.log('[SPARQL] Querying product data for traceId:', traceId);
+  const query = createProductQuery(epcs);
+  console.log('[SPARQL] Querying product data');
   return executeQuery(query, sources);
 }
 
 /**
- * Query stem data (forest origin) by traceId
+ * Query stem data (forest origin) by traceId.
+ *
+ * ``epcs`` ist die Ident-Kette des Bauteils. Sie MUSS beim EPC-Pfad mitgegeben
+ * werden -- sonst liefert die Abfrage einen beliebigen Stamm aus dem Katalog
+ * (siehe createStemQuery). Beim Trace-Id-Pfad bleibt sie leer; dort filtert
+ * die Abfrage ueber tc:stemKey.
  */
 export async function queryStem(
   traceId: string,
-  sources: string[] = DEFAULT_SOURCES
+  sources: string[] = DEFAULT_SOURCES,
+  epcs: string[] = []
 ): Promise<SparqlBinding[]> {
-  const query = createStemQuery(traceId);
+  const query = createStemQuery(traceId, epcs);
   console.log('[SPARQL] Querying stem data for traceId:', traceId);
   return executeQuery(query, sources);
 }
 
-/**
- * Query forest source data by traceId
- */
+/** Waldherkunft -- in v6 am tc:Stem, nicht mehr an einem Quellenknoten. */
 export async function queryForestSource(
-  traceId: string,
+  epcs: string[] = [],
   sources: string[] = DEFAULT_SOURCES
 ): Promise<SparqlBinding[]> {
-  const query = createForestQuery(traceId);
-  console.log('[SPARQL] Querying forest source for traceId:', traceId);
+  const query = createForestQuery(epcs);
+  console.log('[SPARQL] Querying forest source');
   return executeQuery(query, sources);
 }
 
-/**
- * Query sawmill source data by traceId
- */
+/** Saegewerk -- Empfaenger des Rundholzauftrags bzw. Saegewerks-DoP. */
 export async function querySawmillSource(
-  traceId: string,
+  epcs: string[] = [],
   sources: string[] = DEFAULT_SOURCES
 ): Promise<SparqlBinding[]> {
-  const query = createSawmillQuery(traceId);
-  console.log('[SPARQL] Querying sawmill source for traceId:', traceId);
+  const query = createSawmillQuery(epcs);
+  console.log('[SPARQL] Querying sawmill source');
   return executeQuery(query, sources);
 }
 
-/**
- * Query BSP-Werk source data by traceId
- */
+/** Herstellungsangaben -- in v6 flach am tc:Panel. */
 export async function queryBspWerkSource(
-  traceId: string,
+  epcs: string[] = [],
   sources: string[] = DEFAULT_SOURCES
 ): Promise<SparqlBinding[]> {
-  const query = createBspWerkQuery(traceId);
-  console.log('[SPARQL] Querying BSP-Werk source for traceId:', traceId);
+  const query = createBspWerkQuery(epcs);
+  console.log('[SPARQL] Querying BSP-Werk source');
   return executeQuery(query, sources);
 }
 
-/**
- * Query complete supply chain by traceId
- */
+/** Stationen der Kette -- je Station aus ihrem eigenen Beleg. */
 export async function querySupplyChain(
-  traceId: string,
+  epcs: string[] = [],
   sources: string[] = DEFAULT_SOURCES
 ): Promise<SparqlBinding[]> {
-  const query = createSupplyChainQuery(traceId);
-  console.log('[SPARQL] Querying supply chain for traceId:', traceId);
+  const query = createSupplyChainQuery(epcs);
+  console.log('[SPARQL] Querying supply chain');
   return executeQuery(query, sources);
 }
 
-/**
- * Query business partners by traceId
- */
+/** Akteure mit Anschrift -- in v6 aus den Transportauftraegen. */
 export async function queryBusinessPartners(
-  traceId: string,
+  epcs: string[] = [],
   sources: string[] = DEFAULT_SOURCES
 ): Promise<SparqlBinding[]> {
-  const query = createBusinessPartnersQuery(traceId);
-  console.log('[SPARQL] Querying business partners for traceId:', traceId);
+  const query = createBusinessPartnersQuery(epcs);
+  console.log('[SPARQL] Querying business partners');
   return executeQuery(query, sources);
 }
 
@@ -384,6 +511,15 @@ export interface ProductDataResult {
   /** Rohe EPCIS-Events des EPC-Flows -- Quelle der Transportdaten
       (eventTime + bizStep). Nur beim EPC-zentrischen Abruf gesetzt. */
   epcisEvents?: EpcisEvent[];
+  /**
+   * True, wenn ALLE Sparten abgefragt wurden.
+   *
+   * Nach dem Scan steht hier ``false``: dann traegt das Ergebnis nur den
+   * erfassten Ident und seine Produktart (fetchScanData). Wer die Felder der
+   * Anwendungsfaelle braucht, muss vorher nachladen -- sonst haelt er ein
+   * leeres Feld faelschlich fuer "keine Daten vorhanden".
+   */
+  loadedFully?: boolean;
 }
 
 /**
@@ -450,35 +586,138 @@ export function sourcesFromBizTransactions(bizTxUrls: string[]): string[] {
 }
 
 /**
- * EPCIS-centric retrieval: a GS1 EPC -> EPCAT events -> linked EPCs + pod sources
- * -> pod SPARQL. The lifecycle-chain walk (childEPCs across stations) plugs into
- * collectEpcs once AggregationEvents are produced; today this resolves the single
- * scanned object's data.
+ * Der SCAN -- bewusst schlank.
+ *
+ * Nach dem Erfassen zeigt die Ansicht genau zwei Dinge: den Ident und die
+ * Produktart. Alles Weitere haengt hinter der Bezahlschranke des jeweiligen
+ * Anwendungsfalls. Genau so viel wird hier geholt:
+ *
+ *   1 EPCIS-Abfrage (der erfasste Ident, ohne Kettenverfolgung)
+ *   1 SPARQL-Abfrage (die Subjekte, die diesen Ident tragen -> Produktart)
+ *
+ * WARUM DAS EINE EIGENE FUNKTION IST: ``fetchProductDataByEpc`` faehrt 15
+ * Abfragen ueber den gesamten Katalog. Fuer den Scan wurde davon nur
+ * ``scannedEpc`` gebraucht -- der Rest diente allein dazu, die
+ * Verfuegbarkeits-Kacheln auf "liegt was vor?" zu pruefen, und wurde danach
+ * verworfen. Mit der mehrstufigen Kettenverfolgung wurde daraus eine
+ * Wartezeit, die die Anwendung stehen liess.
+ *
+ * Die Kacheln bekommen ihre Auskunft jetzt aus ``availability`` -- einer
+ * Ja/Nein-Angabe je Kategorie, die aus DIESER einen Abfrage faellt.
  */
-export async function fetchProductDataByEpc(epc: string): Promise<ProductDataResult> {
+export async function fetchScanData(epc: string): Promise<ProductDataResult> {
   const errors: string[] = [];
-  console.log('[SPARQL] EPCIS flow for EPC:', epc);
+  console.log('[SPARQL] Scan (schlank) für EPC:', epc);
 
-  // 1. Ask the (role+consent-gated) EPCIS proxy for this EPC's events.
-  let events: Awaited<ReturnType<typeof queryEpcisEvents>>['events'] = [];
+  let events: EpcisEvent[] = [];
   let eventsReturned = 0;
   let eventsFilteredOut = 0;
+  let bizTxUrls: string[] = [];
   try {
-    const result = await queryEpcisEvents(epc);
-    events = result.events;
-    eventsReturned = result.returned;
-    eventsFilteredOut = result.filteredOut;
+    // 'self': keine Kettenverfolgung. Die Ereignisse des erfassten Idents
+    // reichen -- sie tragen die Dokumentlinks, ueber die die Quellen gefunden
+    // werden.
+    const walk = await walkChain(epc, 'self');
+    events = walk.events;
+    eventsReturned = walk.eventsReturned;
+    eventsFilteredOut = walk.eventsFilteredOut;
+    bizTxUrls = walk.bizTxUrls;
+  } catch (err) {
+    console.error('[SPARQL] EPCAT query failed:', err);
+    errors.push(err instanceof Error ? err.message : 'EPCAT-Abfrage fehlgeschlagen');
+  }
+
+  const epcisInfo: EpcisInfo = {
+    epc,
+    eventsReturned,
+    eventsFilteredOut,
+    epcsResolved: 1,
+  };
+
+  const sourceSet = new Set<string>(sourcesFromBizTransactions(bizTxUrls));
+  try {
+    const products = await getAllProductsAsync();
+    for (const url of products.flatMap((p) => p.sources)) sourceSet.add(url);
+  } catch (err) {
+    console.warn('[SPARQL] Katalog-Quellen nicht ermittelbar:', err);
+  }
+  const sources = Array.from(sourceSet);
+
+  const { allowed } = await filterSourcesByRole([...sources], getCurrentRole());
+  const { available } = await filterAvailableSources(allowed);
+
+  if (available.length === 0) {
+    errors.push('Keine verknüpften Pod-Daten erreichbar');
+    return { ...emptyResult(sources, errors), epcisInfo };
+  }
+
+  const scannedEpcBindings = await executeQuery(createEpcQuery(epc), available).catch(
+    (err) => {
+      console.error('[SPARQL] EPC query failed for', epc, err);
+      return [] as SparqlBinding[];
+    },
+  );
+
+  console.log(
+    `[SPARQL] Scan fertig: ${scannedEpcBindings.length} Treffer am erfassten Ident, ` +
+      `${available.length} Quelle(n)`,
+  );
+
+  return {
+    ...emptyResult(sources, errors),
+    product: scannedEpcBindings,
+    scannedEpc: scannedEpcBindings,
+    sourceStatus: available.map((url) => ({ url, available: true, pod: extractPodHost(url) })),
+    epcisInfo,
+    epcisEvents: events,
+  };
+}
+
+/**
+ * EPCIS-centric retrieval: a GS1 EPC -> EPCAT events -> linked EPCs + pod sources
+ * -> pod SPARQL.
+ *
+ * ``scope`` bestimmt, WIE WEIT die Kette verfolgt wird (siehe walkChain):
+ *
+ *   self     nur das erfasste Bauteil
+ *   upstream zusaetzlich seine Vorstufen -- die Herkunft
+ *   full     zusaetzlich, was daraus entstanden ist -- die Verwendung
+ *
+ * Die Traversierung ist mehrstufig und gerichtet. Vorher wurde EPCIS genau
+ * einmal gefragt: beim Scan einer Platte kamen so ihre Lamellen herein, aber
+ * nie die Staemme dahinter -- und damit nie die Forstdaten. Ungerichtet war es
+ * zugleich zu weit: wer eine Lamelle scannte, bekam die Platte mitgeliefert,
+ * die es zum Zeitpunkt der Lamelle noch gar nicht gab.
+ */
+export async function fetchProductDataByEpc(
+  epc: string,
+  scope: ChainScope = 'full',
+): Promise<ProductDataResult> {
+  const errors: string[] = [];
+  console.log(`[SPARQL] EPCIS flow for EPC: ${epc} (Umfang: ${scope})`);
+
+  // 1. Kette ueber den (rollen- und consent-pruefenden) EPCIS-Proxy verfolgen.
+  let events: EpcisEvent[] = [];
+  let eventsReturned = 0;
+  let eventsFilteredOut = 0;
+  let epcs = new Set<string>([epc]);
+  let bizTxUrls: string[] = [];
+  try {
+    const walk = await walkChain(epc, scope);
+    events = walk.events;
+    eventsReturned = walk.eventsReturned;
+    eventsFilteredOut = walk.eventsFilteredOut;
+    epcs = walk.epcs;
+    bizTxUrls = walk.bizTxUrls;
     console.log(
-      `[SPARQL] EPCAT: ${result.returned} events (${result.filteredOut} filtered by consent)`,
+      `[SPARQL] EPCAT: ${walk.eventsReturned} events ` +
+        `(${walk.eventsFilteredOut} filtered by consent), ${epcs.size} EPC(s) in der Kette`,
     );
   } catch (err) {
     console.error('[SPARQL] EPCAT query failed:', err);
     errors.push(err instanceof Error ? err.message : 'EPCAT-Abfrage fehlgeschlagen');
   }
 
-  // 2. Collect the EPCs of the (eventual) chain + the pod-document links.
-  const epcs = new Set<string>([epc, ...collectEpcs(events)]);
-  const bizTxUrls = collectBizTransactions(events);
   const epcisInfo: EpcisInfo = {
     epc,
     eventsReturned,
@@ -523,26 +762,28 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
     return { ...emptyResult(sources, errors), epcisInfo };
   }
 
-  // 4. For each EPC, query the pod for the bearing subject + its product data.
+  // 4. Die Treffer des GESCANNTEN Idents holen -- und NUR die.
   //
-  // Die Treffer des GESCANNTEN Idents werden dabei getrennt gehalten. ``epcs``
-  // enthaelt naemlich die ganze Kette: ``collectEpcs`` liest die
-  // ``inputEPCList`` der Events mit, beim Scan einer BSP-Platte sind das ihre
-  // 169 Lamellen. Verschmilzt man alle Treffer zu einer Liste, laesst sich der
-  // Platte nicht mehr ansehen, welche Zeile ihr gehoert und welche ihrem
-  // Vormaterial -- die Produktart wurde so zur "Lamelle", weil die
-  // Leistungserklaerung der Lamellen ``tc:SawingProcess`` beisteuert.
-  const perEpc = await Promise.all(
-    [...epcs].map(async (e) => ({
-      epc: e,
-      bindings: await executeQuery(createEpcQuery(e), available).catch((err) => {
-        console.error('[SPARQL] EPC query failed for', e, err);
-        return [] as SparqlBinding[];
-      }),
-    })),
+  // Frueher lief hier eine Abfrage JE KETTEN-IDENT ueber alle Quellen. Bei
+  // einer Platte mit 169 Lamellen waren das 170 parallele Comunica-Laeufe,
+  // von denen am Ende genau einer verwendet wurde: die uebrigen Treffer
+  // dienten nur als Rueckfall fuer ``product`` und blaehten dabei die
+  // Datenpunktzahl (und damit den Preis) auf, ohne eine Aussage
+  // hinzuzufuegen. Seit ``queryProduct`` auf tc:Panel laeuft, gibt es diesen
+  // Rueckfall nicht mehr -- und damit auch keinen Grund, die ganze Kette
+  // einzeln abzufragen.
+  //
+  // Warum ueberhaupt getrennt vom Rest: ``epcs`` ist die ganze Kette. Wer die
+  // Treffer aller Idente zu einer Liste verschmilzt, kann der Platte nicht
+  // mehr ansehen, welche Zeile ihr gehoert und welche ihrem Vormaterial --
+  // die Produktart wurde so zur "Lamelle", weil die Leistungserklaerung der
+  // Lamellen ``tc:SawingProcess`` beisteuert.
+  const scannedEpcBindings = await executeQuery(createEpcQuery(epc), available).catch(
+    (err) => {
+      console.error('[SPARQL] EPC query failed for', epc, err);
+      return [] as SparqlBinding[];
+    },
   );
-  const epcBindings = perEpc.flatMap((r) => r.bindings);
-  const scannedEpcBindings = perEpc.find((r) => r.epc === epc)?.bindings ?? [];
 
   // Nachvollziehbar machen, woran die Produktart haengt: welche Typen der
   // GESCANNTE Ident hergibt und -- falls keine -- ob die Quelle ueberhaupt
@@ -593,7 +834,24 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
   //    ``chainEpcs`` ist die Kette dieses Bauteils (gescannter Ident +
   //    Vorprodukte aus den EPCIS-Ereignissen, Schritt 2). Genau daran haengen
   //    die PDF-Vorgaenge ueber tc:epc (im Mapping: materialEpc).
-  const chainEpcs = [...epcs];
+  //
+  //    VOLLSTAENDIG, ohne Kappung. Frueher wanderten hoechstens 48 Idente in
+  //    die Schranke -- eine Begrenzung auf die Antwortzeit, die die Ansicht
+  //    aber INHALTLICH falsch machte: die Menge kommt in Einfuegereihenfolge
+  //    aus dem Ketten-Walk, und bei einer Platte aus 169 Lamellen sind die
+  //    ersten 48 fast ausschliesslich Lamellen. Die Staemme stehen dahinter
+  //    und fielen weg -- mit ihnen der Faellort, den der Herkunftsnachweis
+  //    auf der Karte zeigt. Die Kappung meldete sich zwar im Log, aber in der
+  //    Ansicht war nicht zu sehen, dass ausgerechnet der Wald fehlt.
+  //
+  //    Eine langsamere Ansicht ist der Preis dafuer, dass die Kette vollstaendig
+  //    ausgewertet wird. Wer die Grenze wieder einfuehrt, muss ueber die
+  //    Produktarten (itemRef) hinweg auswaehlen statt vorne abzuschneiden --
+  //    sonst kehrt genau dieser Fehler zurueck.
+  //
+  //    Der gescannte Ident steht weiterhin vorn: Reihenfolge ist zwar fuer die
+  //    Vollstaendigkeit egal, aber die Wertelisten bleiben so lesbar.
+  const chainEpcs = [epc, ...[...epcs].filter((e) => e !== epc)];
   const [
     product,
     stem,
@@ -611,13 +869,13 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
     lca,
     dbpp,
   ] = await Promise.all([
-    queryProduct(epc, available).catch(() => []),
-    queryStem(epc, available).catch(() => []),
-    queryForestSource(epc, available).catch(() => []),
-    querySawmillSource(epc, available).catch(() => []),
-    queryBspWerkSource(epc, available).catch(() => []),
-    querySupplyChain(epc, available).catch(() => []),
-    queryBusinessPartners(epc, available).catch(() => []),
+    queryProduct(chainEpcs, available).catch(() => []),
+    queryStem(epc, available, chainEpcs).catch(() => []),
+    queryForestSource(chainEpcs, available).catch(() => []),
+    querySawmillSource(chainEpcs, available).catch(() => []),
+    queryBspWerkSource(chainEpcs, available).catch(() => []),
+    querySupplyChain(chainEpcs, available).catch(() => []),
+    queryBusinessPartners(chainEpcs, available).catch(() => []),
     queryTransportOrders(available, chainEpcs).catch(() => []),
     queryCertificateData(available, chainEpcs).catch(() => []),
     queryDeclarations(available, chainEpcs).catch(() => []),
@@ -629,7 +887,13 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
   ]);
 
   return {
-    product: product.length ? product : epcBindings,
+    // Rueckfall auf die Ident-Treffer des GESCANNTEN Bauteils, nicht der
+    // ganzen Kette. createEpcQuery liefert nur Struktur (subject/type/
+    // epcisDoc) -- ueber alle 169 Lamellen gesammelt blaeht das die
+    // Datenpunktzahl und damit den Preis auf, ohne eine Aussage
+    // hinzuzufuegen. Seit queryProduct auf tc:Panel laeuft, greift dieser
+    // Zweig ohnehin nur noch, wenn gar keine Plattendaten vorliegen.
+    product: product.length ? product : scannedEpcBindings,
     stem,
     forest,
     sawmill,
@@ -649,6 +913,7 @@ export async function fetchProductDataByEpc(epc: string): Promise<ProductDataRes
     errors,
     epcisInfo,
     epcisEvents: events,
+    loadedFully: true,
   };
 }
 
@@ -674,15 +939,36 @@ function emptyResult(sources: string[], errors: string[]): ProductDataResult {
   };
 }
 
+/**
+ * Nach dem Erfassen: nur Ident und Produktart.
+ *
+ * Der Scan ist kostenlos und zeigt nichts, wofuer man zahlen muesste. Er darf
+ * deshalb auch nicht die Daten aller Anwendungsfaelle holen -- das kostet
+ * Wartezeit fuer etwas, das der Nutzer vielleicht nie oeffnet. Die
+ * Vollabfrage laeuft erst, wenn ein Anwendungsfall geoeffnet wird
+ * (fetchProductData mit dem gewaehlten Umfang).
+ *
+ * Trace-Ids gehen weiterhin den direkten Weg: dort ist die Quellenliste durch
+ * den Katalogeintrag ohnehin auf ein Bauteil begrenzt.
+ */
+export async function fetchScanPreview(id: string): Promise<ProductDataResult> {
+  if (isEpc(id)) return fetchScanData(id);
+  return fetchProductData(id);
+}
+
 export async function fetchProductData(
   traceId: string,
-  sources?: string[]
+  sources?: string[],
+  scope: ChainScope = 'full'
 ): Promise<ProductDataResult> {
   // EPCIS-centric flow: a scanned GS1 EPC (SGTIN/LGTIN) is resolved via EPCAT
   // first, then the linked pod data is queried. Trace-ids / doc-hashes keep the
   // existing direct flow below.
+  //
+  // ``scope`` wirkt nur hier: der Trace-Id-Pfad kennt keine EPC-Kette, die man
+  // eingrenzen koennte.
   if (!sources && isEpc(traceId)) {
-    return fetchProductDataByEpc(traceId);
+    return fetchProductDataByEpc(traceId, scope);
   }
 
   const errors: string[] = [];
@@ -785,7 +1071,16 @@ export async function fetchProductData(
     lca,
     dbpp,
   ] = await Promise.all([
-      queryProduct(traceId, available).catch((e) => {
+      // ALLE Abfragen dieses Pfades laufen ohne Ident-Schranke, und das ist
+      // hier richtig: der Trace-Id-Pfad kennt keine EPC-Kette. Die Quellen
+      // stammen aus dem Katalogeintrag GENAU DIESER Trace-Id, sind also
+      // bereits auf ein Bauteil begrenzt -- anders als im EPC-Pfad, der den
+      // ganzen Katalog laedt. Eine leere Ident-Liste laesst die Schranke
+      // bewusst entfallen.
+      //
+      // queryStem behaelt die traceId: seine Abfrage filtert ueber
+      // tc:stemKey, solange kein Ident vorliegt.
+      queryProduct([], available).catch((e) => {
         console.error('[SPARQL] Product query failed:', e);
         return [];
       }),
@@ -793,31 +1088,26 @@ export async function fetchProductData(
         console.error('[SPARQL] Stem query failed:', e);
         return [];
       }),
-      queryForestSource(traceId, available).catch((e) => {
+      queryForestSource([], available).catch((e) => {
         console.error('[SPARQL] Forest query failed:', e);
         return [];
       }),
-      querySawmillSource(traceId, available).catch((e) => {
+      querySawmillSource([], available).catch((e) => {
         console.error('[SPARQL] Sawmill query failed:', e);
         return [];
       }),
-      queryBspWerkSource(traceId, available).catch((e) => {
+      queryBspWerkSource([], available).catch((e) => {
         console.error('[SPARQL] BSP-Werk query failed:', e);
         return [];
       }),
-      querySupplyChain(traceId, available).catch((e) => {
+      querySupplyChain([], available).catch((e) => {
         console.error('[SPARQL] Supply chain query failed:', e);
         return [];
       }),
-      queryBusinessPartners(traceId, available).catch((e) => {
+      queryBusinessPartners([], available).catch((e) => {
         console.error('[SPARQL] Business partners query failed:', e);
         return [];
       }),
-      // Ohne Ident-Schranke, und das ist hier richtig: der Trace-Id-Pfad
-      // kennt keine EPC-Kette. Die Quellen stammen aus dem Katalogeintrag
-      // GENAU DIESER Trace-Id, sind also bereits auf ein Bauteil begrenzt --
-      // anders als im EPC-Pfad, der den ganzen Katalog laedt. Eine leere
-      // Ident-Liste laesst identGuard() bewusst entfallen.
       queryTransportOrders(available).catch((e) => {
         console.error('[SPARQL] Transport orders query failed:', e);
         return [];
@@ -877,6 +1167,7 @@ export async function fetchProductData(
     dbpp,
     sourceStatus,
     errors,
+    loadedFully: true,
   };
 }
 

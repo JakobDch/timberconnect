@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { assertDeletable, removeCatalogRefs } from './podResetService';
+import {
+  assertDeletable,
+  removeCatalogRefs,
+  selectPlanContainers,
+  describeContainer,
+  documentKindFromFiles,
+  type ResetPlan,
+} from './podResetService';
 
 /**
  * Der Schutzschild ist der Kern dieses Dienstes: er entscheidet, ob eine URL
@@ -185,5 +192,236 @@ describe('removeCatalogRefs', () => {
 `;
     const out = removeCatalogRefs(cat, [A]);
     expect(out).toContain(`ds/${B}.ttl#it`);
+  });
+});
+
+/**
+ * Auswahl einzelner Vorgaenge.
+ *
+ * Der gefaehrliche Fall ist nicht das Loeschen zu weniger, sondern zu vieler
+ * Dinge: Ein Katalog-Eintrag, der zu einem BEHALTENEN Vorgang gehoert, darf
+ * nicht mitgehen -- sonst verschwindet ein noch vorhandener Vorgang aus dem
+ * Katalog und ist im Datenraum nicht mehr auffindbar.
+ */
+describe('selectPlanContainers', () => {
+  const POD_B = 'https://solid-community-server.tmdt.info/epcisrepository/';
+  const pflanzung = `${POD_B}data/proc-pflanzung/`;
+  const faellung = `${POD_B}data/proc-faellung/`;
+
+  const container = (url: string, files: string[]) => ({
+    url,
+    traceId: url.split('/').filter(Boolean).pop() as string,
+    files: files.map((n) => ({ url: `${url}${n}`, name: n, modified: null })),
+    modified: null,
+    ownerWebId: null,
+    isOwn: true,
+  });
+
+  const entry = (uuid: string, target: string | null) => ({
+    uuid,
+    datasetUrl: `${POD_B}catalog/ds/${uuid}.ttl`,
+    recordUrl: `${POD_B}catalog/records/${uuid}.ttl`,
+    targetContainer: target,
+  });
+
+  const plan: ResetPlan = {
+    podBase: POD_B,
+    containers: [
+      container(pflanzung, ['a.ttl', 'a.pdf']),
+      container(faellung, ['b.ttl', 'b.hpr', 'process.ttl']),
+    ],
+    foreign: [],
+    catalogEntries: [entry('uuid-p', pflanzung), entry('uuid-f', faellung)],
+    keptCatalogEntries: [entry('uuid-x', null)],
+    fileCount: 5,
+    warnings: [],
+  };
+
+  it('behaelt nur den gewaehlten Vorgang', () => {
+    const out = selectPlanContainers(plan, [faellung]);
+
+    expect(out.containers).toHaveLength(1);
+    expect(out.containers[0].url).toBe(faellung);
+  });
+
+  it('zaehlt die Dateien der Auswahl neu', () => {
+    expect(selectPlanContainers(plan, [faellung]).fileCount).toBe(3);
+  });
+
+  it('nimmt den Katalog-Eintrag des gewaehlten Vorgangs mit', () => {
+    // Bliebe er stehen, zeigte der Katalog auf einen Container, den es nicht
+    // mehr gibt.
+    const out = selectPlanContainers(plan, [faellung]);
+
+    expect(out.catalogEntries.map((e) => e.uuid)).toEqual(['uuid-f']);
+  });
+
+  it('schuetzt den Katalog-Eintrag des behaltenen Vorgangs', () => {
+    // Der eigentliche Fallstrick: uuid-p stand im Ausgangsplan unter
+    // catalogEntries und muss beim Abwaehlen der Pflanzung dort verschwinden.
+    const out = selectPlanContainers(plan, [faellung]);
+
+    expect(out.catalogEntries.map((e) => e.uuid)).not.toContain('uuid-p');
+    expect(out.keptCatalogEntries.map((e) => e.uuid)).toContain('uuid-p');
+  });
+
+  it('fuehrt abgewaehlte Vorgaenge als unantastbar', () => {
+    const out = selectPlanContainers(plan, [faellung]);
+
+    expect(out.foreign.map((c) => c.url)).toContain(pflanzung);
+  });
+
+  it('liefert einen leeren Plan, wenn nichts gewaehlt ist', () => {
+    const out = selectPlanContainers(plan, []);
+
+    expect(out.containers).toHaveLength(0);
+    expect(out.catalogEntries).toHaveLength(0);
+    expect(out.fileCount).toBe(0);
+  });
+
+  it('ignoriert unbekannte URLs, statt zu werfen', () => {
+    const out = selectPlanContainers(plan, [`${POD_B}data/gibt-es-nicht/`]);
+
+    expect(out.containers).toHaveLength(0);
+  });
+
+  it('laesst den Pod-Basispfad unveraendert', () => {
+    // executePodReset leitet daraus den Schutzschild ab.
+    expect(selectPlanContainers(plan, [faellung]).podBase).toBe(POD_B);
+  });
+});
+
+/**
+ * Lesbare Beschriftung der Vorgaenge.
+ *
+ * Anlass war die Loeschliste, die Container-Hashes wie "0de0b1aafc5e9c26"
+ * anzeigte. Die sind der Dokument-Hash und sagen niemandem etwas -- der Nutzer
+ * soll erkennen, WAS er loescht und WANN es hochgeladen wurde.
+ */
+describe('describeContainer', () => {
+  const base = {
+    url: 'https://pod/data/x/',
+    traceId: 'x',
+    files: [],
+    modified: null,
+    ownerWebId: null,
+    isOwn: true,
+    processLabel: null,
+    title: null,
+    registeredAt: null,
+    processId: null,
+  };
+
+  const file = (name: string) => ({ url: `https://pod/data/x/${name}`, name, modified: null });
+
+  it('nimmt den Vorgangstyp als Ueberschrift', () => {
+    const d = describeContainer({
+      ...base,
+      processLabel: 'Fällvorgang',
+      registeredAt: new Date('2026-09-02T14:28:00Z'),
+      processId: 'VG-2026-0902-4128',
+    });
+
+    expect(d.title).toBe('Fällvorgang');
+    expect(d.subtitle).toContain('VG-2026-0902-4128');
+  });
+
+  it('nennt den Zeitpunkt der Registrierung', () => {
+    const d = describeContainer({
+      ...base,
+      processLabel: 'Pflanzvorgang',
+      registeredAt: new Date('2026-09-02T14:28:00Z'),
+    });
+
+    expect(d.subtitle).toMatch(/02\.09\.2026/);
+  });
+
+  it('wiederholt den Titel nicht, wenn er dem Typ gleicht', () => {
+    const d = describeContainer({
+      ...base,
+      processLabel: 'Fällvorgang',
+      title: 'Fällvorgang',
+    });
+
+    expect(d.subtitle ?? '').not.toMatch(/Fällvorgang/);
+  });
+
+  it('ergaenzt einen abweichenden Titel', () => {
+    const d = describeContainer({
+      ...base,
+      processLabel: 'Fällvorgang',
+      title: 'Schlag Nordhang',
+    });
+
+    expect(d.subtitle).toContain('Schlag Nordhang');
+  });
+
+  it('erkennt die Dokumentart, wenn kein Vorgang registriert ist', () => {
+    // Genau der Fall aus dem Screenshot: Container heisst nach dem Hash,
+    // aber die Dateinamen verraten, worum es geht.
+    const d = describeContainer({
+      ...base,
+      traceId: '0de0b1aafc5e9c26',
+      files: [
+        file('0de0b1aafc5e9c26_pdf_stammzertifikat.ttl'),
+        file('pricing.ttl'),
+        file('0de0b1aafc5e9c26_dokument.pdf'),
+      ],
+    });
+
+    expect(d.title).toBe('Stammzertifikat');
+    expect(d.subtitle).toContain('ohne Vorgangsregistrierung');
+  });
+
+  it('unterscheidet Leistungserklaerung und BSP-Variante', () => {
+    // "pdf_leistungserklaerung" ist Praefix von "..._bsp" -- ohne Sortierung
+    // nach Laenge gewinnt die falsche.
+    const bsp = describeContainer({
+      ...base,
+      files: [file('abc_pdf_leistungserklaerung_bsp.ttl')],
+    });
+    const normal = describeContainer({
+      ...base,
+      files: [file('abc_pdf_leistungserklaerung.ttl')],
+    });
+
+    expect(bsp.title).toBe('Leistungserklärung BSP');
+    expect(normal.title).toBe('Leistungserklärung');
+  });
+
+  it('erkennt das Harvesterprotokoll am Dateinamen', () => {
+    const d = describeContainer({ ...base, files: [file('f65cf310_forst.hpr')] });
+
+    expect(d.title).toBe('Harvesterprotokoll');
+  });
+
+  it('faellt auf den Zeitpunkt zurueck, wenn nichts bekannt ist', () => {
+    // Der Hash darf nie die Ueberschrift sein -- hoechstens Beiwerk.
+    const d = describeContainer({
+      ...base,
+      traceId: 'deadbeef',
+      modified: new Date('2026-08-01T09:00:00Z'),
+    });
+
+    expect(d.title).toMatch(/Upload vom/);
+    expect(d.subtitle).toBe('deadbeef');
+  });
+
+  it('kommt ohne jede Angabe zurecht', () => {
+    expect(describeContainer(base).title).toBe('Unbenannter Upload');
+  });
+});
+
+describe('documentKindFromFiles', () => {
+  const file = (name: string) => ({ url: `https://pod/${name}`, name, modified: null });
+
+  it('liefert null, wenn keine Kennung passt', () => {
+    expect(documentKindFromFiles([file('irgendwas.ttl')])).toBeNull();
+  });
+
+  it('findet die Kennung unabhaengig von der Dateireihenfolge', () => {
+    expect(
+      documentKindFromFiles([file('pricing.ttl'), file('abc_pdf_pruefzertifikat.ttl')]),
+    ).toBe('Prüfzertifikat');
   });
 });

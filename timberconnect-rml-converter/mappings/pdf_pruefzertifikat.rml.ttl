@@ -91,7 +91,6 @@
         rr:objectMap [ rml:reference "verunreinigungen" ;
             rr:datatype xsd:decimal ]
     ] ;
-    # Woraus die Verunreinigung besteht -- der Prozentwert allein sagt es nicht.
     rr:predicateObjectMap [
         rr:predicate tc:impurityDescription ;
         rr:objectMap [ rml:reference "verunreinigungenBeschreibung" ]
@@ -151,8 +150,6 @@
         rr:objectMap [ rml:reference "hohleSamen" ;
             rr:datatype xsd:decimal ]
     ] ;
-    # Wie die Keimpruefung durchgefuehrt wurde -- ohne das Verfahren stehen
-    # die Prozentwerte ohne Bezug da.
     rr:predicateObjectMap [
         rr:predicate tc:testMethodDescription ;
         rr:objectMap [ rml:reference "keimpruefungBeschreibung" ]

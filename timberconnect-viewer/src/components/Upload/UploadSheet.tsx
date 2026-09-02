@@ -16,14 +16,12 @@ import { SheetPortal, useBodyScrollLock } from '../UI/SheetPortal';
 interface UploadSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadSuccess: (traceId: string) => void;
   isLoading?: boolean;
 }
 
 export function UploadSheet({
   isOpen,
   onClose,
-  onUploadSuccess,
   isLoading = false,
 }: UploadSheetProps) {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -70,7 +68,6 @@ export function UploadSheet({
               {/* Inhalt (scrollbar) */}
               <div className="px-5 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto scroll-touch">
                 <ProcessUploadPanel
-                  onUploadSuccess={onUploadSuccess}
                   isLoading={isLoading}
                   onLoginClick={() => setLoginModalOpen(true)}
                 />

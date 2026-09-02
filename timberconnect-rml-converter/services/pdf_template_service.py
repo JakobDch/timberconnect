@@ -377,12 +377,30 @@ SEED_QUANTITY_UOM = "GRM"
 
 
 def _planting_area_section(hint: str, required: bool) -> dict:
-    """Sektion mit der auf der Karte gezeichneten Pflanzflaeche."""
+    """Sektion mit der auf der Karte gezeichneten Pflanzflaeche.
+
+    Die Sektion bekommt ein EIGENES Subjekt der Klasse ``tc:Seed``.
+
+    Grund: Das Hauptsubjekt des Stammzertifikats ist ``tc:Certificate`` -- ein
+    Beleg, keine Sache. Wer den Ident des Vermehrungsguts scannt, bekam als
+    einzige Typangabe "Zertifikat" zurueck; die Produktart-Erkennung im Viewer
+    sortiert Belegklassen bewusst aus (NON_PRODUCT_CLASSES) und fiel deshalb
+    auf eine Ersatzregel zurueck, die eine Pflanzung als "Rundholz" auswies.
+
+    Mit eigenem Subjekt traegt derselbe EPC zusaetzlich ``a tc:Seed``. Das
+    Zertifikat bleibt, was es ist -- ein Beleg, der ueber ``tc:describes`` auf
+    die Sache zeigt, die er bescheinigt.
+    """
     return {
         "id": "pflanzflaeche",
         "title": "Pflanzfläche",
         "description": hint,
         "planting_area": True,
+        "entity": {
+            "suffix": "saatgut",
+            "class": "tc:Seed",
+            "link_predicate": "tc:describes",
+        },
         "fields": [
             _f(
                 PLANTING_AREA_KEY,
@@ -829,14 +847,30 @@ TEMPLATES: dict[str, dict] = {
                 "id": "allgemein",
                 "title": "Allgemeine Angaben",
                 "fields": [
-                    # Nicht Pflicht: die Leistungserklaerung des Saegewerks
-                    # traegt dieses Feld nicht -- sie identifiziert sich ueber
-                    # Typ, Typennummer und Hersteller. Als Pflichtfeld liess
-                    # sie sich gar nicht uebernehmen ("Pflichtfeld 'Nr. der
-                    # Leistungserklärung' fehlt"), obwohl das Dokument
-                    # vollstaendig ausgefuellt war. Die BSP-Leistungserklaerung
-                    # weiter unten hat das Feld und behaelt es als Pflicht.
-                    _f("nr", "Nr. der Leistungserklärung", "tc:identifier", "Nummer"),
+                    # PFLICHT -- und zwar zwingend, obwohl das Feld frueher
+                    # optional war. Die damalige Begruendung ("das Saegewerks-PDF
+                    # traegt das Feld nicht, als Pflichtfeld liess es sich nicht
+                    # uebernehmen") hat einen groesseren Schaden angerichtet als
+                    # den behobenen: ``timber-event`` nimmt ``fields.nr`` als
+                    # DOKUMENTIDENTITAET des sawdecl-Treibers. Fehlt sie, bricht
+                    # der Treiber ab
+                    #
+                    #   "format 'sawdecl' produced no document identity;
+                    #    the identifying field is missing (sawdecl: fields.nr)"
+                    #
+                    # und es entsteht KEIN TransformationEvent. Genau dieses
+                    # Ereignis ist aber die einzige Kante zwischen Stamm und
+                    # Lamelle -- ohne es endet die Kette der BSP-Platte bei den
+                    # Lamellen, der Stamm-Ident kommt nie in den Scope, die
+                    # Forstdaten werden nie geladen und der Faellort fehlt im
+                    # Herkunftsnachweis. Der Upload lief dabei ohne sichtbaren
+                    # Fehler durch (der Aufrufer faengt EPCISClientError
+                    # bewusst ab), die Luecke zeigte sich erst in der Ansicht.
+                    #
+                    # Die Vorlage-PDF hat das AcroForm-Feld "Nummer" deshalb
+                    # wieder; Katharinas Originaldatei trug es nicht (v2 hatte
+                    # es, v3 nicht mehr).
+                    _f("nr", "Nr. der Leistungserklärung", "tc:identifier", "Nummer", required=True),
                     _f("typ", "1. Typ", "tc:type", "Typ"),
                     _f("typennummer", "2. Typennummer", "tc:typeNumber", "Typennummer"),
                     _f("verwendung", "3. Verwendung", "tc:intendedUse", "Verwendung"),

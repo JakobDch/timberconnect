@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { AppView } from '../types';
 import type { ProductStage } from '../services/productImageService';
+import type { ChainScope } from '../services/supplyChainWalk';
 
 /**
  * Registry der Anwendungsfaelle -- die EINZIGE Wahrheitsquelle.
@@ -181,7 +182,21 @@ export interface ProductDataFacts {
    * Platte.
    */
   productStage: ProductStage | null;
+  /**
+   * Wie weit die Kette geladen wurde. Bestimmt mit, welche Faelle sich
+   * sinnvoll oeffnen lassen -- siehe die Regel in useCaseAvailability.
+   */
+  scope: ChainScope;
 }
+
+/**
+ * Faelle, die auch fuer ein Vorprodukt eine vollstaendige Aussage treffen.
+ *
+ * Der Herkunftsnachweis zeigt, was VOR dem Bauteil liegt -- das ist bei einer
+ * Lamelle genauso vollstaendig wie bei einer Platte, nur kuerzer. Der Assistent
+ * antwortet ohnehin nur aus dem, was da ist.
+ */
+const SCOPE_INDEPENDENT_USE_CASES = new Set(['origin-proof', 'chatbot']);
 
 export function useCaseAvailability(
   useCase: UseCaseDefinition,
@@ -201,6 +216,31 @@ export function useCaseAvailability(
   // (Flag ``standalone``); das ist ersatzlos entfallen.
   if (!facts) {
     return { available: false, reason: 'Zuerst ein Bauteil erfassen.' };
+  }
+
+  // Im eingeschraenkten Umfang bleiben fuer Vorprodukte nur die Faelle, die
+  // auch ohne die weitere Kette eine vollstaendige Aussage treffen.
+  //
+  // Ein Produktpass oder eine Rueckbaubarkeit fuer eine Lamelle waere
+  // zwangslaeufig halb befuellt -- und ein halb befuellter Nachweis hat keinen
+  // Erkenntniswert, er fuehrt nur Luecken vor. Fuer die fertige BSP-Platte
+  // gilt die Sperre nicht: bei ihr ist die Kette nach oben zu Ende, ihre
+  // Angaben sind auch ohne Nachfolger vollstaendig.
+  //
+  // Unbestimmbare Produktart (null) zaehlt hier wie ein Vorprodukt: geraten
+  // wird nicht (Philosophie von detectProductStage), und die vorsichtige
+  // Richtung ist die engere.
+  if (
+    facts.scope !== 'full' &&
+    facts.productStage !== 'clt-panel' &&
+    !SCOPE_INDEPENDENT_USE_CASES.has(useCase.id)
+  ) {
+    return {
+      available: false,
+      reason:
+        'Im gewählten Umfang liegen für dieses Vorprodukt nur Teildaten vor. ' +
+        'Wählen Sie „Ganze Kette“, um diesen Anwendungsfall zu öffnen.',
+    };
   }
 
   switch (useCase.id) {

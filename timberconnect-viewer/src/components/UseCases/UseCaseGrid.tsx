@@ -15,10 +15,36 @@ import {
   type UseCaseDefinition,
 } from '../../config/useCases';
 import { UseCaseToggleCard } from './UseCaseToggleCard';
+import { SegmentedControl, type SegmentedOption } from '../UI/SegmentedControl';
 import { detectProductStage, productImageFor } from '../../services/productImageService';
 import { ProductImageSection } from '../Dashboard';
 import type { Product, SupplyChainStep } from '../../types';
 import type { ProductDataResult } from '../../services/sparqlService';
+import type { ChainScope } from '../../services/supplyChainWalk';
+
+/**
+ * Die drei Stufen des Ketten-Umfangs.
+ *
+ * "Ganze Kette" steht bewusst zuerst und ist die Voreinstellung: erst wer
+ * sieht, was alles vorhanden ist, kann sinnvoll einschraenken.
+ */
+const SCOPE_OPTIONS: SegmentedOption<ChainScope>[] = [
+  {
+    id: 'full',
+    label: 'Ganze Kette',
+    hint: 'Alles, was mit diesem Bauteil verknüpft ist — auch was daraus entstanden ist.',
+  },
+  {
+    id: 'upstream',
+    label: 'Herkunft',
+    hint: 'Das Bauteil und seine Vorstufen — nichts, was zeitlich danach kommt.',
+  },
+  {
+    id: 'self',
+    label: 'Nur dieses Produkt',
+    hint: 'Ausschließlich das erfasste Bauteil. Am schnellsten und günstigsten.',
+  },
+];
 
 interface UseCaseGridProps {
   productId: string;
@@ -28,10 +54,16 @@ interface UseCaseGridProps {
   supplyChain?: SupplyChainStep[];
   onSelectUseCase: (useCaseId: string) => void;
   onBack: () => void;
+  /** Welcher Fall wird gerade geoeffnet? Zeigt den Spinner an SEINER Kachel. */
+  openingUseCaseId?: string | null;
   isLoading?: boolean;
   error?: string | null;
   warnings?: string[];
   sourcePods?: string[];
+  /** Geladener Ketten-Umfang -- bestimmt Datenmenge, Preis und Verfuegbarkeit. */
+  scope?: ChainScope;
+  /** Loest einen Neu-Abruf mit dem gewaehlten Umfang aus. */
+  onScopeChange?: (scope: ChainScope) => void;
 }
 
 export function UseCaseGrid({
@@ -41,10 +73,13 @@ export function UseCaseGrid({
   supplyChain = [],
   onSelectUseCase,
   onBack,
+  openingUseCaseId = null,
   isLoading = false,
   error = null,
   warnings = [],
   sourcePods = [],
+  scope = 'full',
+  onScopeChange,
 }: UseCaseGridProps) {
   // State for enabled use cases (session-only)
   const [enabledUseCases, setEnabledUseCases] = useState<Set<string>>(() => {
@@ -55,18 +90,37 @@ export function UseCaseGrid({
    * Welche Daten zu diesem Bauteil vorliegen — daraus ergibt sich, welche
    * Anwendungsfaelle sich ueberhaupt sinnvoll oeffnen lassen.
    */
+  // Nach dem Scan liegt nur die Kurzinfo vor -- die Sparten-Felder sind dann
+  // leer, WEIL sie nicht abgefragt wurden, nicht weil nichts da waere. Sie
+  // hier als "keine Daten" zu lesen, wuerde jede Kachel sperren. Geprueft
+  // wird deshalb nur, was aus der Kurzinfo hervorgeht; die genaue Datenlage
+  // entscheidet sich beim Oeffnen, wo ohnehin nachgeladen wird.
+  const nurKurzinfo = !!productData && !productData.loadedFully;
+
   const facts: ProductDataFacts | null = product
     ? {
         hasProduct: (productData?.product?.length ?? 0) > 0 || !!product.name,
-        hasForest: (productData?.forest?.length ?? 0) > 0,
+        // Auch der Stamm zaehlt: die Waldangaben (Forstamt, Revier,
+        // Einschlagdatum) stehen in v6 an den Maschinendaten des
+        // Faellvorgangs. Nur auf ``forest`` zu pruefen, sperrte den
+        // Herkunftsnachweis fuer Bauteile, deren Walddaten vollstaendig
+        // vorliegen.
+        hasForest:
+          nurKurzinfo ||
+          (productData?.forest?.length ?? 0) > 0 ||
+          (productData?.stem?.length ?? 0) > 0,
         hasSupplyChain:
-          (productData?.supplyChain?.length ?? 0) > 0 || supplyChain.length > 0,
-        hasDeconstruction: (productData?.deconstruction?.length ?? 0) > 0,
-        hasCertificates: (productData?.certificates?.length ?? 0) > 0,
+          nurKurzinfo ||
+          (productData?.supplyChain?.length ?? 0) > 0 ||
+          supplyChain.length > 0,
+        hasDeconstruction:
+          nurKurzinfo || (productData?.deconstruction?.length ?? 0) > 0,
+        hasCertificates: nurKurzinfo || (productData?.certificates?.length ?? 0) > 0,
         hasCertifications: (product.certifications?.length ?? 0) > 0,
         // Stufe des gescannten Objekts -- sperrt z.B. die CO2-Bilanz fuer
         // Vorprodukte (nur fuer die fertige BSP-Platte definiert).
         productStage: detectProductStage(product, productData),
+        scope,
       }
     : null;
 
@@ -267,6 +321,28 @@ export function UseCaseGrid({
               </span>
             </div>
 
+            {/*
+              Umfang der Kette. Steht VOR der Auswahl eines Anwendungsfalls,
+              weil er bestimmt, wie viele Datenpunkte in die Abrechnung gehen --
+              erst im Kaufdialog waere die Entscheidung schon gefallen.
+            */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+              <div className="flex items-center gap-2 text-sm text-night-300">
+                <span className="font-semibold text-white">Umfang</span>
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin text-sky-400" />}
+              </div>
+              <SegmentedControl
+                ariaLabel="Umfang der Lieferkette"
+                options={SCOPE_OPTIONS}
+                value={scope}
+                onChange={(next) => onScopeChange?.(next)}
+                disabled={isLoading || !onScopeChange}
+              />
+              <p className="text-xs text-night-400 sm:max-w-xs">
+                {SCOPE_OPTIONS.find((o) => o.id === scope)?.hint}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {USE_CASES.map((useCase, index) => (
                 <motion.div
@@ -280,6 +356,11 @@ export function UseCaseGrid({
                     isEnabled={enabledUseCases.has(useCase.id)}
                     onToggle={() => toggleUseCase(useCase.id)}
                     onClick={() => onSelectUseCase(useCase.id)}
+                    isOpening={openingUseCaseId === useCase.id}
+                    // Waehrend ein Fall laedt, sind die anderen gesperrt: ein
+                    // zweiter Abruf wuerde dieselben Daten parallel holen und
+                    // am Ende die Ansicht des zuerst geklickten ueberschreiben.
+                    isBlocked={openingUseCaseId !== null}
                     available={availability(useCase).available}
                     unavailableReason={availability(useCase).reason}
                   />

@@ -177,8 +177,54 @@ tc:hasSawingProcess a owl:ObjectProperty ;
 
 # === Aus PDF-Formularen materialisierte Terme ===============================
 
+# Beleg -> bescheinigte Sache.
+#
+# Ein Stammzertifikat ist ein Dokument, keine Sache: sein Subjekt trägt
+# tc:Certificate. Der EPC daran bezeichnet aber Vermehrungsgut, also ein
+# Objekt der Lieferkette. Ohne Trennung war die einzige Typangabe zu diesem
+# Ident "Zertifikat" — die Produktart-Erkennung im Viewer sortiert Belegklassen
+# bewusst aus und konnte eine Pflanzung deshalb nie als solche ausweisen
+# (nachgeholt am 02.09.2026).
+#
+# Seither steht die bescheinigte Sache als eigenes Subjekt daneben (tc:Seed mit
+# demselben tc:epc), und dieses Prädikat verbindet beide. Bewusst allgemein
+# gehalten: Dieselbe Trennung betrifft jeden Beleg, der ein Objekt beschreibt.
+tc:describes a owl:ObjectProperty ;
+    rdfs:label "beschreibt"@de ;
+    rdfs:label "describes"@en ;
+    rdfs:domain tc:Document ;
+    rdfs:range tc:SupplyChainEntity ;
+    rdfs:comment "Verbindet einen Beleg (Zertifikat, Erklärung, Nachweis) mit dem Objekt der Lieferkette, über das er eine Aussage trifft. Der Beleg und die bescheinigte Sache sind getrennte Subjekte, tragen aber denselben tc:epc."@de .
+
 tc:plantingArea a owl:DatatypeProperty ;
     rdfs:label "Pflanzfläche"@de ;
     rdfs:label "planting area"@en ;
     rdfs:range xsd:string ;
     rdfs:comment "Die beim Pflanzvorgang auf der Karte gezeichnete Fläche als rohes GeoJSON-Polygon (Koordinaten in [lon, lat]). Erhält die Zeichnung verlustfrei. Die abfragbare Form steht daneben als geo:asWKT, der Schwerpunkt als wgs84:lat/long — siehe _planting_area_section in pdf_template_service.py."@de .
+
+# === Teilnehmer, Rolle und Nummernkreis ====================================
+#
+# Diese Terme stehen NICHT in den Produktdaten, sondern im Profil des
+# jeweiligen Teilnehmer-Pods (profile/role.ttl, access/role-policy.ttl). Sie
+# wurden vom Viewer von Beginn an geschrieben und gelesen, waren hier aber nie
+# deklariert — nachgeholt am 02.09.2026, als tc:companyPrefix von einer reinen
+# Anzeigeangabe zu einem tragenden Element wurde: die Scan-Auflösung bestimmt
+# darüber die Grenze zwischen Firmenpräfix und Artikelnummer.
+#
+# Die IRIs müssen mit src/config/roles.ts im Viewer übereinstimmen.
+
+tc:companyPrefix a owl:DatatypeProperty ;
+    rdfs:range xsd:string ;
+    rdfs:label "GS1-Firmenpräfix"@de ;
+    rdfs:label "GS1 company prefix"@en ;
+    rdfs:comment "Der GS1 Company Prefix des Teilnehmers (4–12 Ziffern), hinterlegt am eigenen WebID-Subjekt in profile/role.ttl. Bei der Registrierung einmalig erfasst und danach unveränderlich. Öffentlich lesbar — und zwar notwendigerweise: Aus einem gescannten Barcode ist nicht ableitbar, wo der Firmenpräfix endet und die Artikelnummer beginnt (der Präfix ist eine Lizenznummer, keine Eigenschaft der Ziffernfolge). Die Summe dieser Angaben über alle Pods der Föderation ersetzt die GS1 Company Prefix Length Table, die lückenhaft und seit 01/2026 passwortgeschützt ist. Siehe services/companyPrefixService.ts."@de .
+
+tc:hasRole a owl:ObjectProperty ;
+    rdfs:label "hat Rolle"@de ;
+    rdfs:label "has role"@en ;
+    rdfs:comment "Die Rolle, die ein Teilnehmer in der Wertschöpfungskette für sich erklärt (z. B. tc:Forstbetrieb). Steht am WebID-Subjekt in profile/role.ttl des eigenen Pods — jeder erklärt seine Rolle selbst, es gibt kein zentrales Verzeichnis. Grundlage für die Materialisierung der acl:agentGroup-Mitgliedschaften."@de .
+
+tc:allowsRole a owl:ObjectProperty ;
+    rdfs:label "erlaubt Rolle"@de ;
+    rdfs:label "allows role"@en ;
+    rdfs:comment "Eine Rolle, deren Träger die Daten dieses Pods lesen dürfen. Steht in access/role-policy.ttl. Ein Pod ohne diese Angabe gilt als Altbestand und wird nicht gefiltert; die tatsächliche Durchsetzung erfolgt serverseitig über WAC, die Angabe hier ist die Absichtserklärung des Eigentümers."@de .

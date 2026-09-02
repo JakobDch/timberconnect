@@ -82,6 +82,44 @@ import { isEpc } from '../../services/sparqlQueries';
 import { ProcessTypePicker } from './ProcessTypePicker';
 import { LeadDocumentSlot } from './LeadDocumentSlot';
 import { ProcessSearchSheet } from './ProcessSearchSheet';
+import { OriginLinkSheet } from './OriginLinkSheet';
+import { proposeOrigin, type OriginProposal } from '../../services/stemOriginService';
+import { captureOriginLink } from '../../services/originEventService';
+import { loadPlantingAreasWithReason } from '../../services/plantingLookupService';
+
+/**
+ * Klartext zu einer ausgefallenen Herkunftspruefung.
+ *
+ * Der Nutzer soll erfahren, WARUM keine Kante entstand -- "keine Flaeche
+ * getroffen" ist Alltag, "Katalog nicht erreichbar" ist ein Fehler, den er
+ * beheben kann (neu laden) und der sonst erst beim Blick ins EPCAT auffiele.
+ */
+function originWarningText(proposal: OriginProposal): string {
+  const suffix =
+    ' Der Vorgang wurde ohne Verknüpfung zur Pflanzfläche hochgeladen.';
+  switch (proposal.blocker) {
+    case 'no-sources':
+      return (
+        'Die Herkunftsprüfung fand keine Datenquellen — der Katalog ist ' +
+        'veraltet oder nicht erreichbar. Ein Neuladen der Seite hilft meist.' +
+        suffix
+      );
+    case 'areas-unavailable':
+      return (
+        'Die Pflanzflächen konnten nicht geladen werden' +
+        (proposal.blockerDetail ? `: ${proposal.blockerDetail}` : '.') +
+        suffix
+      );
+    case 'no-usable-areas':
+      return (
+        'Es sind Pflanzflächen vorhanden, aber keine trägt sowohl einen ' +
+        'Saatgut-Ident als auch ein Polygon.' +
+        suffix
+      );
+    default:
+      return 'Es entstand keine Herkunftsverknüpfung.' + suffix;
+  }
+}
 
 /**
  * Vorgangs-basierter Upload.
@@ -118,7 +156,6 @@ const DATA_TYPE_ICONS: Record<string, typeof TreePine> = {
 type Step = 'choose' | 'collect' | 'done';
 
 interface ProcessUploadPanelProps {
-  onUploadSuccess: (traceId: string) => void;
   isLoading?: boolean;
   onLoginClick?: () => void;
 }
@@ -128,6 +165,22 @@ function isPdf(item: ProcessDraftFile): boolean {
     item.dataType === 'dokument' ||
     item.file.type === 'application/pdf' ||
     item.file.name.toLowerCase().endsWith('.pdf')
+  );
+}
+
+/**
+ * Ein StanForD-Harvesterprotokoll?
+ *
+ * Es traegt die Fällpositionen, aus denen sich die Herkunft des Rundholzes
+ * ableiten laesst. Die Endung ".xml" gilt mit: der Vorgang nimmt sie laut
+ * `accept` entgegen, und StanForD-Dateien werden haeufig so ausgeliefert.
+ * Ob wirklich Staemme drinstehen, entscheidet nicht die Endung, sondern
+ * `extractStems` — findet es keine, entfaellt der Schritt von selbst.
+ */
+function isHarvesterLog(item: ProcessDraftFile): boolean {
+  const name = item.file.name.toLowerCase();
+  return (
+    item.dataType === 'forst' || name.endsWith('.hpr') || name.endsWith('.xml')
   );
 }
 
@@ -221,7 +274,6 @@ async function readEpcs(
 }
 
 export function ProcessUploadPanel({
-  onUploadSuccess,
   isLoading = false,
   onLoginClick,
 }: ProcessUploadPanelProps) {
@@ -286,6 +338,22 @@ export function ProcessUploadPanel({
    */
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewItems, setReviewItems] = useState<PdfReviewItem[] | null>(null);
+  /**
+   * Herkunftsvorschlag des Faellvorgangs. `null` bei offenem Sheet heisst: die
+   * Flaechen werden noch geprueft.
+   */
+  const [originOpen, setOriginOpen] = useState(false);
+  const [originProposal, setOriginProposal] = useState<OriginProposal | null>(null);
+  /**
+   * Vom Nutzer bestaetigte Flaechen. Wird nach dem Upload gebraucht: erst dann
+   * steht die bizTransaction fest, auf die das Event zeigen soll.
+   */
+  const [originSelection, setOriginSelection] = useState<string[]>([]);
+  /**
+   * Hinweis, wenn die Herkunftspruefung ausfiel statt ergebnislos zu bleiben.
+   * Wird im Ergebnisschritt gezeigt -- der Upload selbst gilt als gelungen.
+   */
+  const [originWarning, setOriginWarning] = useState<string | null>(null);
   /**
    * Material-ID des in der IFC geplanten Bauteils (Vorgang "Ausführungsplanung").
    *
@@ -554,6 +622,12 @@ export function ProcessUploadPanel({
     setPhoto(null);
     setIfcEpc('');
     setIfcFileEpc(null);
+    // Herkunftszustand des vorigen Durchlaufs mit zuruecksetzen: Ein stehen
+    // gebliebener Vorschlag wuerde beim naechsten Vorgang eine Kante schreiben,
+    // die zu Dateien gehoert, die gar nicht mehr im Entwurf sind.
+    setOriginProposal(null);
+    setOriginSelection([]);
+    setOriginWarning(null);
     setStep('choose');
   };
 
@@ -650,12 +724,77 @@ export function ProcessUploadPanel({
   };
 
   /**
+   * Die Herkunftspruefung eines Faellvorgangs oeffnen.
+   *
+   * Liest die Stammkoordinaten aus dem Harvesterprotokoll und haelt sie gegen
+   * die registrierten Pflanzflaechen. Ergibt sich eine Zuordnung, bestaetigt
+   * der Nutzer sie, BEVOR etwas geschrieben wird — die Kante ginge sonst
+   * ungefragt ins LIVE-EECC-Repository.
+   *
+   * Wirft nie: Scheitert die Pruefung, laeuft der Upload wie bisher weiter. Die
+   * Verknuepfung ist eine Zugabe, keine Voraussetzung.
+   */
+  const openOriginCheck = async (hprItem: ProcessDraftFile) => {
+    setOriginProposal(null);
+    setOriginWarning(null);
+    setOriginOpen(true);
+    try {
+      const text = await hprItem.file.text();
+      const proposal = await proposeOrigin(text, loadPlantingAreasWithReason);
+      if (proposal.groups.length > 0) {
+        setOriginProposal(proposal);
+        return;
+      }
+
+      // Nichts zu bestaetigen: den Schritt gar nicht erst zeigen, sondern
+      // weitergehen. Ein Dialog, der nur "nichts gefunden" sagt, waere ein
+      // Klick ohne Entscheidung.
+      //
+      // ABER: Ist die Pruefung ausgefallen statt ergebnislos geblieben, geht
+      // eine belegbare Herkunftskante verloren. Das darf nicht lautlos
+      // passieren -- genau so blieb am 02.09.2026 ein Faellvorgang ohne
+      // TransformationEvent, ohne dass es jemandem auffiel. Der Upload laeuft
+      // trotzdem weiter (die Kante ist eine Zugabe), aber mit Hinweis.
+      if (proposal.blocker && proposal.blocker !== 'no-stems') {
+        setOriginWarning(originWarningText(proposal));
+      }
+      setOriginOpen(false);
+      continueAfterOrigin();
+    } catch (err) {
+      console.warn('[process-upload] Herkunftspruefung fehlgeschlagen:', err);
+      setOriginWarning(
+        'Die Herkunftsprüfung ist ausgefallen — der Vorgang wurde ohne ' +
+          'Verknüpfung zur Pflanzfläche hochgeladen.',
+      );
+      setOriginOpen(false);
+      continueAfterOrigin();
+    }
+  };
+
+  /**
+   * Der Schritt nach der Herkunftspruefung.
+   *
+   * Die Herkunft ist jetzt der erste der beiden Bestaetigungsschritte, nicht
+   * mehr ein Ersatz fuer den zweiten: Liegt neben dem Protokoll ein PDF mit
+   * Vorlage (der uebliche Transportauftrag), gehoert dessen Pruefansicht
+   * weiterhin dazu. Sonst geht es direkt in den Upload.
+   */
+  const continueAfterOrigin = () => {
+    if (draftFiles.some((item) => isPdf(item) && templateForFile(item))) {
+      void openReview();
+      return;
+    }
+    void runSubmit();
+  };
+
+  /**
    * Absenden — der Einstieg in die Vorschaltkette.
    *
-   * Vor dem ersten Byte im Pod stehen drei Schritte, und zwar ALLE vorher:
+   * Vor dem ersten Byte im Pod stehen diese Schritte, und zwar ALLE vorher:
    *   1. Pflanzflaeche(n) zeichnen   (nur Stammzertifikat)
    *   2. ausgebrachte Saatgutmenge   (nur Stammzertifikat)
-   *   3. ausgelesene Daten pruefen und bestaetigen
+   *   3. Herkunft bestaetigen        (nur Faellvorgang mit .hpr)
+   *   4. ausgelesene Daten pruefen und bestaetigen
    *
    * Frueher lief der Upload bereits an, waehrend Schritt 1 noch offen war:
    * der Abbruch der Karte setzte `pendingSubmit` und damit den Upload in
@@ -676,12 +815,27 @@ export function ProcessUploadPanel({
       return;
     }
 
+    // Die Herkunftspruefung haengt am Harvesterprotokoll, NICHT daran, ob der
+    // Vorgang zufaellig auch ein PDF enthaelt.
+    //
+    // Frueher stand sie im Zweig "kein PDF dabei" und lief deshalb nur bei
+    // einem Faellvorgang aus reinem .hpr. Sobald ein Transportauftrag
+    // danebenlag -- der Normalfall -- ging der Upload ueber die Pruefansicht
+    // und die Herkunft wurde nie geprueft. Genau daran fehlte am 02.09.2026
+    // zweimal das TransformationEvent, obwohl Flaeche, Polygon und
+    // Koordinaten vollstaendig vorlagen.
+    const hpr = draftFiles.find(isHarvesterLog);
+    if (hpr) {
+      void openOriginCheck(hpr);
+      return;
+    }
+
     // Die Pruefansicht zeigt AcroForm-Werte aus PDFs. Ein Vorgang ohne solches
-    // PDF -- der Faellvorgang laedt ein Harvesterprotokoll (.hpr), die
-    // Herstellung eine ERP-Tabelle (.xlsx) -- hat dort nichts zu zeigen und
-    // meldete "Keine Werte gefunden". Das las sich wie ein Fehlschlag beim
-    // Auslesen, obwohl diese Formate ueber einen ganz anderen Weg im Backend
-    // ausgewertet werden. Gibt es nichts zu bestaetigen, entfaellt der Schritt.
+    // PDF -- die Herstellung laedt eine ERP-Tabelle (.xlsx) -- hat dort nichts
+    // zu zeigen und meldete "Keine Werte gefunden". Das las sich wie ein
+    // Fehlschlag beim Auslesen, obwohl diese Formate ueber einen ganz anderen
+    // Weg im Backend ausgewertet werden. Gibt es nichts zu bestaetigen,
+    // entfaellt der Schritt.
     if (!draftFiles.some((item) => isPdf(item) && templateForFile(item))) {
       void runSubmit();
       return;
@@ -756,6 +910,10 @@ export function ProcessUploadPanel({
               userName,
               plantingAreas[item.file.name],
               seedGrams[item.file.name] ?? null,
+              // In den Container des Vorgangs — sonst bekaeme jedes PDF einen
+              // eigenen Ordner und der Vorgang zerfiele im Pod in mehrere
+              // gleichrangige Eintraege.
+              record.containerUrl,
             );
             newPdfResults.push(pdfResult);
             if (pdfResult.warning) uploadErrors.push(pdfResult.warning);
@@ -865,6 +1023,42 @@ export function ProcessUploadPanel({
                     : (item.dataType ?? null),
                 epcs: embeddedEpcs,
               });
+            }
+          }
+
+          // Die bestaetigte Herkunftskante schreiben — NACH dem Upload, weil
+          // erst jetzt die bizTransaction feststeht, auf die das Event zeigt.
+          //
+          // Das Scheitern bleibt eine Warnung und kein Abbruch: Die Dateien
+          // liegen an dieser Stelle bereits im Pod, und das ObjectEvent des
+          // Faellvorgangs ist geschrieben. Den ganzen Vorgang wegen der
+          // fehlenden Zusatzkante als gescheitert zu melden waere falsch — sie
+          // laesst sich nachtragen, der Upload nicht zurueckdrehen.
+          if (originProposal && originSelection.length > 0) {
+            setProgress('Herkunft wird verknüpft...');
+            const forstResult = uploadResult.files['forst'];
+            try {
+              const capture = await captureOriginLink(
+                originProposal,
+                originSelection,
+                {
+                  bizTransactionUrl:
+                    forstResult?.rdf_url || forstResult?.raw_url || null,
+                },
+              );
+              if (capture.captured || capture.dryRun) {
+                attachProcessIdents(record.id, {
+                  materialEpcs: originProposal.groups
+                    .filter((g) => originSelection.includes(g.area.certificateIri))
+                    .map((g) => g.seedEpc),
+                });
+              }
+            } catch (err) {
+              uploadErrors.push(
+                `Herkunftsverknüpfung: ${
+                  err instanceof Error ? err.message : 'fehlgeschlagen'
+                }`,
+              );
             }
           }
         }
@@ -1564,6 +1758,19 @@ export function ProcessUploadPanel({
             </div>
           )}
 
+          {/*
+            Ausgefallene Herkunftspruefung: bernsteinfarben, nicht rot -- der
+            Vorgang selbst ist gelungen und liegt vollstaendig im Pod. Fehlend
+            ist nur die Zusatzkante zur Pflanzflaeche, die sich nachtragen
+            laesst. Sie zu verschweigen war der eigentliche Fehler.
+          */}
+          {originWarning && (
+            <div className="flex items-start gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span className="text-sm">{originWarning}</span>
+            </div>
+          )}
+
           {/* PDFs des Vorgangs + KG-Status */}
           {pdfResults.length > 0 && (
             <div className="bg-night-700/40 border border-white/10 rounded-2xl p-5">
@@ -1604,14 +1811,6 @@ export function ProcessUploadPanel({
             <button onClick={resetDraft} className="btn btn-night flex-1">
               Weiterer Vorgang
             </button>
-            {result?.success && (
-              <button
-                onClick={() => onUploadSuccess(result.trace_id)}
-                className="btn btn-acid flex-1"
-              >
-                Produkt anzeigen
-              </button>
-            )}
           </div>
         </motion.div>
       )}
@@ -1711,6 +1910,27 @@ export function ProcessUploadPanel({
           setReviewOpen(false);
           setReviewItems(null);
           resetDraft();
+        }}
+      />
+
+      {/* Vorschaltschritt fuer den Faellvorgang: die aus den Stammkoordinaten
+          abgeleitete Herkunft bestaetigen. Steht VOR dem Upload, weil die
+          Kante sonst ungefragt ins LIVE-EECC-Repository ginge. */}
+      <OriginLinkSheet
+        isOpen={originOpen}
+        proposal={originProposal}
+        isBusy={isUploading}
+        onConfirm={(selectedIris) => {
+          setOriginSelection(selectedIris);
+          setOriginOpen(false);
+          continueAfterOrigin();
+        }}
+        onSkip={() => {
+          // Ohne Verknuepfung, aber MIT Upload: der Faellvorgang selbst ist
+          // davon unberuehrt. Nur die Zusatzkante entfaellt.
+          setOriginSelection([]);
+          setOriginOpen(false);
+          continueAfterOrigin();
         }}
       />
     </div>

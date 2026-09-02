@@ -216,3 +216,62 @@ describe('Produktart — gescannter Ident vs. Vorkette', () => {
     expect(detectProductStage(product(PANEL), d)).toBe('clt-panel');
   });
 });
+
+/**
+ * Der gemeldete Fall: eine gescannte PFLANZUNG wurde als "Rundholz"
+ * ausgewiesen (02.09.2026).
+ *
+ * Zwei Ursachen wirkten zusammen:
+ *
+ *   1. Am Ident des Vermehrungsguts hing als einzige Klasse tc:Certificate --
+ *      eine Belegklasse, die bewusst ausgefiltert wird. Das Stammzertifikat
+ *      setzte kein Subjekt fuer die SACHE, nur fuer den BELEG. Behoben im
+ *      Mapping: das Saatgut ist jetzt ein eigenes Subjekt a tc:Seed.
+ *
+ *   2. Die Rueckfallstufe schloss aus ``data.stem`` auf Rundholz. Deren
+ *      Abfrage laeuft aber OHNE Ident-Filter ueber alle geladenen Quellen --
+ *      ein beliebiger fremder Stamm genuegte.
+ */
+const SEED = 'urn:epc:class:lgtin:404711145.0001.Pflanzung01';
+
+describe('Pflanzung — Saatgut statt Rundholz', () => {
+  it('erkennt tc:Seed als Saatgut', () => {
+    const d = data({ scannedEpc: [epcRow(`${TC}Seed`)], epcsResolved: 1 });
+    expect(detectProductStage(product(SEED), d)).toBe('seedling');
+  });
+
+  it('erkennt tc:Seedling als Saatgut', () => {
+    const d = data({ scannedEpc: [epcRow(`${TC}Seedling`)], epcsResolved: 1 });
+    expect(detectProductStage(product(SEED), d)).toBe('seedling');
+  });
+
+  it('laesst sich von FREMDEN Stammdaten nicht zu "Rundholz" verleiten', () => {
+    // Der Kern des gemeldeten Fehlers: Das Zertifikat traegt eine eigene
+    // Typangabe (die ausgefiltert wird), und irgendwo in den geladenen
+    // Quellen liegt ein fremder Stamm. Frueher gewann der Stamm.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}Certificate`)],
+      stem: [{ stemNumber: { value: '4711' } }],
+      epcsResolved: 1,
+    });
+    expect(detectProductStage(product(SEED), d)).toBeNull();
+  });
+
+  it('bleibt bei tc:Seed auch wenn Stammdaten danebenliegen', () => {
+    // Das Saatgut-Subjekt gewinnt in Stufe 1 -- lange bevor die
+    // Rueckfallstufe ueberhaupt erreicht wird.
+    const d = data({
+      scannedEpc: [epcRow(`${TC}Seed`)],
+      stem: [{ stemNumber: { value: '4711' } }],
+      epcsResolved: 1,
+    });
+    expect(detectProductStage(product(SEED), d)).toBe('seedling');
+  });
+
+  it('erkennt echtes Rundholz weiterhin ueber die Rueckfallstufe', () => {
+    // Die Stufe bleibt gueltig, wo sie gedacht war: kein eigener Typ am
+    // Ident, keine Kette, aber Stammdaten da.
+    const d = data({ scannedEpc: [], stem: [{ stemNumber: { value: '4711' } }] });
+    expect(detectProductStage(product(ID), d)).toBe('stem');
+  });
+});

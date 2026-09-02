@@ -183,6 +183,29 @@ const NON_PRODUCT_CLASSES = [
 ];
 
 /**
+ * Belege, die eine EIGENE Sache bescheinigen.
+ *
+ * Die Unterscheidung braucht die Rueckfallstufe unten. Beide Arten von Belegen
+ * sind keine Produktklasse, aber sie sagen Verschiedenes darueber aus, was der
+ * gescannte Ident ist:
+ *
+ *   * ``tc:EpcisDocument`` ist die Huelle, in der Maschinendaten ankommen. Sie
+ *     TRAEGT den Ident eines Stammes, ohne selbst etwas zu sein — steht daneben
+ *     ein Stamm in den Daten, gehoert er zu diesem Ident.
+ *   * ``tc:Certificate`` und Verwandte bescheinigen ein eigenes Objekt
+ *     (Vermehrungsgut, Pruefkoerper). Steht daneben ein Stamm, gehoert er
+ *     gerade NICHT hierher, sondern stammt aus einer anderen Quelle.
+ *
+ * Ohne diese Trennung galt eine gescannte Pflanzung als "Rundholz", sobald
+ * irgendwo ein fremder Stamm geladen war (02.09.2026).
+ */
+const SUBJECT_BEARING_CLASSES = [
+  'certificate',
+  'testreport',
+  'declarationofperformance',
+];
+
+/**
  * Vorgangstypen, die am Ident haengen.
  *
  * Die Idente tragen nicht immer eine Produktklasse — haeufig haengt an ihnen
@@ -232,10 +255,13 @@ function stageFromMasterData(
   // die Rueckfallebene -- dort ist die Liste nicht vermischt, weil ohne
   // EPCIS-Kette nur ein Ident abgefragt wurde.
   const rows = data.scannedEpc ?? data.product ?? [];
-  const types = rows
+  // Alle Typangaben am Ident -- einschliesslich der Belegklassen.
+  const allTypes = rows
     .map((row) => row.type?.value)
     .filter((t): t is string => !!t)
-    .map(localName)
+    .map(localName);
+
+  const types = allTypes
     // Belegdokumente aussortieren: sie tragen den Ident, sagen aber nichts
     // ueber die Produktart. Ohne diesen Schritt entschiede die Reihenfolge der
     // geladenen Quellen, ob die Platte erkannt wird -- kommt die
@@ -259,11 +285,30 @@ function stageFromMasterData(
   //    Nur zulaessig, wenn der Scan KEINE Kette aufgeloest hat. Beim EPC-Abruf
   //    laeuft diese Abfrage ohne Ident-Filter ueber alle geladenen Quellen --
   //    zu jeder BSP-Platte gehoeren auch die Stammdaten ihrer Vorkette, sonst
-  //    gaelte jede Platte ohne eigene Typangabe als Rundholz. Ohne Kette
-  //    stammen die Quellen dagegen von genau diesem Ident, und ein Stamm ist
-  //    dann der einzige Beleg, den die Daten hergeben.
+  //    gaelte jede Platte ohne eigene Typangabe als Rundholz.
+  //
+  //    Und selbst ohne Kette bleibt der Schluss schwach: Der fehlende
+  //    Ident-Filter heisst, dass ``data.stem`` auch dann gefuellt ist, wenn
+  //    irgendein FREMDER Stamm in einer der geladenen Quellen liegt. Eine
+  //    gescannte Pflanzung wurde so als "Rundholz" ausgewiesen, obwohl kein
+  //    einziger Stamm zu ihr gehoerte (beobachtet 02.09.2026).
+  //
+  //    Deshalb gilt sie nicht mehr, wenn am Ident ein Beleg haengt, der eine
+  //    EIGENE Sache bescheinigt (tc:Certificate & Co., siehe
+  //    SUBJECT_BEARING_CLASSES). Ein Stammzertifikat sagt aus, dass dieser
+  //    Ident Vermehrungsgut bezeichnet -- ein daneben geladener Stamm gehoert
+  //    dann zu etwas anderem.
+  //
+  //    Die Huelle tc:EpcisDocument bleibt ausdruecklich zugelassen: Sie ist
+  //    der Normalfall bei Maschinendaten und traegt den Ident des Stammes,
+  //    ohne selbst etwas zu sein.
   const chainResolved = (data.epcisInfo?.epcsResolved ?? 0) > 1;
-  if (!chainResolved && (data.stem?.length ?? 0) > 0) return 'stem';
+  const describesOwnSubject = allTypes.some((t) =>
+    SUBJECT_BEARING_CLASSES.includes(t),
+  );
+  if (!chainResolved && !describesOwnSubject && (data.stem?.length ?? 0) > 0) {
+    return 'stem';
+  }
 
   return null;
 }

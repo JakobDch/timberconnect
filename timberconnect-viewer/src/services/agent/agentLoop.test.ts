@@ -1,4 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Der Katalog haengt am echten Netz (Federation Registry). Ohne diesen Mock
+// versucht der Herkunfts-Abgleich, Pods im Internet zu finden, laeuft in
+// Zeitgrenzen und reisst den Test mit -- eine Testisolationsluecke, die nichts
+// mit dem Pruefgegenstand zu tun hat.
+vi.mock('../plantingLookupService', () => ({
+  resolvePlantingSources: () => Promise.resolve([]),
+  queryPlantingAreas: () => Promise.resolve([]),
+}));
+
 import {
   citedIndices,
   billableKeys,
@@ -247,6 +257,22 @@ function turn(text: string, antwort?: string, verwendete_daten: unknown[] = []) 
   return chunks;
 }
 
+/**
+ * Wie oft ging eine Anfrage AN DAS MODELL?
+ *
+ * Nicht `fetchMock.mock.calls.length`: Werkzeuge duerfen waehrend einer Runde
+ * selbst ins Netz gehen (`match_forest_origin` laedt den Katalog, um
+ * Pflanzflaechen zu finden). Solche Abrufe sind keine zusaetzliche Runde der
+ * Antwortschleife -- genau die zaehlen diese Tests aber. Ein blosser
+ * fetch-Zaehler machte sie davon abhaengig, welche Werkzeuge zufaellig
+ * mitlaufen, und schlaege bei einer harmlosen Erweiterung fehl.
+ */
+function modelCalls(mock: ReturnType<typeof vi.spyOn>): number {
+  return mock.mock.calls.filter((args) =>
+    String(args[0]).includes('/chat/completions'),
+  ).length;
+}
+
 const scope = {
   epc: 'urn:epc:id:sgtin:404711145.0100.12A3D4567',
   relatedEpcs: new Set<string>(),
@@ -316,7 +342,7 @@ describe('Kanaltrennung zwischen Nachdenken und Antwort', () => {
     const result = await runAgent({ apiKey: 'k', question: 'Welche Holzart?', scope, pack });
 
     expect(result.content).toBe('Dazu liegen keine Angaben vor.');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(modelCalls(fetchMock)).toBe(2);
   });
 
   it('faellt auf einen ehrlichen Satz zurueck, wenn das Argument leer ist', async () => {
@@ -417,7 +443,7 @@ describe('Kanaltrennung zwischen Nachdenken und Antwort', () => {
     const result = await runAgent({ apiKey: 'k', question: 'Welche Holzart?', scope, pack });
 
     // Direkt durch -- kein Rueckschicken.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(modelCalls(fetchMock)).toBe(1);
     expect(result.content).toBe('Fichte [Q1.holzart].');
   });
 
@@ -466,7 +492,7 @@ describe('Kanaltrennung zwischen Nachdenken und Antwort', () => {
     });
 
     // Genau zwei Runden: einmal zurueckgeschickt, dann durchgelassen.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(modelCalls(fetchMock)).toBe(2);
     expect(result.content).toBe('Dazu liegen keine Angaben vor.');
     expect(result.exhausted).toBe(false);
   });

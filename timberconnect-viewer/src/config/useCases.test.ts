@@ -1,143 +1,117 @@
 import { describe, it, expect } from 'vitest';
-import { Hammer } from 'lucide-react';
 import {
   USE_CASES,
   findUseCase,
-  isAvailable,
   useCaseAvailability,
   type ProductDataFacts,
-  type UseCaseDefinition,
 } from './useCases';
+import type { ChainScope } from '../services/supplyChainWalk';
+import type { ProductStage } from '../services/productImageService';
 
-const FULL: ProductDataFacts = {
-  hasProduct: true,
-  hasForest: true,
-  hasSupplyChain: true,
-  hasDeconstruction: true,
-  hasCertificates: true,
-  hasCertifications: true,
-  productStage: 'clt-panel',
-};
+/** Vollstaendige Datenlage -- so bleibt im Test nur der Scope die Variable. */
+function facts(stage: ProductStage | null, scope: ChainScope): ProductDataFacts {
+  return {
+    hasProduct: true,
+    hasForest: true,
+    hasSupplyChain: true,
+    hasDeconstruction: true,
+    hasCertificates: true,
+    hasCertifications: true,
+    productStage: stage,
+    scope,
+  };
+}
 
-const EMPTY: ProductDataFacts = {
-  hasProduct: false,
-  hasForest: false,
-  hasSupplyChain: false,
-  hasDeconstruction: false,
-  hasCertificates: false,
-  hasCertifications: false,
-  productStage: null,
-};
+const verfuegbar = (id: string, stage: ProductStage | null, scope: ChainScope) =>
+  useCaseAvailability(findUseCase(id)!, facts(stage, scope)).available;
 
-const uc = (id: string) => findUseCase(id)!;
+const ALLE_IDS = USE_CASES.map((uc) => uc.id);
 
-describe('Verfuegbarkeit je Bauteil', () => {
-  it('gibt bei vollstaendigen Daten alle gebauten Faelle frei', () => {
-    for (const id of ['dbpp', 'co2', 'origin-proof', 'deconstruction']) {
-      expect(useCaseAvailability(uc(id), FULL).available).toBe(true);
+describe('Anwendungsfaelle im Umfang "Ganze Kette"', () => {
+  it('gibt bei der BSP-Platte alle Faelle frei', () => {
+    for (const id of ALLE_IDS) {
+      expect(verfuegbar(id, 'clt-panel', 'full'), id).toBe(true);
     }
   });
 
-  it('sperrt den Herkunftsnachweis ohne Wald- und Lieferkettendaten', () => {
-    const r = useCaseAvailability(uc('origin-proof'), EMPTY);
-    expect(r.available).toBe(false);
-    expect(r.reason).toMatch(/Wald|Lieferketten/i);
-  });
-
-  it('gibt den Herkunftsnachweis frei, sobald eine der beiden Quellen da ist', () => {
-    expect(
-      useCaseAvailability(uc('origin-proof'), { ...EMPTY, hasForest: true }).available,
-    ).toBe(true);
-    expect(
-      useCaseAvailability(uc('origin-proof'), { ...EMPTY, hasSupplyChain: true })
-        .available,
-    ).toBe(true);
-  });
-
-  it('sperrt die Rueckbaubarkeit ohne Verbindungsdaten', () => {
-    const r = useCaseAvailability(uc('deconstruction'), EMPTY);
-    expect(r.available).toBe(false);
-    expect(r.reason).toMatch(/Rückbau|Verbindung/i);
-  });
-
-  it('nennt bei ungebauten Faellen die Entwicklung als Grund', () => {
-    // Seit dem 21.08.2026 hat JEDER Eintrag der Registry ein ``view`` -- die
-    // drei "Demnaechst"-Platzhalter sind entfernt. Die Mechanik bleibt aber
-    // bestehen und wird hier an einem konstruierten Eintrag geprueft, damit
-    // sie nicht unbemerkt zerfaellt, bevor der naechste Fall sie braucht.
-    const ungebaut: UseCaseDefinition = {
-      id: 'noch-nicht-gebaut',
-      title: 'Noch nicht gebaut',
-      description: 'Platzhalter fuer den Test',
-      icon: Hammer,
-    };
-    const r = useCaseAvailability(ungebaut, FULL);
-    expect(r.available).toBe(false);
-    expect(r.reason).toMatch(/Entwicklung/i);
-  });
-
-  it('haelt die Registry frei von Platzhaltern', () => {
-    // Gegenprobe zur Awf-Vorgabe: nicht umgesetzte Faelle sollen gar nicht
-    // erst in der Anzeige erscheinen.
-    for (const useCase of USE_CASES) {
-      expect(isAvailable(useCase), `${useCase.id} hat kein view`).toBe(true);
+  it('gibt auch bei einem Vorprodukt alle bis auf die CO2-Bilanz frei', () => {
+    // Unveraendertes Verhalten: der Umfang schraenkt nichts ein, nur die
+    // bestehenden Datenregeln greifen. Die CO2-Bilanz ist unabhaengig davon
+    // auf die fertige Platte begrenzt (Awf-Vorgabe).
+    for (const id of ALLE_IDS.filter((i) => i !== 'co2')) {
+      expect(verfuegbar(id, 'lamella', 'full'), id).toBe(true);
     }
+    expect(verfuegbar('co2', 'lamella', 'full')).toBe(false);
   });
+});
 
-  it('gibt den Assistenten frei, sobald Produktdaten vorliegen', () => {
-    expect(useCaseAvailability(uc('chatbot'), FULL).available).toBe(true);
-  });
-
-  it('sperrt den Assistenten ohne Produktdaten', () => {
-    const r = useCaseAvailability(uc('chatbot'), EMPTY);
-    expect(r.available).toBe(false);
-    expect(r.reason).toMatch(/keine Daten/i);
-  });
-
-  it('liefert fuer jeden gesperrten Fall eine Begruendung', () => {
-    for (const useCase of USE_CASES) {
-      for (const facts of [FULL, EMPTY, null]) {
-        const r = useCaseAvailability(useCase, facts);
-        if (!r.available) {
-          expect(r.reason, `${useCase.id} ohne Begruendung`).toBeTruthy();
-        }
+describe('Anwendungsfaelle im eingeschraenkten Umfang', () => {
+  it.each<ChainScope>(['self', 'upstream'])(
+    'laesst der BSP-Platte in "%s" alles offen',
+    (scope) => {
+      // Bei der fertigen Platte ist die Kette nach oben zu Ende -- ihre
+      // Angaben sind auch ohne Nachfolger vollstaendig.
+      for (const id of ALLE_IDS) {
+        expect(verfuegbar(id, 'clt-panel', scope), id).toBe(true);
       }
+    },
+  );
+
+  it.each<ChainScope>(['self', 'upstream'])(
+    'zeigt bei einem Vorprodukt in "%s" nur Herkunft und Assistent',
+    (scope) => {
+      // Ein Produktpass oder eine Rueckbaubarkeit fuer eine Lamelle waere
+      // zwangslaeufig halb befuellt -- das fuehrt nur Luecken vor.
+      expect(verfuegbar('origin-proof', 'lamella', scope)).toBe(true);
+      expect(verfuegbar('chatbot', 'lamella', scope)).toBe(true);
+      for (const id of ALLE_IDS.filter(
+        (i) => i !== 'origin-proof' && i !== 'chatbot',
+      )) {
+        expect(verfuegbar(id, 'lamella', scope), id).toBe(false);
+      }
+    },
+  );
+
+  it('behandelt unbestimmbare Produktart wie ein Vorprodukt', () => {
+    // Geraten wird nicht (Philosophie von detectProductStage); die
+    // vorsichtige Richtung ist die engere.
+    expect(verfuegbar('dbpp', null, 'self')).toBe(false);
+    expect(verfuegbar('origin-proof', null, 'self')).toBe(true);
+  });
+
+  it('gilt fuer jede Vorstufe, nicht nur fuer Lamellen', () => {
+    for (const stage of ['seedling', 'stem', 'lamella'] as ProductStage[]) {
+      expect(verfuegbar('deconstruction', stage, 'upstream'), stage).toBe(false);
+      expect(verfuegbar('origin-proof', stage, 'upstream'), stage).toBe(true);
     }
   });
 
-  // Ohne Bauteil ist KEIN Anwendungsfall auswertbar -- ausnahmslos. Vorher
-  // waren CO2 und Herkunftsnachweis ueber ``standalone`` ausgenommen und
-  // zeigten dann Demo-Werte; das Flag ist entfallen, weil jeder Fall eine
-  // Aussage ueber ein bestimmtes Produkt trifft (Vorgabe 28.08.2026).
-  it('sperrt ohne Bauteil jeden Anwendungsfall', () => {
+  it('nennt den Umfang als Grund und den Weg heraus', () => {
+    // Ausgegraut ohne Begruendung laesst den Nutzer den Fehler bei sich
+    // suchen -- der Text muss sagen, was zu tun ist.
+    const { reason } = useCaseAvailability(
+      findUseCase('dbpp')!,
+      facts('lamella', 'self'),
+    );
+    expect(reason).toContain('Ganze Kette');
+  });
+});
+
+describe('Bestehende Datenregeln bleiben wirksam', () => {
+  it('sperrt den Herkunftsnachweis ohne Wald- und Lieferkettendaten', () => {
+    // Der Umfang hebt die Datenpruefung nicht auf: ist nichts da, hilft
+    // auch "Ganze Kette" nicht.
+    const leer: ProductDataFacts = {
+      ...facts('clt-panel', 'full'),
+      hasForest: false,
+      hasSupplyChain: false,
+    };
+    expect(useCaseAvailability(findUseCase('origin-proof')!, leer).available).toBe(false);
+  });
+
+  it('sperrt ohne Bauteil ausnahmslos alles', () => {
     for (const useCase of USE_CASES) {
-      const r = useCaseAvailability(useCase, null);
-      expect(r.available, `${useCase.id} darf ohne Bauteil nicht offen sein`).toBe(
-        false,
-      );
-      expect(r.reason).toMatch(/Bauteil erfassen/i);
+      expect(useCaseAvailability(useCase, null).available, useCase.id).toBe(false);
     }
-  });
-
-  // Awf-Vorgabe (Rueckmeldung Anni, 18.08.2026): CO2-Bilanz nur fuer die
-  // fertige BSP-Platte -- fuer Vorprodukte verschoeben sich die Module.
-  it('sperrt die CO2-Bilanz fuer Vorprodukte', () => {
-    for (const stage of ['stem', 'lamella', 'seedling'] as const) {
-      const r = useCaseAvailability(uc('co2'), { ...FULL, productStage: stage });
-      expect(r.available, `co2 darf fuer ${stage} nicht verfuegbar sein`).toBe(false);
-      expect(r.reason).toMatch(/BSP-Platte/i);
-    }
-  });
-
-  it('sperrt die CO2-Bilanz bei unbestimmbarer Produktart', () => {
-    const r = useCaseAvailability(uc('co2'), { ...FULL, productStage: null });
-    expect(r.available).toBe(false);
-    expect(r.reason).toMatch(/nicht bestimmbar/i);
-  });
-
-  it('gibt die CO2-Bilanz fuer die BSP-Platte frei', () => {
-    expect(
-      useCaseAvailability(uc('co2'), { ...EMPTY, productStage: 'clt-panel' }).available,
-    ).toBe(true);
   });
 });

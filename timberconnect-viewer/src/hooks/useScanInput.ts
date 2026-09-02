@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useHardwareScan } from './useHardwareScan';
-import { parseScan } from '../services/identifiers';
+import { parseScan, resolveScan } from '../services/identifiers';
 import type { ParsedIdentifier, ScanSource } from '../services/identifiers';
 
 /** Sammelfenster nach dem ersten Scan. */
@@ -22,6 +22,27 @@ const SESSION_MS = 700;
 
 /** Obergrenze, damit ein Dauersweep das Fenster nicht endlos verlaengert. */
 const SESSION_MAX_MS = 3000;
+
+/**
+ * Die Praefixgrenze eines gedeuteten Scans aufloesen.
+ *
+ * `resolveScan` arbeitet auf dem Rohwert; das erneute Deuten ist billig
+ * (reine Zeichenarbeit) und haelt den Hook frei von Sonderwegen. Die teure
+ * Abfrage — die Praefixliste aus der Foederation — ist im
+ * companyPrefixService gecacht und laeuft pro Sweep nur einmal.
+ *
+ * Schlaegt die Aufloesung fehl, bleibt der urspruenglich gedeutete Scan
+ * gueltig: der Aufrufer meldet dann wie bisher einen Fehlschlag mit Grund.
+ */
+async function resolveOne(parsed: ParsedIdentifier): Promise<ParsedIdentifier> {
+  if (parsed.urn) return parsed; // bereits eindeutig (URN, Trace-ID, RFID)
+  try {
+    const { parsed: out } = await resolveScan(parsed.raw, parsed.source);
+    return out;
+  } catch {
+    return parsed;
+  }
+}
 
 export interface ScanInputOptions {
   enabled?: boolean;
@@ -67,11 +88,18 @@ export function useScanInput({
     setCollecting(false);
 
     if (items.length === 0) return;
-    if (items.length === 1) {
-      singleRef.current(items[0]);
-    } else {
-      multipleRef.current(items);
-    }
+
+    // Praefixgrenze aufloesen, BEVOR der Scan weitergereicht wird.
+    //
+    // Hier statt bei jedem Empfaenger: alle Scan-Wege laufen durch diesen
+    // Hook, und die Aufloesung ist asynchron. Wuerde jeder Aufrufer sie
+    // selbst anstossen, haetten wir vier Stellen, an denen sie vergessen
+    // werden kann — genau so entstand der urspruengliche Fehler.
+    void (async () => {
+      const resolved = await Promise.all(items.map(resolveOne));
+      if (resolved.length === 1) singleRef.current(resolved[0]);
+      else multipleRef.current(resolved);
+    })();
   }, []);
 
   const push = useCallback(
@@ -114,8 +142,11 @@ export function useScanInput({
   const submit = useCallback(
     (raw: string, source: ScanSource) => {
       // Aus Kamera oder Eingabefeld kommt genau ein Wert — direkt weiterreichen,
-      // ohne Sammelfenster.
-      singleRef.current(parseScan(raw, source));
+      // ohne Sammelfenster. Die Praefixaufloesung laeuft trotzdem: ein per Hand
+      // eingetippter Elementstring ist genauso mehrdeutig wie ein gescannter.
+      void (async () => {
+        singleRef.current(await resolveOne(parseScan(raw, source)));
+      })();
     },
     [],
   );

@@ -137,6 +137,12 @@ class EPCATClient:
                 "EPCAT capture job failed (attempt %d/%d): %s",
                 attempt, self.max_attempts, detail,
             )
+            # Ein Formatfehler ist deterministisch: derselbe ungueltige BizStep
+            # scheitert beim dritten Versuch genauso wie beim ersten. Nur die
+            # sporadische Pipeline-Race, wegen der es die Wiederholung gibt,
+            # rechtfertigt einen zweiten Anlauf.
+            if "EpcisFormatException" in detail or "not an allowed" in detail:
+                raise EPCATError(f"Capture rejected (invalid document): {detail}")
             if attempt < self.max_attempts:
                 await asyncio.sleep(self.retry_backoff)
 
@@ -164,6 +170,19 @@ class EPCATClient:
             )
 
         job_url = resp.headers.get("Location")
+        if not job_url:
+            # Das EECC-EPCAT setzt KEINEN Location-Header, sondern liefert die
+            # captureID im Rumpf. Ohne diesen Zweig blieb job_url None, und
+            # _await_job_outcome wertete das als "synchron erfolgreich" —
+            # jede asynchrone Ablehnung ging damit lautlos verloren. Genau so
+            # verschwand am 02.09.2026 ein TransformationEvent mit ungueltigem
+            # BizStep: 202 im Log, nichts im Repository.
+            try:
+                capture_id = (resp.json() or {}).get("captureID")
+            except ValueError:
+                capture_id = None
+            if capture_id:
+                job_url = f"{self.base_url}/capture/{capture_id}"
         if job_url and job_url.startswith("/"):
             job_url = f"{self.base_url}{job_url}"
         logger.info("EPCAT capture accepted (%s), job=%s", resp.status_code, job_url)
@@ -197,8 +216,19 @@ class EPCATClient:
                 continue
             if status.get("success"):
                 return "ok", ""
-            errors = status.get("errors") or [{}]
-            return "failed", errors[0].get("title", "unknown capture error")
+            # Das EECC-EPCAT liefert `errors` als Liste von Strings
+            # ("EpcisFormatException: ..."), die GS1-Referenz als Liste von
+            # Objekten mit `title`. Beides auswerten, sonst steht im Log nur
+            # "unknown capture error" und der eigentliche Grund geht verloren.
+            errors = status.get("errors") or []
+            detail = "unknown capture error"
+            if errors:
+                first = errors[0]
+                if isinstance(first, str):
+                    detail = first
+                elif isinstance(first, dict):
+                    detail = first.get("title") or first.get("detail") or detail
+            return "failed", detail
 
         # Still running when the poll budget ran out — accepted but not confirmed.
         return "timeout", f"capture job still running after {self.poll_timeout}s"

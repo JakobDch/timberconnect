@@ -25,6 +25,11 @@
  * Der Ablauf ist zweistufig: planPodReset() sammelt und zeigt, was getroffen
  * wuerde; erst executePodReset() loescht. Die WAC-Rechte des Servers bleiben
  * die eigentliche Grenze — dieser Service ist die zweite Sicherung davor.
+ *
+ * Dazwischen passt selectPlanContainers(): Es grenzt den Plan auf einzelne
+ * Vorgaenge ein, sodass nicht mehr nur "alles oder nichts" zur Wahl steht.
+ * Ausfuehrung und Schutzschild bleiben davon unberuehrt — die Auswahl aendert
+ * nur, WAS im Plan steht, nicht, was erlaubt ist.
  */
 
 import {
@@ -32,6 +37,7 @@ import {
   getContainedResourceUrlAll,
   getThing,
   getDatetime,
+  getStringNoLocale,
   getUrl,
 } from '@inrupt/solid-client';
 import { DCTERMS } from '@inrupt/vocab-common-rdf';
@@ -64,6 +70,11 @@ const PROTECTED_SEGMENTS = [
 
 /** tc:owner — Ersteller eines Vorgangs, siehe processService/damageReportService. */
 const TC_OWNER = `${NAMESPACES.tc}owner`;
+/** Beschreibende Angaben aus process.ttl — machen den Vorgang lesbar. */
+const TC_PROCESS_LABEL = `${NAMESPACES.tc}processLabel`;
+const TC_TITLE = `${NAMESPACES.tc}title`;
+const TC_REGISTERED_AT = `${NAMESPACES.tc}registeredAt`;
+const TC_PROCESS_ID = `${NAMESPACES.tc}processId`;
 
 /**
  * Harte Zusicherung, dass eine URL geloescht werden darf.
@@ -139,6 +150,108 @@ export interface ResetContainer {
   ownerWebId: string | null;
   /** false, wenn tc:owner auf eine fremde WebID zeigt -> wird uebersprungen. */
   isOwn: boolean;
+  /**
+   * Lesbare Angaben aus process.ttl. Alle optional: PDF-Uploads ohne
+   * registrierten Vorgang haben keine process.ttl, und der Container heisst
+   * dann nach dem Dokument-Hash. Genau dafuer gibt es `describeContainer`.
+   */
+  processLabel: string | null;
+  title: string | null;
+  registeredAt: Date | null;
+  processId: string | null;
+}
+
+/**
+ * Was in der Liste als Ueberschrift steht.
+ *
+ * Ein Container-Name wie "0de0b1aafc5e9c26" ist der Hash des Dokuments und
+ * sagt niemandem etwas. Die Reihenfolge hier ist die der Aussagekraft:
+ *
+ *   1. der Vorgangstyp aus process.ttl ("Faellvorgang") — was es IST
+ *   2. der Titel, falls er etwas anderes sagt als der Typ
+ *   3. sonst: die Dokumentart aus dem Dateinamen ("Stammzertifikat"), denn
+ *      ein PDF-Upload ohne Vorgangsregistrierung hat nichts Besseres
+ *   4. zuletzt der Hash — nie als einzige Angabe, immer nur als Beiwerk
+ */
+const DOC_TYPE_LABELS: Record<string, string> = {
+  pdf_stammzertifikat: 'Stammzertifikat',
+  pdf_pruefzertifikat: 'Prüfzertifikat',
+  pdf_leistungserklaerung: 'Leistungserklärung',
+  pdf_leistungserklaerung_bsp: 'Leistungserklärung BSP',
+  pdf_transportauftrag: 'Transportauftrag',
+  pdf_transportauftrag_rundholz: 'Transportauftrag Rundholz',
+  forst: 'Harvesterprotokoll',
+  saegewerk: 'Sägewerk-Protokoll',
+  bspwerk: 'BSP-Werk-Daten',
+  herstellung: 'ERP-Auszug',
+};
+
+/** Dokumentart aus den Dateinamen des Containers ableiten. */
+export function documentKindFromFiles(files: ResetFile[]): string | null {
+  // Laengste Kennung zuerst: "pdf_leistungserklaerung_bsp" enthaelt
+  // "pdf_leistungserklaerung" als Praefix und wuerde sonst davon verdeckt.
+  const keys = Object.keys(DOC_TYPE_LABELS).sort((a, b) => b.length - a.length);
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    for (const key of keys) {
+      if (name.includes(key)) return DOC_TYPE_LABELS[key];
+    }
+  }
+  return null;
+}
+
+export interface ContainerDescription {
+  /** Fett dargestellte Hauptzeile. */
+  title: string;
+  /** Zusatz darunter — Zeitpunkt, Kennung. Kann leer sein. */
+  subtitle: string | null;
+}
+
+/**
+ * Einen Container in eine lesbare Beschreibung uebersetzen.
+ *
+ * Ausgelagert und exportiert, damit die Regel testbar ist: Sie entscheidet,
+ * ob der Nutzer in der Loeschliste erkennt, was er vor sich hat.
+ */
+export function describeContainer(container: ResetContainer): ContainerDescription {
+  const when = container.registeredAt ?? container.modified;
+  const stamp = when
+    ? when.toLocaleString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
+  // 1./2. Registrierter Vorgang: Typ ist die Ueberschrift, der Titel ergaenzt
+  // ihn nur, wenn er wirklich etwas Neues sagt.
+  if (container.processLabel) {
+    const extra =
+      container.title && container.title !== container.processLabel
+        ? container.title
+        : null;
+    return {
+      title: container.processLabel,
+      subtitle: [stamp, extra, container.processId].filter(Boolean).join(' · ') || null,
+    };
+  }
+
+  // 3. Kein Vorgang, aber erkennbare Dokumentart.
+  const kind = documentKindFromFiles(container.files);
+  if (kind) {
+    return {
+      title: kind,
+      subtitle: [stamp, 'ohne Vorgangsregistrierung'].filter(Boolean).join(' · '),
+    };
+  }
+
+  // 4. Nichts bekannt — dann wenigstens der Zeitpunkt vor dem Hash.
+  return {
+    title: stamp ? `Upload vom ${stamp}` : 'Unbenannter Upload',
+    subtitle: container.traceId,
+  };
 }
 
 export interface ResetCatalogEntry {
@@ -170,6 +283,56 @@ export interface ResetOutcome {
   deletedCatalogEntries: number;
   catalogCleaned: boolean;
   errors: string[];
+}
+
+/**
+ * Einen Plan auf ausgewaehlte Vorgaenge eingrenzen.
+ *
+ * Der Grund fuer diese Funktion: Bis hierher gab es nur "alles oder nichts".
+ * Wer einen einzelnen Vorgang neu hochladen wollte -- etwa den Faellvorgang,
+ * um die Herkunftskante zu ergaenzen -- musste den ganzen Pod leeren und
+ * anschliessend auch den Pflanzvorgang neu einspielen, obwohl an dem nichts
+ * falsch war.
+ *
+ * Wesentlich ist die Mitnahme der Katalog-Eintraege: Sie haengen ueber
+ * `targetContainer` an je einem Vorgang. Bleiben sie beim Loeschen zurueck,
+ * zeigt der Katalog auf Container, die es nicht mehr gibt -- die Produktsuche
+ * findet dann Eintraege, deren Daten 404 liefern. Umgekehrt darf ein Eintrag
+ * eines BEHALTENEN Vorgangs auf keinen Fall mitgeloescht werden; er wandert
+ * darum ausdruecklich nach `keptCatalogEntries`.
+ *
+ * Unbekannte URLs werden ignoriert statt zu werfen: Die Auswahl kommt aus einer
+ * Oberflaeche, die den Plan bereits kennt; ein zwischenzeitlich verschwundener
+ * Container soll den Rest nicht blockieren.
+ */
+export function selectPlanContainers(plan: ResetPlan, containerUrls: string[]): ResetPlan {
+  const wanted = new Set(containerUrls);
+  const containers = plan.containers.filter((c) => wanted.has(c.url));
+  const keptContainers = plan.containers.filter((c) => !wanted.has(c.url));
+
+  // Katalog-Eintraege neu aufteilen: Alles, was auf einen NICHT gewaehlten
+  // Vorgang zeigt, gehoert zu den behaltenen -- auch wenn es im Ausgangsplan
+  // unter `catalogEntries` stand.
+  const targets = new Set(containers.map((c) => c.url));
+  const all = [...plan.catalogEntries, ...plan.keptCatalogEntries];
+  const catalogEntries = all.filter(
+    (e) => e.targetContainer && targets.has(e.targetContainer),
+  );
+  const keptCatalogEntries = all.filter(
+    (e) => !e.targetContainer || !targets.has(e.targetContainer),
+  );
+
+  return {
+    ...plan,
+    containers,
+    // Die abgewaehlten Vorgaenge sind fuer diesen Lauf so unantastbar wie
+    // fremde. Sie hier zu fuehren haelt die Zusicherung aufrecht, dass
+    // ausschliesslich `containers` geloescht wird.
+    foreign: [...plan.foreign, ...keptContainers],
+    catalogEntries,
+    keptCatalogEntries,
+    fileCount: containers.reduce((sum, c) => sum + c.files.length, 0),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -220,36 +383,74 @@ async function listContainer(
   return { files, containers, modified: self ? getDatetime(self, DCTERMS.modified) : null };
 }
 
+interface ContainerMeta {
+  ownerWebId: string | null;
+  processLabel: string | null;
+  title: string | null;
+  registeredAt: Date | null;
+  processId: string | null;
+}
+
+const EMPTY_META: ContainerMeta = {
+  ownerWebId: null,
+  processLabel: null,
+  title: null,
+  registeredAt: null,
+  processId: null,
+};
+
 /**
- * Ersteller eines Vorgangs bestimmen.
+ * Ersteller UND Beschreibung eines Vorgangs bestimmen.
  *
- * process.ttl und die Schadensmeldungen tragen tc:owner. Findet sich kein
- * Tripel, gilt der Vorgang als eigener (Alt-Bestand aus der Zeit vor dem
- * owner-Feld liegt im eigenen Pod und stammt damit vom Pod-Eigentuemer).
+ * process.ttl und die Schadensmeldungen tragen tc:owner; process.ttl zusaetzlich
+ * die lesbaren Angaben (Typ, Titel, Registrierzeitpunkt). Beides in EINEM
+ * Durchgang, weil es dieselbe Datei ist — ein zweiter Lauf waere ein zweiter
+ * Netzaufruf je Container ohne Gegenwert.
+ *
+ * Findet sich kein owner-Tripel, gilt der Vorgang als eigener (Alt-Bestand aus
+ * der Zeit vor dem owner-Feld liegt im eigenen Pod und stammt damit vom
+ * Pod-Eigentuemer).
  */
-async function resolveContainerOwner(
+async function resolveContainerMeta(
   containerUrl: string,
   files: ResetFile[],
-): Promise<string | null> {
+): Promise<ContainerMeta> {
   const candidates = files.filter(
     (f) => f.name === 'process.ttl' || f.name.toLowerCase().endsWith('.ttl'),
   );
-  // process.ttl zuerst: dort steht der Ersteller des Vorgangs.
+  // process.ttl zuerst: dort stehen Ersteller und Beschreibung des Vorgangs.
   candidates.sort((a, b) => (a.name === 'process.ttl' ? -1 : b.name === 'process.ttl' ? 1 : 0));
+
+  const meta: ContainerMeta = { ...EMPTY_META };
 
   for (const file of candidates.slice(0, 3)) {
     try {
       const ds = await getSolidDataset(file.url, { fetch: getAuthFetch() });
-      for (const subject of [`${containerUrl}process.ttl#process`, file.url, `${file.url}#it`]) {
+      // Das Subjekt der process.ttl ist die Container-URL selbst
+      // (siehe buildProcessTtl); die uebrigen Kandidaten decken
+      // Schadensmeldungen und Alt-Bestand ab.
+      for (const subject of [
+        containerUrl,
+        `${containerUrl}process.ttl#process`,
+        file.url,
+        `${file.url}#it`,
+      ]) {
         const thing = getThing(ds, subject);
-        const owner = thing ? getUrl(thing, TC_OWNER) : null;
-        if (owner) return owner;
+        if (!thing) continue;
+
+        meta.ownerWebId ??= getUrl(thing, TC_OWNER);
+        meta.processLabel ??= getStringNoLocale(thing, TC_PROCESS_LABEL);
+        meta.title ??= getStringNoLocale(thing, TC_TITLE);
+        meta.registeredAt ??= getDatetime(thing, TC_REGISTERED_AT);
+        meta.processId ??= getStringNoLocale(thing, TC_PROCESS_ID);
       }
+      // Sobald die Beschreibung steht, sind die weiteren Dateien entbehrlich.
+      if (meta.processLabel && meta.ownerWebId) break;
     } catch {
       // Datei nicht lesbar/kein RDF -> naechste probieren
     }
   }
-  return null;
+  return meta;
 }
 
 /** Alle Vorgangs-Container unter data/ des eigenen Pods sammeln. */
@@ -276,16 +477,20 @@ async function collectDataContainers(
     roots.map(async (containerUrl) => {
       try {
         const { files, modified } = await listContainer(containerUrl);
-        const ownerWebId = await resolveContainerOwner(containerUrl, files);
+        const meta = await resolveContainerMeta(containerUrl, files);
         // Kein owner-Tripel = Alt-Bestand im eigenen Pod -> als eigen behandeln.
-        const isOwn = ownerWebId === null || ownerWebId === webId;
+        const isOwn = meta.ownerWebId === null || meta.ownerWebId === webId;
         const entry: ResetContainer = {
           url: containerUrl,
           traceId: traceIdFromContainer(containerUrl),
           files,
           modified,
-          ownerWebId,
+          ownerWebId: meta.ownerWebId,
           isOwn,
+          processLabel: meta.processLabel,
+          title: meta.title,
+          registeredAt: meta.registeredAt,
+          processId: meta.processId,
         };
         (isOwn ? own : foreign).push(entry);
       } catch (e) {
@@ -298,8 +503,16 @@ async function collectDataContainers(
     }),
   );
 
-  const byTrace = (a: ResetContainer, b: ResetContainer) => a.traceId.localeCompare(b.traceId);
-  return { own: own.sort(byTrace), foreign: foreign.sort(byTrace) };
+  // Neueste zuerst. Nach dem Hash zu sortieren war eine Ordnung ohne Bedeutung
+  // -- gesucht wird "was habe ich zuletzt hochgeladen", und das steht damit
+  // oben. Container ohne jeden Zeitstempel wandern ans Ende.
+  const byTime = (a: ResetContainer, b: ResetContainer) => {
+    const ta = (a.registeredAt ?? a.modified)?.getTime() ?? 0;
+    const tb = (b.registeredAt ?? b.modified)?.getTime() ?? 0;
+    if (ta !== tb) return tb - ta;
+    return a.traceId.localeCompare(b.traceId);
+  };
+  return { own: own.sort(byTime), foreign: foreign.sort(byTime) };
 }
 
 /**

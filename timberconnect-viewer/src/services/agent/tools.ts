@@ -23,7 +23,8 @@ import {
 import { areasContaining } from '../geoService';
 import { filterSourcesByRole } from '../accessControlService';
 import { getCurrentRole } from '../authFetch';
-import { NAMESPACES, getAllProductsAsync } from '../../config/solidPods';
+import { NAMESPACES } from '../../config/solidPods';
+import { resolvePlantingSources } from '../plantingLookupService';
 import { runScopedQuery } from './agentSparqlService';
 import type { EpcScope } from './epcScopeService';
 import type { SchemaPack } from './schemaContextService';
@@ -527,8 +528,13 @@ export async function executeTool(
  */
 async function plantingAreaSources(scope: EpcScope): Promise<string[]> {
   try {
-    const products = await getAllProductsAsync();
-    const all = new Set<string>([...scope.sources, ...products.flatMap((p) => p.sources)]);
+    // resolvePlantingSources statt des Produktkatalogs: Der fuehrt nur
+    // Datensaetze mit lesbarer Bauteil-ID, ein Stammzertifikat hat keine --
+    // es beschreibt Vermehrungsgut. Ueber Produkte gesucht blieben genau die
+    // Zertifikate unsichtbar, deren Flaeche die Waldherkunft belegen soll.
+    // Der Rollenfilter steckt bereits darin.
+    const catalog = await resolvePlantingSources();
+    const all = new Set<string>([...scope.sources, ...catalog]);
     const { allowed } = await filterSourcesByRole([...all], getCurrentRole());
     return allowed;
   } catch (err) {

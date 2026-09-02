@@ -128,12 +128,6 @@
     ] ;
     rr:predicateObjectMap [
         rr:predicate tc:thicknessTolerance ;
-        rr:objectMap [ rml:reference "dickenBreitenToleranz" ]
-    ] ;
-    # EN 336 staffelt die Toleranz nach Nennmasse; die ausgefuellte
-    # Leistungserklaerung fuehrt beide Klassen getrennt.
-    rr:predicateObjectMap [
-        rr:predicate tc:thicknessTolerance ;
         rr:objectMap [ rml:reference "dickenBreitenToleranzBis100" ]
     ] ;
     rr:predicateObjectMap [

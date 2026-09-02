@@ -276,10 +276,10 @@ export function SideMenu({
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block font-semibold text-white text-sm">
-                        Uploads zurücksetzen
+                        Vorgänge löschen
                       </span>
                       <span className="block text-xs text-night-400">
-                        Eigene Dateien löschen, Urzustand
+                        Einzeln wählbar oder alle
                       </span>
                     </span>
                   </button>

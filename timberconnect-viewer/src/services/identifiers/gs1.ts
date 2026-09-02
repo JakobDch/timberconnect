@@ -214,6 +214,36 @@ function fromAis(
 }
 
 /**
+ * Den URN mit BEKANNTER Praefixgrenze bilden.
+ *
+ * Das Gegenstueck zu `gtinSplitCandidates`: Dort ist die Grenze unbekannt und
+ * es entsteht eine Liste, hier ist sie bekannt und es entsteht genau ein
+ * Ergebnis. Der Praefix kommt aus der Foederation — jeder Teilnehmer
+ * hinterlegt ihn in seinem eigenen Pod (profile/role.ttl, tc:companyPrefix).
+ *
+ * Liefert null, wenn der Praefix nicht zum GTIN passt oder keine Serien-
+ * bzw. Chargennummer vorliegt; ein halb gebildeter Ident waere schlimmer als
+ * gar keiner.
+ */
+export function splitAtPrefix(parsed: ParsedIdentifier, gcp: string): string | null {
+  const gtin = parsed.gtin;
+  if (!gtin || !/^\d{14}$/.test(gtin)) return null;
+
+  const value = parsed.serial || parsed.lot;
+  if (!value) return null;
+
+  const indicator = gtin[0];
+  const body = gtin.slice(1, 13);
+  if (!body.startsWith(gcp) || gcp.length >= body.length) return null;
+
+  // Die Artikelnummer traegt die Indikatorziffer als erste Stelle — so
+  // entsteht "0100" aus Indikator "0" und Rest "100".
+  const itemRef = indicator + body.slice(gcp.length);
+  const scheme = parsed.serial ? 'urn:epc:id:sgtin' : 'urn:epc:class:lgtin';
+  return `${scheme}:${gcp}.${itemRef}.${value}`;
+}
+
+/**
  * Einen beliebigen Scan-Rohwert deuten.
  *
  * Reihenfolge ist bewusst: bestehende Formate (URN, Trace-ID) zuerst und

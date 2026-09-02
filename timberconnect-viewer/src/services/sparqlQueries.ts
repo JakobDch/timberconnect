@@ -131,88 +131,157 @@ export function dopIdentGuard(epcs: string[], node = '?dop'): string {
 }
 
 /**
- * Query for BSP Panel product data (final product)
- * Simplified query that works better with Comunica
+ * Stammdaten der BSP-Platte.
+ *
+ * AUF v6 UMGESTELLT. Vorher fragte diese Abfrage ``vlex:BSPPanel`` mit
+ * ``tc:traceId`` und drei Unterknoten (hasConfiguration/hasDimension/
+ * hasProduction). Dieses Vokabular stammt aus ``vlex.rml.ttl`` -- dem einzigen
+ * Mapping, das die v6-Migration nie erfasst hat. Es wird von keinem aktuellen
+ * Upload mehr erzeugt, und ``tc:traceId`` existiert in v6 nirgends. Die
+ * Abfrage lieferte deshalb beim Ident-Pfad ausnahmslos null Zeilen.
+ *
+ * In v6 liegen alle Felder FLACH am ``tc:Panel`` (erp_bsp.rml.ttl), das seinen
+ * Ident direkt auf ``tc:epc`` traegt. Die Unterknoten entfallen ersatzlos.
+ *
+ * Ohne v6-Entsprechung und deshalb entfallen: ``traceId`` (gibt es nicht mehr),
+ * ``fsc`` (FSC haengt am Stamm, nicht an der Platte -- siehe createStemQuery)
+ * und ``holzartBezeichnung`` (v6 fuehrt nur ein Holzart-Feld).
  */
-export function createProductQuery(traceId: string): string {
+export function createProductQuery(epcs: string[] = []): string {
   return `${PREFIXES}
-SELECT ?panel ?artikel ?traceId ?fsc ?pefc
-       ?holzart ?holzartBezeichnung ?festigkeit
+SELECT ?panel ?artikel ?pefc
+       ?holzart ?festigkeit
        ?laenge ?breite ?hoehe
-       ?beschreibung ?status
+       ?beschreibung ?status ?produktnorm
+       ?schichten ?nettoVolumen ?bruttoVolumen
 WHERE {
-  ?panel a vlex:BSPPanel ;
-         tc:traceId "${traceId}" ;
-         tc:traceId ?traceId .
+  ?panel a tc:Panel .
+  OPTIONAL { ?panel tc:epc ?epc }
 
-  OPTIONAL { ?panel vlex:artikel ?artikel }
-  OPTIONAL { ?panel tc:fscCertification ?fsc }
-  OPTIONAL { ?panel tc:pefcCertification ?pefc }
-
-  OPTIONAL {
-    ?panel vlex:hasConfiguration ?config .
-    ?config vlex:holzart ?holzart .
-  }
-  OPTIONAL {
-    ?panel vlex:hasConfiguration ?config2 .
-    ?config2 vlex:holzartBezeichnung ?holzartBezeichnung .
-  }
-  OPTIONAL {
-    ?panel vlex:hasConfiguration ?config3 .
-    ?config3 vlex:festigkeit ?festigkeit .
-  }
-
-  OPTIONAL {
-    ?panel vlex:hasDimension ?dim .
-    ?dim vlex:laengeGesamt ?laenge .
-  }
-  OPTIONAL {
-    ?panel vlex:hasDimension ?dim2 .
-    ?dim2 vlex:breite ?breite .
-  }
-  OPTIONAL {
-    ?panel vlex:hasDimension ?dim3 .
-    ?dim3 vlex:hoehe ?hoehe .
-  }
-
-  OPTIONAL {
-    ?panel vlex:hasProduction ?prod .
-    ?prod vlex:beschreibung ?beschreibung .
-  }
-  OPTIONAL {
-    ?panel vlex:hasProduction ?prod2 .
-    ?prod2 vlex:status ?status .
-  }
+  OPTIONAL { ?panel tc:hasArticle ?article . ?article tc:artikel ?artikel }
+  OPTIONAL { ?panel tc:pEFC ?pefc }
+  OPTIONAL { ?panel tc:holzart_v3 ?holzart }
+  OPTIONAL { ?panel tc:festigkeit__Material_Produkt ?festigkeit }
+  OPTIONAL { ?panel tc:laenge_v3 ?laenge }
+  OPTIONAL { ?panel tc:breite ?breite }
+  OPTIONAL { ?panel tc:hoehe__Staerke ?hoehe }
+  OPTIONAL { ?panel tc:beschreibung_Freitext ?beschreibung }
+  OPTIONAL { ?panel tc:bauteilstatus_Produktion ?status }
+  OPTIONAL { ?panel tc:produktnorm ?produktnorm }
+  OPTIONAL { ?panel tc:anzahl_der_Schichten_innerhalb_einer_BSP_Platte ?schichten }
+  OPTIONAL { ?panel tc:nettovolumen_Produkt ?nettoVolumen }
+  OPTIONAL { ?panel tc:bruttovolumen_Produkt ?bruttoVolumen }
+${identGuard(epcs)}
 }
 LIMIT 1
 `;
 }
 
 /**
- * Query for forest source data (origin)
+ * Waldherkunft.
+ *
+ * AUF v6 UMGESTELLT -- und zwar auf denselben Knoten wie createStemQuery.
+ * ``tc:ForestSource`` war ein rein synthetischer Zwischenknoten aus
+ * ``vlex.rml.ttl`` und existiert in v6 nicht mehr; die Waldangaben stehen
+ * seither direkt am ``tc:Stem`` (stanford_hpr.rml.ttl). Die frueheren
+ * SELECT-Variablen ``?lat``/``?long`` waren ueberdies nie an ein Muster
+ * gebunden -- sie blieben auch im alten Vokabular immer leer.
+ *
+ * Der Ident haengt am Abschnitt, nicht am Stamm (siehe stemIdentGuard).
  */
-export function createForestQuery(traceId: string): string {
+export function createForestQuery(epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?forestryOffice ?district ?harvestDate ?stemKey ?lat ?long
 WHERE {
-  ?source a tc:ForestSource ;
-          tc:stemKey ?stemKey .
+  ?stem a tc:Stem ;
+        tc:stemKey ?stemKey .
 
-  OPTIONAL { ?source tc:forestryOffice ?forestryOffice }
-  OPTIONAL { ?source tc:district ?district }
-  OPTIONAL { ?source tc:harvestDate ?harvestDate }
-
-  FILTER(?stemKey = "${traceId}")
+  OPTIONAL { ?stem tc:forestryOffice ?forestryOffice }
+  OPTIONAL { ?stem tc:district ?district }
+  OPTIONAL { ?stem tc:harvestDate ?harvestDate }
+  OPTIONAL { ?stem tc:hasMachinePosition ?pos . ?pos geo:lat ?lat }
+  OPTIONAL { ?stem tc:hasMachinePosition ?pos2 . ?pos2 geo:long ?long }
+${stemIdentGuard(epcs)}
 }
 LIMIT 1
 `;
+}
+
+/**
+ * Die Ident-Schranke des Stamms -- er traegt seinen Ident NICHT selbst.
+ *
+ * Im HPR steht ``<Identity>`` innerhalb von ``<Log>``, nicht am ``<Stem>``:
+ * ein Baum hat keinen eigenen GS1-Ident, seine Abschnitte haben ihn. Der
+ * Ident-Injektor folgt dem und haengt den SGTIN bevorzugt an den Abschnitt
+ * (ident_injector.py: "Den Abschnitt bevorzugen, wenn es ihn gibt"); nur ohne
+ * LogKey landet er am Stamm. Gefiltert wird deshalb ueber den Abschnitt, der
+ * per ``tc:belongsToStem`` auf den Stamm zeigt (stanford_hpr.rml.ttl).
+ *
+ * Beide Ident-Prädikate pruefen: der Injektor schreibt ``tc:sgtin``, waehrend
+ * die PDF-Vorgaenge ``tc:epc`` fuehren. ``tc:sgtin`` ist in der Ontologie zwar
+ * als Unter-Property von ``tc:epc`` deklariert -- Comunica macht aber kein
+ * Reasoning, eine Abfrage auf ``tc:epc`` allein faende den injizierten Ident
+ * also nicht.
+ *
+ * Der zweite Zweig deckt den Fallback des Injektors ab (Ident direkt am
+ * Stamm, HPR ohne LogKey).
+ *
+ * BEIDE Zweige muessen den Ident SELBST matchen. Frueher stand hier
+ *
+ *     { ?stem tc:hasLog|^tc:belongsToStem ?identNode }
+ *     UNION { BIND(?stem AS ?identNode) }
+ *     { ?identNode tc:epc ?identValue } UNION { ?identNode tc:sgtin ?identValue }
+ *
+ * -- und das hat die Schranke praktisch AUFGEHOBEN. Ein BIND sieht die
+ * Variablen ausserhalb seiner Gruppe nicht: ``?stem`` ist im UNION-Zweig
+ * ungebunden, ``?identNode`` wird dort also an nichts gebunden. Der Zweig
+ * verknuepft ``?stem`` und ``?identValue`` daher nicht mehr, sondern laesst
+ * jeden Stamm durch, sobald der Ident IRGENDWO im Graphen vorkommt.
+ * Nachgemessen an einer Mini-TTL mit zwei Staemmen: die Abfrage nach dem
+ * Ident von Stamm A lieferte A UND B. Mit ``LIMIT 1`` (createForestQuery)
+ * gewinnt dann ein beliebiger Stamm -- bei der BSP-Platte einer ohne
+ * Erntekoordinate, weshalb der Faellort aus der Karte verschwand.
+ *
+ * Kein Fehler, kein Log -- deshalb sieht das Ergebnis wie eine Datenluecke
+ * aus. Siehe denselben Fehler in ``agent/epcScopeService.ts``.
+ */
+function stemIdentGuard(epcs: string[]): string {
+  if (epcs.length === 0) return '';
+  // VALUES statt FILTER(?x IN (...)): der Wert wird GEBUNDEN, statt jeden
+  // Kandidaten gegen eine lange Liste zu pruefen. Bei einer Kette mit 169
+  // Lamellen ist das der Unterschied zwischen einer Abfrage, die zurueckkommt,
+  // und einer, die den Browser stehen laesst -- das EXISTS lief sonst als
+  // Kreuzprodukt ueber alle Log-Knoten je Kandidat.
+  const values = epcs.map((e) => `<${e}>`).join(' ');
+  return `  {
+    VALUES ?identValue { ${values} }
+    {
+      # Normalfall: der Ident haengt am Abschnitt.
+      ?stem tc:hasLog|^tc:belongsToStem ?logNode .
+      { ?logNode tc:epc ?identValue } UNION { ?logNode tc:sgtin ?identValue }
+    }
+    UNION
+    {
+      # Fallback des Injektors: HPR ohne LogKey, Ident direkt am Stamm.
+      { ?stem tc:epc ?identValue } UNION { ?stem tc:sgtin ?identValue }
+    }
+  }`;
 }
 
 /**
  * Query for stem data (raw forest data from StanForD HPR file)
  * The stem data is in 01_Forst_StanForD_HPR.ttl with stemKey matching traceId
+ *
+ * ``epcs`` schraenkt auf die Ident-Kette des Bauteils ein. OHNE diese Schranke
+ * war die Abfrage beim EPC-Pfad voellig ungefiltert: ``isTraceId`` schlaegt bei
+ * einem EPC fehl, die einzige Filterzeile verschwand, und uebrig blieb
+ * ``?stem a tc:Stem`` + ``LIMIT 1`` ueber den GESAMTEN Katalog. Der
+ * Herkunftsnachweis wies damit einen BELIEBIGEN fremden Stamm als Herkunft des
+ * gescannten Bauteils aus -- mit nur einem hochgeladenen Stammzertifikat faellt
+ * das nicht auf, beim zweiten wird es zur Falschaussage. Derselbe Fehler war
+ * fuer die dokumentbezogenen Abfragen bereits behoben (siehe identGuard).
  */
-export function createStemQuery(traceId: string): string {
+export function createStemQuery(traceId: string, epcs: string[] = []): string {
   return `${PREFIXES}
 SELECT ?stem ?forestryOffice ?district ?harvestDate ?dbh ?fsc ?pefc ?lat ?long ?alt ?species ?speciesName
        ?analyzedLength ?referenceDiameter ?destinationSawmill ?gnssQuality ?stemNumber
@@ -221,6 +290,7 @@ SELECT ?stem ?forestryOffice ?district ?harvestDate ?dbh ?fsc ?pefc ?lat ?long ?
 WHERE {
   ?stem a tc:Stem .
   ${isTraceId(traceId) ? `?stem tc:stemKey "${traceId}" .` : ''}
+${stemIdentGuard(epcs)}
 
   OPTIONAL { ?stem tc:forestryOffice ?forestryOffice }
   OPTIONAL { ?stem tc:district ?district }
@@ -276,162 +346,214 @@ LIMIT 1
  * Query for sawmill/polter data (from ELDAT HBA file)
  * Gets polter details including volume, pieces, and delivery date from WoodAllocation
  */
-export function createSawmillQuery(traceId: string): string {
+export function createSawmillQuery(epcs: string[] = []): string {
   return `${PREFIXES}
-SELECT ?company ?deliveryDate ?polterId ?totalVolume ?totalPieces ?polterLat ?polterLong ?destinationProduct
+SELECT ?company ?street ?postcode ?city ?country ?deliveryDate
+       ?polterId ?totalVolume ?totalPieces ?destinationProduct
 WHERE {
-  # From Sägewerk ELDAT file: Polter with trace reference
-  ?polter a eldat:Polter ;
-          eldat:polterId ?polterId .
-
-  OPTIONAL { ?polter eldat:totalVolume ?totalVolume }
-  OPTIONAL { ?polter eldat:totalPieces ?totalPieces }
-  OPTIONAL { ?polter geo:lat ?polterLat }
-  OPTIONAL { ?polter geo:long ?polterLong }
-
-  ?polter tc:hasTraceReference ?trace .
-  ?trace tc:traceId "${traceId}" .
-
-  # Get delivery/creation date from WoodAllocation
-  OPTIONAL {
-    ?alloc eldat:hasPolter ?polter .
-    ?alloc eldat:creationDateTime ?deliveryDate .
+  {
+    # Das Saegewerk ist der EMPFAENGER des Rundholz-Transportauftrags.
+    # Eine eigene Saegewerks-Klasse gibt es in v6 nicht; der Auftrag traegt
+    # Firma und Anschrift flach (pdf_transportauftrag_rundholz.rml.ttl) und
+    # haengt selbst am Ident.
+    ?order a tc:TransportOrder .
+    OPTIONAL { ?order tc:epc ?epc }
+    OPTIONAL { ?order tc:firmenname ?company }
+    OPTIONAL { ?order tc:strasse ?street }
+    OPTIONAL { ?order tc:pLZ ?postcode }
+    OPTIONAL { ?order tc:stadt ?city }
+    OPTIONAL { ?order tc:land ?country }
+    OPTIONAL { ?order tc:datum ?deliveryDate }
+    OPTIONAL { ?order tc:polter_Nummer ?polterId }
+    OPTIONAL { ?order tc:summe_Festmeter ?totalVolume }
+    OPTIONAL { ?order tc:summer_Stueck ?totalPieces }
+${identGuard(epcs)}
   }
-
-  # Get sawmill company from SawmillSource in BSP file
-  OPTIONAL {
-    ?panel tc:hasSawmillSource ?source ;
-           tc:traceId "${traceId}" .
-    ?source tc:company ?company .
+  UNION
+  {
+    # Zweitquelle: die Saegewerks-Leistungserklaerung. Sie traegt den Ident
+    # nicht selbst, sondern am Unterknoten tc:SawingProcess -- dafuer gibt es
+    # dopIdentGuard.
+    ?dop a tc:DeclarationOfPerformance .
+    ?dop tc:manufacturer ?company .
+    OPTIONAL { ?dop tc:manufacturerAddress ?street }
+${dopIdentGuard(epcs)}
   }
-
-  # Get destination product from WoodData
-  OPTIONAL {
-    ?polter tc:hasWoodData ?woodData .
-    ?woodData tc:destinationProduct ?destinationProduct .
+  UNION
+  {
+    # Bestimmungssaegewerk aus den Maschinendaten -- nur ein Name, keine
+    # Anschrift, aber die frueheste Aussage in der Kette.
+    ?stem a tc:Stem .
+    ?stem tc:destinationSawmill ?destinationProduct .
+${stemIdentGuard(epcs)}
   }
 }
-LIMIT 1
 `;
 }
 
 /**
- * Query for BSP-Werk production data with extended details
+ * Herstellungsangaben der BSP-Platte.
+ *
+ * AUF v6 UMGESTELLT. ``tc:BSPWerkSource`` und die vlex-Unterknoten sind mit
+ * ``vlex.rml.ttl`` entfallen; in v6 steht alles flach am ``tc:Panel``
+ * (erp_bsp.rml.ttl), das ``tc:epc`` direkt traegt.
+ *
+ * Der HERSTELLERNAME kommt nicht von dort: ``tc:organisation`` am Panel ist
+ * ein ERP-Schluessel, kein Klartext. Den Namen samt Anschrift fuehrt die
+ * BSP-Leistungserklaerung (pdf_leistungserklaerung_bsp.rml.ttl), die ihren
+ * Ident ebenfalls direkt traegt -- daher der zweite Zweig.
+ *
+ * Ohne v6-Entsprechung: ``zusatzabbundBeschreibung``, ``bspTypBezeichnung``,
+ * ``plattencodeBezeichnung`` (v6 fuehrt je nur ein Feld statt Code+Klartext).
  */
-export function createBspWerkQuery(traceId: string): string {
+export function createBspWerkQuery(epcs: string[] = []): string {
   return `${PREFIXES}
-SELECT ?company ?productionDate ?orderId ?status ?beschreibung ?konstruktionsnummer
-       ?cncAbbund ?cncMaschine ?zusatzabbund ?zusatzabbundBeschreibung ?produktionsstandort
-       ?anzahlSchichten ?brandschutzklasse ?bspTyp ?bspTypBezeichnung ?plattencode ?plattencodeBezeichnung
+SELECT ?company ?street ?postcode ?city ?country
+       ?productionDate ?orderId ?status ?beschreibung ?konstruktionsnummer
+       ?cncAbbund ?cncMaschine ?zusatzabbund ?produktionsstandort ?organisation
+       ?anzahlSchichten ?brandschutzklasse ?bspTyp ?plattencode
        ?produktnorm ?nettoVolumen ?bruttoVolumen
        ?optikSeite1 ?decklageBspSeite1
 WHERE {
-  ?source a tc:BSPWerkSource .
+  {
+    ?panel a tc:Panel .
+    OPTIONAL { ?panel tc:epc ?epc }
 
-  OPTIONAL { ?source tc:company ?company }
-  OPTIONAL { ?source tc:productionDate ?productionDate }
-  OPTIONAL { ?source tc:orderId ?orderId }
-
-  ?panel tc:hasBSPWerkSource ?source ;
-         tc:traceId "${traceId}" .
-
-  OPTIONAL {
-    ?panel vlex:hasProduction ?prod .
-    OPTIONAL { ?prod vlex:status ?status }
-    OPTIONAL { ?prod vlex:beschreibung ?beschreibung }
-    OPTIONAL { ?prod vlex:konstruktionsnummer ?konstruktionsnummer }
-    OPTIONAL { ?prod vlex:cncAbbund ?cncAbbund }
-    OPTIONAL { ?prod vlex:cncMaschine ?cncMaschine }
-    OPTIONAL { ?prod vlex:zusatzabbund ?zusatzabbund }
-    OPTIONAL { ?prod vlex:zusatzabbundBeschreibung ?zusatzabbundBeschreibung }
-    OPTIONAL { ?prod vlex:produktionsstandort ?produktionsstandort }
+    OPTIONAL { ?panel tc:organisation ?organisation }
+    OPTIONAL { ?panel tc:ist_Beginndatum ?productionDate }
+    OPTIONAL { ?panel tc:vertriebsauftragsnummer ?orderId }
+    OPTIONAL { ?panel tc:bauteilstatus_Produktion ?status }
+    OPTIONAL { ?panel tc:beschreibung_Freitext ?beschreibung }
+    OPTIONAL { ?panel tc:konstruktionsnummer ?konstruktionsnummer }
+    OPTIONAL { ?panel tc:cNC_Abbund ?cncAbbund }
+    OPTIONAL { ?panel tc:cNC_Maschiene ?cncMaschine }
+    OPTIONAL { ?panel tc:zusatzabbund ?zusatzabbund }
+    OPTIONAL { ?panel tc:produktionsstandort ?produktionsstandort }
+    OPTIONAL { ?panel tc:anzahl_der_Schichten_innerhalb_einer_BSP_Platte ?anzahlSchichten }
+    OPTIONAL { ?panel tc:brandschutzklasse_Produkt ?brandschutzklasse }
+    OPTIONAL { ?panel tc:typ_der_BSP_Platte ?bspTyp }
+    OPTIONAL { ?panel tc:plattencode_BSP ?plattencode }
+    OPTIONAL { ?panel tc:produktnorm ?produktnorm }
+    OPTIONAL { ?panel tc:nettovolumen_Produkt ?nettoVolumen }
+    OPTIONAL { ?panel tc:bruttovolumen_Produkt ?bruttoVolumen }
+    OPTIONAL { ?panel tc:optik_Seite_1 ?optikSeite1 }
+    OPTIONAL { ?panel tc:deckelage_BSP ?decklageBspSeite1 }
+${identGuard(epcs)}
   }
-
-  OPTIONAL {
-    ?panel vlex:hasConfiguration ?config .
-    OPTIONAL { ?config vlex:anzahlSchichten ?anzahlSchichten }
-    OPTIONAL { ?config vlex:brandschutzklasse ?brandschutzklasse }
-    OPTIONAL { ?config vlex:bspTyp ?bspTyp }
-    OPTIONAL { ?config vlex:bspTypBezeichnung ?bspTypBezeichnung }
-    OPTIONAL { ?config vlex:plattencode ?plattencode }
-    OPTIONAL { ?config vlex:plattencodeBezeichnung ?plattencodeBezeichnung }
-    OPTIONAL { ?config vlex:produktnorm ?produktnorm }
-  }
-
-  OPTIONAL {
-    ?panel vlex:hasDimension ?dim .
-    OPTIONAL { ?dim vlex:nettoVolumen ?nettoVolumen }
-    OPTIONAL { ?dim vlex:bruttoVolumen ?bruttoVolumen }
-  }
-
-  OPTIONAL {
-    ?panel vlex:hasSurfaceQuality ?surf .
-    OPTIONAL { ?surf vlex:optikSeite1 ?optikSeite1 }
-    OPTIONAL { ?surf vlex:decklageBspSeite1 ?decklageBspSeite1 }
+  UNION
+  {
+    # Herstellername + Anschrift. Die Adresse steht als BEUTEL auf demselben
+    # Praedikat (Strasse/PLZ/Stadt/Land) -- deshalb ein Kreuzprodukt, das der
+    # Mapper aufloest, statt hier vier Variablen zu behaupten.
+    ?dop a tc:DeclarationOfPerformance .
+    ?dop tc:manufacturer ?company .
+    OPTIONAL { ?dop tc:epc ?dopEpc }
+    OPTIONAL { ?dop tc:manufacturerAddress ?street }
+${identGuard(epcs, '?dopEpc')}
   }
 }
-LIMIT 1
 `;
 }
 
 /**
- * Query for complete supply chain (all sources)
+ * Die Stationen der Lieferkette.
+ *
+ * AUF v6 UMGESTELLT -- mit geaenderter Herleitung. Die frueheren
+ * ``tc:hasForestSource``/``hasSawmillSource``/``hasBSPWerkSource``-Knoten
+ * waren ein synthetisches vlex-Konstrukt: eine Datei behauptete die ganze
+ * Kette. In v6 gibt es diese Knoten nicht mehr, und das ist eine Verbesserung:
+ * jede Station belegt sich jetzt selbst.
+ *
+ *   Wald       -> tc:Stem (Maschinendaten des Fällvorgangs)
+ *   Saegewerk  -> Empfaenger des Rundholz-Transportauftrags
+ *   BSP-Werk   -> Hersteller der Leistungserklaerung
+ *
+ * ``station`` wird hier fest gesetzt, statt aus den Daten gelesen: die
+ * Stationsbezeichnung war ein Feld des vlex-Knotens und hat in v6 keine
+ * Entsprechung -- sie ergibt sich aus der Herkunft der Zeile.
  */
-export function createSupplyChainQuery(traceId: string): string {
+export function createSupplyChainQuery(epcs: string[] = []): string {
   return `${PREFIXES}
-SELECT ?station ?company ?date ?sourceFormat ?location
+SELECT ?station ?company ?date ?location
 WHERE {
-  ?panel tc:traceId "${traceId}" .
-
   {
-    ?panel tc:hasForestSource ?source .
-    ?source tc:station ?station .
-    OPTIONAL { ?source tc:forestryOffice ?company }
-    OPTIONAL { ?source tc:harvestDate ?date }
-    OPTIONAL { ?source tc:sourceFormat ?sourceFormat }
-    OPTIONAL { ?source tc:district ?location }
+    ?stem a tc:Stem .
+    OPTIONAL { ?stem tc:forestryOffice ?company }
+    OPTIONAL { ?stem tc:harvestDate ?date }
+    OPTIONAL { ?stem tc:district ?location }
+${stemIdentGuard(epcs)}
+    BIND("Forst" AS ?station)
   }
   UNION
   {
-    ?panel tc:hasSawmillSource ?source .
-    ?source tc:station ?station .
-    OPTIONAL { ?source tc:company ?company }
-    OPTIONAL { ?source tc:deliveryDate ?date }
-    OPTIONAL { ?source tc:sourceFormat ?sourceFormat }
+    ?order a tc:TransportOrder .
+    OPTIONAL { ?order tc:epc ?epc }
+    OPTIONAL { ?order tc:firmenname ?company }
+    OPTIONAL { ?order tc:datum ?date }
+    OPTIONAL { ?order tc:stadt ?location }
+${identGuard(epcs)}
+    BIND("Sägewerk" AS ?station)
   }
   UNION
   {
-    ?panel tc:hasBSPWerkSource ?source .
-    ?source tc:station ?station .
-    OPTIONAL { ?source tc:company ?company }
-    OPTIONAL { ?source tc:productionDate ?date }
-    OPTIONAL { ?source tc:sourceFormat ?sourceFormat }
+    ?dop a tc:DeclarationOfPerformance .
+    ?dop tc:manufacturer ?company .
+    OPTIONAL { ?dop tc:epc ?dopEpc }
+${identGuard(epcs, '?dopEpc')}
+    BIND("BSP-Werk" AS ?station)
   }
 }
-ORDER BY ?date
 `;
 }
 
 /**
- * Query for business partners in the supply chain (from ELDAT file)
- * Business partners are linked via WoodAllocation -> Polter -> TraceReference
+ * Die Akteure der Kette mit Anschrift.
+ *
+ * AUF v6 UMGESTELLT. ``eldat:BusinessPartner`` hat es nie gegeben (vor v6 hiess
+ * die Klasse ``eldat:Supplier``), und der Pfad ueber ``eldat:hasPolter`` /
+ * ``tc:hasTraceReference`` ist mit der v6-Migration entfallen. Das heutige
+ * ELDAT-Mapping erzeugt nur LogPile/DeliveryNote/Carrier/Transport -- ohne
+ * Rollen, ohne Anschriften und ohne Ident.
+ *
+ * Die Akteure stehen in v6 in den TRANSPORTAUFTRAEGEN: der Rundholzauftrag
+ * fuehrt Absender (Forst) und Empfaenger (Saegewerk) flach, der
+ * Schnittholzauftrag Be- und Entladestelle als eigene Knoten.
  */
-export function createBusinessPartnersQuery(traceId: string): string {
+export function createBusinessPartnersQuery(epcs: string[] = []): string {
   return `${PREFIXES}
-SELECT ?name ?role ?city ?street ?postcode
+SELECT ?name ?role ?city ?street ?postcode ?country
 WHERE {
-  ?partner a eldat:BusinessPartner ;
-           eldat:name ?name ;
-           eldat:role ?role .
-
-  OPTIONAL { ?partner eldat:city ?city }
-  OPTIONAL { ?partner eldat:street ?street }
-  OPTIONAL { ?partner eldat:postcode ?postcode }
-
-  ?partner eldat:belongsToAllocation ?alloc .
-  ?alloc eldat:hasPolter ?polter .
-  ?polter tc:hasTraceReference ?trace .
-  ?trace tc:traceId "${traceId}" .
+  {
+    # Rundholz-Transportauftrag: Empfaengerfirma ist das Saegewerk.
+    ?order a tc:TransportOrder .
+    ?order tc:firmenname ?name .
+    OPTIONAL { ?order tc:epc ?epc }
+    OPTIONAL { ?order tc:strasse ?street }
+    OPTIONAL { ?order tc:pLZ ?postcode }
+    OPTIONAL { ?order tc:stadt ?city }
+    OPTIONAL { ?order tc:land ?country }
+${identGuard(epcs)}
+    BIND("Sägewerk" AS ?role)
+  }
+  UNION
+  {
+    # Rundholz-Transportauftrag: der Lieferant ist das Forstamt.
+    ?order2 a tc:TransportOrder .
+    ?order2 tc:lieferant_Forstamt ?name .
+    OPTIONAL { ?order2 tc:epc ?epc2 }
+${identGuard(epcs, '?epc2')}
+    BIND("Forstbetrieb" AS ?role)
+  }
+  UNION
+  {
+    # Hersteller aus der Leistungserklaerung.
+    ?dop a tc:DeclarationOfPerformance .
+    ?dop tc:manufacturer ?name .
+    OPTIONAL { ?dop tc:epc ?dopEpc }
+    OPTIONAL { ?dop tc:manufacturerAddress ?street }
+${identGuard(epcs, '?dopEpc')}
+    BIND("Hersteller" AS ?role)
+  }
 }
 `;
 }
@@ -764,13 +886,34 @@ export function createPlantingAreaQuery(): string {
   return `${PREFIXES}
 SELECT ?certificate ?wkt ?lat ?long ?epc ?zertifikatNr ?baumart ?reifejahr
 WHERE {
-  ?certificate geosparql:asWKT ?wkt .
-  OPTIONAL { ?certificate geo:lat ?lat }
-  OPTIONAL { ?certificate geo:long ?long }
-  OPTIONAL { ?certificate tc:epc ?epc }
-  OPTIONAL { ?certificate tc:identifier ?zertifikatNr }
-  OPTIONAL { ?certificate tc:species ?baumart }
-  OPTIONAL { ?certificate tc:maturityYear ?reifejahr }
+  # Die Flaeche haengt am Saatgut-Subjekt (tc:Seed), die Angaben zum Beleg
+  # dagegen am Zertifikat. Seit beide getrennt sind, verbindet tc:describes
+  # sie -- ohne diesen Weg lieferte die Abfrage zwar das Polygon, aber keine
+  # Zertifikatsnummer und keine Baumart mehr, und jede Flaeche hiesse in der
+  # Anzeige nur noch "Pflanzvorgang".
+  #
+  # Der Beleg-Teil ist OPTIONAL: Aeltere Datensaetze tragen die Flaeche noch
+  # direkt am Zertifikat, dort bleibt ?doc ungebunden. Deshalb faellt die
+  # Beschriftung ueber COALESCE auf das Flaechen-Subjekt selbst zurueck.
+  ?area geosparql:asWKT ?wkt .
+  OPTIONAL { ?doc tc:describes ?area }
+
+  OPTIONAL { ?area geo:lat ?lat }
+  OPTIONAL { ?area geo:long ?long }
+  OPTIONAL { ?area tc:epc ?epcDirect }
+  OPTIONAL { ?doc tc:epc ?epcDoc }
+  OPTIONAL { ?doc tc:identifier ?nrDoc }
+  OPTIONAL { ?area tc:identifier ?nrDirect }
+  OPTIONAL { ?doc tc:species ?artDoc }
+  OPTIONAL { ?area tc:species ?artDirect }
+  OPTIONAL { ?doc tc:maturityYear ?jahrDoc }
+  OPTIONAL { ?area tc:maturityYear ?jahrDirect }
+
+  BIND(COALESCE(?doc, ?area) AS ?certificate)
+  BIND(COALESCE(?epcDirect, ?epcDoc) AS ?epc)
+  BIND(COALESCE(?nrDoc, ?nrDirect) AS ?zertifikatNr)
+  BIND(COALESCE(?artDoc, ?artDirect) AS ?baumart)
+  BIND(COALESCE(?jahrDoc, ?jahrDirect) AS ?reifejahr)
 }
 `;
 }
@@ -785,12 +928,24 @@ export function createPlantingAreaByEpcQuery(epc: string): string {
   return `${PREFIXES}
 SELECT ?certificate ?wkt ?lat ?long ?zertifikatNr ?baumart
 WHERE {
-  ?certificate tc:epc <${epc}> ;
-               geosparql:asWKT ?wkt .
-  OPTIONAL { ?certificate geo:lat ?lat }
-  OPTIONAL { ?certificate geo:long ?long }
-  OPTIONAL { ?certificate tc:identifier ?zertifikatNr }
-  OPTIONAL { ?certificate tc:species ?baumart }
+  # Wie in createPlantingAreaQuery: Flaeche am Saatgut, Belegangaben am
+  # Zertifikat, verbunden ueber tc:describes. Der EPC steht an beiden, die
+  # Bindung an <${epc}> greift also unabhaengig davon, welches Subjekt die
+  # Flaeche traegt.
+  ?area tc:epc <${epc}> ;
+        geosparql:asWKT ?wkt .
+  OPTIONAL { ?doc tc:describes ?area }
+
+  OPTIONAL { ?area geo:lat ?lat }
+  OPTIONAL { ?area geo:long ?long }
+  OPTIONAL { ?doc tc:identifier ?nrDoc }
+  OPTIONAL { ?area tc:identifier ?nrDirect }
+  OPTIONAL { ?doc tc:species ?artDoc }
+  OPTIONAL { ?area tc:species ?artDirect }
+
+  BIND(COALESCE(?doc, ?area) AS ?certificate)
+  BIND(COALESCE(?nrDoc, ?nrDirect) AS ?zertifikatNr)
+  BIND(COALESCE(?artDoc, ?artDirect) AS ?baumart)
 }
 `;
 }

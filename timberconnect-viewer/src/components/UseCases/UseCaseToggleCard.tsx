@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight, Info, Loader2 } from 'lucide-react';
 import { ToggleSwitch } from '../UI/ToggleSwitch';
 import { UseCaseIcon } from './UseCaseIcon';
 import { type UseCaseDefinition } from '../../config/useCases';
@@ -14,6 +14,10 @@ interface UseCaseToggleCardProps {
   available?: boolean;
   /** Warum nicht — wird beim Hovern/Antippen eingeblendet. */
   unavailableReason?: string;
+  /** Dieser Fall wird gerade geoeffnet — Pfeil wird zum Ladesymbol. */
+  isOpening?: boolean;
+  /** Ein ANDERER Fall laedt gerade — solange nicht anklickbar. */
+  isBlocked?: boolean;
 }
 
 export function UseCaseToggleCard({
@@ -23,6 +27,8 @@ export function UseCaseToggleCard({
   onClick,
   available = true,
   unavailableReason,
+  isOpening = false,
+  isBlocked = false,
 }: UseCaseToggleCardProps) {
   const isInteractive = available && isEnabled;
 
@@ -39,8 +45,10 @@ export function UseCaseToggleCard({
           ? 'bg-night-800 border-white/10 hover:border-acid-400/40'
           : 'bg-night-800/50 border-white/5'
         }
+        ${isOpening ? 'border-acid-400/60' : ''}
+        ${isBlocked && !isOpening ? 'opacity-60' : ''}
       `}
-      whileHover={isInteractive ? { y: -2 } : {}}
+      whileHover={isInteractive && !isBlocked ? { y: -2 } : {}}
       transition={{ duration: 0.2 }}
       onMouseEnter={() => canExplain && setShowReason(true)}
       onMouseLeave={() => setShowReason(false)}
@@ -81,10 +89,21 @@ export function UseCaseToggleCard({
       {isInteractive ? (
         <button
           onClick={onClick}
-          className="flex items-center text-acid-300 text-sm font-semibold hover:text-acid-200 transition-colors group"
+          disabled={isBlocked}
+          aria-busy={isOpening}
+          className="flex items-center text-acid-300 text-sm font-semibold hover:text-acid-200 transition-colors group disabled:hover:text-acid-300 disabled:cursor-default"
         >
-          <span>Öffnen</span>
-          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+          {isOpening ? (
+            <>
+              <span>Wird geöffnet</span>
+              <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+            </>
+          ) : (
+            <>
+              <span>Öffnen</span>
+              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            </>
+          )}
         </button>
       ) : canExplain ? (
         <button

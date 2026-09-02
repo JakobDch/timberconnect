@@ -656,6 +656,42 @@ function detectDataType(dataset: CatalogDataset): 'forst' | 'saegewerk' | 'bspwe
 // PUBLIC API
 // ============================================================================
 
+/**
+ * ALLE Datenquellen aus allen registrierten Pods — ohne Umweg ueber Produkte.
+ *
+ * Der Unterschied zu ``getAllProductsAsync().flatMap(p => p.sources)`` ist
+ * nicht kosmetisch: ``groupDatasetsToProducts`` verwirft jeden Datensatz, aus
+ * dem ``extractIdFromData`` keine ID lesen konnte
+ * (``filter(d => d.traceId !== null)``). Fuer Bauteile ist das richtig — eine
+ * Liste "Verfuegbare Produkte" soll keine ID-losen Dokumente zeigen.
+ *
+ * Fuer Pflanzflaechen ist es falsch. Eine Flaeche ist kein Produkt: Das
+ * Stammzertifikat liegt im Pod der Baumschule bzw. des Forstbetriebs, taucht
+ * in keiner Bauteil-Gruppierung auf, und sein Bezug ist Vermehrungsgut
+ * (``urn:epc:class:lgtin``) — der Regex in ``extractIdFromData`` sucht aber
+ * nur ``urn:epc:id:``. Ein Zertifikat faellt damit gleich doppelt heraus, und
+ * mit ihm seine Quelle. Wer Flaechen ueber den Produktkatalog sucht, findet
+ * genau die nicht, die noch zu keinem geernteten Bauteil gehoeren.
+ *
+ * Deshalb hier die Rohliste. Die Zugriffsentscheidung faellt nicht hier,
+ * sondern danach ueber ``filterSourcesByRole`` — welcher Pod welcher Rolle
+ * offensteht, weiss die Zugriffskontrolle, nicht der Katalog.
+ */
+export async function getAllCatalogSources(): Promise<string[]> {
+  // Liegt der Katalog schon im Cache, wird er NICHT neu geholt. Das ist nicht
+  // nur eine Sparmassnahme: Diese Funktion wird auch aus dem Agenten heraus
+  // aufgerufen, waehrend er eine Frage beantwortet. Dort einen Netzabruf
+  // auszuloesen, wo der Aufrufer laengst dieselben Daten hat, waere eine
+  // versteckte Verzoegerung mitten in der Antwort.
+  const cached = getCachedDatasets();
+  const datasets = cached.length > 0 ? cached : await fetchCatalogDatasets();
+
+  const urls = datasets
+    .map((d) => d.access_url_dataset)
+    .filter((url): url is string => Boolean(url));
+  return Array.from(new Set(urls));
+}
+
 export async function getCatalogProducts(): Promise<ProductConfig[]> {
   try {
     await fetchCatalogDatasets();
