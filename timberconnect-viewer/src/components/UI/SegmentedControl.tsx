@@ -11,6 +11,13 @@
  * dann darf die Gruppe im umgebenden Flex-Layout aber nicht schrumpfen
  * (``sm:shrink-0``), sonst laufen die einzeiligen Beschriftungen ueber die
  * Segmentgrenzen hinaus.
+ *
+ * Ab ``sm`` haben die Segmente ausserdem ihre Inhaltsbreite als Basis
+ * (``sm:flex-auto``, nicht ``flex-1``). Mit Basis 0 misst Chrome die Gruppe
+ * zwar als Summe der Inhaltsbreiten, verteilt sie dann aber in gleiche
+ * Drittel -- das laengste Segment ("Nur dieses Produkt") lief ueber den
+ * rechten Rand in den Hinweistext hinein. Auf dem Handy (volle Breite,
+ * Umbruch erlaubt) bleiben gleiche Drittel richtig.
  */
 
 export interface SegmentedOption<T extends string> {
@@ -58,7 +65,7 @@ export function SegmentedControl<T extends string>({
             title={option.hint}
             disabled={disabled}
             onClick={() => onChange(option.id)}
-            className={`flex-1 min-w-0 px-2 sm:px-3 py-2 rounded-lg text-sm font-semibold leading-tight text-center transition-colors sm:whitespace-nowrap ${
+            className={`flex-1 sm:flex-auto min-w-0 px-2 sm:px-3 py-2 rounded-lg text-sm font-semibold leading-tight text-center transition-colors sm:whitespace-nowrap ${
               active ? 'bg-acid-400 text-night-950' : 'text-night-300 hover:text-white'
             } ${disabled ? 'cursor-not-allowed' : ''}`}
           >
