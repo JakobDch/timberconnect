@@ -326,8 +326,15 @@ export function UseCaseGrid({
               weil er bestimmt, wie viele Datenpunkte in die Abrechnung gehen --
               erst im Kaufdialog waere die Entscheidung schon gefallen.
             */}
+            {/*
+              Layout: auf dem Handy untereinander, die Leiste ueber die volle
+              Breite (Beschriftungen duerfen umbrechen). Ab ``sm`` in einer
+              Zeile: Beschriftung und Leiste behalten ihre Inhaltsbreite
+              (``shrink-0``), nur der Hinweistext nimmt den Restplatz und
+              bricht um.
+            */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-              <div className="flex items-center gap-2 text-sm text-night-300">
+              <div className="flex items-center gap-2 text-sm text-night-300 shrink-0">
                 <span className="font-semibold text-white">Umfang</span>
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin text-sky-400" />}
               </div>
@@ -337,8 +344,9 @@ export function UseCaseGrid({
                 value={scope}
                 onChange={(next) => onScopeChange?.(next)}
                 disabled={isLoading || !onScopeChange}
+                className="w-full sm:w-auto sm:shrink-0"
               />
-              <p className="text-xs text-night-400 sm:max-w-xs">
+              <p className="text-xs text-night-400 sm:flex-1 sm:min-w-0 sm:max-w-md">
                 {SCOPE_OPTIONS.find((o) => o.id === scope)?.hint}
               </p>
             </div>

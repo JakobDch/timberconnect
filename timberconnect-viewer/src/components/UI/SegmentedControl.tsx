@@ -7,7 +7,10 @@
  *
  * Auf schmalen Bildschirmen (Handy) duerfen die Beschriftungen umbrechen:
  * drei Segmente mit ``whitespace-nowrap`` liefen sonst ueber den rechten
- * Rand hinaus und wurden abgeschnitten. Ab ``sm`` bleibt alles einzeilig.
+ * Rand hinaus und wurden abgeschnitten. Ab ``sm`` bleibt alles einzeilig --
+ * dann darf die Gruppe im umgebenden Flex-Layout aber nicht schrumpfen
+ * (``sm:shrink-0``), sonst laufen die einzeiligen Beschriftungen ueber die
+ * Segmentgrenzen hinaus.
  */
 
 export interface SegmentedOption<T extends string> {
@@ -25,6 +28,8 @@ interface SegmentedControlProps<T extends string> {
   disabled?: boolean;
   /** Beschriftung fuer Screenreader, wenn keine sichtbare daneben steht. */
   ariaLabel?: string;
+  /** Zusaetzliche Klassen fuer die Gruppe, z.B. Breite im umgebenden Layout. */
+  className?: string;
 }
 
 export function SegmentedControl<T extends string>({
@@ -33,6 +38,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   disabled = false,
   ariaLabel,
+  className = '',
 }: SegmentedControlProps<T>) {
   return (
     <div
@@ -40,7 +46,7 @@ export function SegmentedControl<T extends string>({
       aria-label={ariaLabel}
       className={`flex items-stretch gap-1 p-1 rounded-xl bg-night-700/50 border border-white/10 ${
         disabled ? 'opacity-60' : ''
-      }`}
+      } ${className}`}
     >
       {options.map((option) => {
         const active = option.id === value;
