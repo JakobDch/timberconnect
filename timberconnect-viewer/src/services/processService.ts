@@ -27,6 +27,7 @@ import {
   podBaseFromWebId,
   writeEpcisConsent,
 } from './accessControlService';
+import { isDemoRole } from '../config/roles';
 
 // ---------------------------------------------------------------------------
 // Vorgangstypen
@@ -111,6 +112,10 @@ export interface ProcessType {
    * das Dokument im Datenraum behauptet dann eine Urheberschaft, die es nicht
    * gibt. Wer mehrere Stufen abdeckt (integriertes Saegewerk), traegt das ueber
    * die Rollenliste hier ein, statt die Grenze im Formular aufzuweichen.
+   *
+   * Die Demo-Rolle (config/roles.ts) steht hier bewusst NICHT drin: sie geht
+   * in processTypesForRole an der Liste vorbei, damit sie auch kuenftige
+   * Vorgaenge automatisch sieht.
    */
   typicalRoles: string[];
 }
@@ -240,9 +245,14 @@ export const PROCESS_TYPES: ProcessType[] = [
  * Finanzamt, Forschung) bekommt bewusst eine leere Liste zurueck: sie
  * registriert keine Vorgaenge, sie liest sie. Die UI erklaert das, statt eine
  * Auswahl anzubieten, die fachlich keine ist.
+ *
+ * Die Demo-Rolle bekommt alles: Sie ist das Vorfuehrkonto, das die gesamte
+ * Kette in einem Pod durchspielt. Die Sperre schuetzt vor falscher
+ * Urheberschaft im Regelbetrieb -- fuer die Vorfuehrung ist genau diese
+ * Buendelung gewollt.
  */
 export function processTypesForRole(roleId: string | null | undefined): ProcessType[] {
-  if (!roleId) return PROCESS_TYPES;
+  if (!roleId || isDemoRole(roleId)) return PROCESS_TYPES;
   return PROCESS_TYPES.filter((t) => t.typicalRoles.includes(roleId));
 }
 

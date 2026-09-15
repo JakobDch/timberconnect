@@ -47,7 +47,8 @@ export type RoleGroupId =
   | 'planungBau'
   | 'betriebNutzung'
   | 'finanzenRecht'
-  | 'oeffentlichkeitWissenschaft';
+  | 'oeffentlichkeitWissenschaft'
+  | 'demo';
 
 export const ROLE_GROUPS: { id: RoleGroupId; label: string }[] = [
   { id: 'wertschoepfung', label: 'Wertschöpfungskette Holz' },
@@ -55,7 +56,23 @@ export const ROLE_GROUPS: { id: RoleGroupId; label: string }[] = [
   { id: 'betriebNutzung', label: 'Betrieb & Nutzung' },
   { id: 'finanzenRecht', label: 'Finanzen, Recht & Prüfung' },
   { id: 'oeffentlichkeitWissenschaft', label: 'Öffentlichkeit & Wissenschaft' },
+  { id: 'demo', label: 'Demo' },
 ];
+
+/**
+ * Die Demo-Rolle ist KEIN Akteur der Wertschoepfungskette. Sie existiert nur,
+ * damit ein einzelnes Vorfuehrkonto alle Vorgaenge (Pflanzung bis Planung)
+ * in einem Pod durchspielen und anschliessend in einem Zug wieder loeschen
+ * kann. Sie steht wie jede andere Rolle im Pod (profile/role.ttl), weil das
+ * Zugriffsmodell, das Foederationsregister und der EPCIS-Proxy einen
+ * aufloesbaren Rollen-IRI verlangen.
+ */
+export const DEMO_ROLE_ID = 'Demo';
+
+/** True fuer die Vorfuehr-Rolle, die alle Vorgaenge registrieren darf. */
+export function isDemoRole(roleId: string | null | undefined): boolean {
+  return roleId === DEMO_ROLE_ID;
+}
 
 /** A supply-chain role. `id` is the local name appended to the tc: namespace. */
 export interface RoleDef {
@@ -98,7 +115,9 @@ function role(
  *   Holzwerkstoffproduzent  -> Herstellungsvorgang
  *   FachplanerHolzbau       -> Ausfuehrungsplanung
  * Alle uebrigen registrieren keine eigenen Vorgaenge, brauchen aber eine
- * Rolle, um im Zugriffsmodell adressierbar zu sein.
+ * Rolle, um im Zugriffsmodell adressierbar zu sein. Einzige Ausnahme ist die
+ * Demo-Rolle am Ende der Liste (siehe DEMO_ROLE_ID), die alle Vorgaenge
+ * durchspielen darf.
  *
  * Der Fachplaner Holzbau ist die einzige Rolle, die KEIN Material erzeugt: er
  * beschreibt, wohin ein bereits gefertigtes Bauteil eingebaut wird. Seine
@@ -291,6 +310,13 @@ export const ROLES: RoleDef[] = [
     'Wissenschaft und Forschung',
     'oeffentlichkeitWissenschaft',
     'Forschung und Lehre, Auswertung anonymisierter Daten für wissenschaftliche Zwecke.',
+  ),
+  role(
+    DEMO_ROLE_ID,
+    'Demo',
+    'Demo',
+    'demo',
+    'Vorführkonto: darf alle Vorgänge von der Pflanzung bis zur Planung in einem Pod anlegen. Nicht für den Regelbetrieb.',
   ),
 ];
 

@@ -13,7 +13,7 @@ import {
   UserCog, Lock, Axe, Wrench, HardHat, ClipboardList, Hammer, Compass,
   Banknote, ShieldCheck, BadgeCheck, Search, Scale, Receipt, Boxes,
   Settings2, Users, Briefcase, Megaphone, ClipboardCheck, GraduationCap,
-  Home, X,
+  Home, X, FlaskConical,
 } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import {
@@ -53,6 +53,8 @@ const ROLE_ICONS: Record<string, typeof TreePine> = {
   Politik: Landmark,
   Befragung: ClipboardCheck,
   WissenschaftForschung: GraduationCap,
+  // Vorfuehrkonto, kein Akteur der Kette -- der Kolben markiert das Labor.
+  Demo: FlaskConical,
 };
 
 /** Umlaute normalisieren, damit "Sagewerk" auch "Sägewerk" findet. */

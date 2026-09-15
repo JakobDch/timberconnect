@@ -7,7 +7,12 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { forgetProcessesByContainer, getProcesses } from './processService';
+import {
+  forgetProcessesByContainer,
+  getProcesses,
+  processTypesForRole,
+  PROCESS_TYPES,
+} from './processService';
 
 const POD = 'https://solid-community-server.tmdt.info/epcisrepository/';
 const KEY = 'tc.processes';
@@ -68,5 +73,24 @@ describe('forgetProcessesByContainer', () => {
 
     expect(removed).toBe(2);
     expect(getProcesses().map((p) => p.containerUrl)).toEqual([urls[1]]);
+  });
+});
+
+describe('processTypesForRole', () => {
+  it('sperrt Vorgaenge, die die Rolle fachlich nicht umsetzt', () => {
+    const ids = processTypesForRole('Saegewerk').map((t) => t.id);
+    expect(ids).toEqual(['aufsaegung']);
+  });
+
+  it('gibt Rollen ohne eigenen Vorgang eine leere Liste', () => {
+    expect(processTypesForRole('Versicherer')).toEqual([]);
+  });
+
+  // Das Vorfuehrkonto spielt die ganze Kette in einem Pod durch. Es steht
+  // absichtlich in keiner typicalRoles-Liste, damit auch ein kuenftig
+  // ergaenzter Vorgang ohne Nacharbeit sichtbar wird.
+  it('laesst die Demo-Rolle an allen Vorgaengen vorbei', () => {
+    expect(processTypesForRole('Demo')).toEqual(PROCESS_TYPES);
+    for (const t of PROCESS_TYPES) expect(t.typicalRoles).not.toContain('Demo');
   });
 });

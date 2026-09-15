@@ -337,6 +337,34 @@ export async function setAllowedRoles(
 }
 
 /**
+ * Die eigene Rolle in die eigene Pod-Freigabe aufnehmen, falls sie fehlt.
+ *
+ * Weder der SPARQL-Vorfilter noch der EPCIS-Proxy kennen eine Eigentuemer-
+ * Ausnahme: Beide pruefen die Rolle des Aufrufers gegen die Freigabeliste des
+ * Pods (bzw. den daraus erzeugten Consent). Ein Konto, das seine eigene Rolle
+ * nicht freigegeben hat, bekommt seine eigenen EPCIS-Ereignisse deshalb
+ * herausgefiltert. Fuer das Demo-Konto, das alles selbst hochlaedt und
+ * gleich wieder ansehen will, ist das der Normalfall -- daher wird die Rolle
+ * beim Setzen automatisch eingetragen.
+ *
+ * Bewusst NICHT fuer alle Rollen: Pods ohne Freigabeliste gelten im Viewer
+ * als oeffentlich (Altbestand). Wuerde beim Nachtragen des Company Prefix
+ * ploetzlich eine Liste mit nur der eigenen Rolle entstehen, verloeren alle
+ * anderen Rollen den Zugriff auf diese Altdaten -- inklusive Nachstempeln
+ * der Container-ACLs.
+ */
+export async function ensureRoleAllowed(
+  webId: string,
+  roleIri: string,
+  resolveMembers: (roleIri: string) => Promise<string[]>,
+): Promise<void> {
+  const pod = podBaseFromWebId(webId);
+  const allowed = await getAllowedRoles(pod);
+  if (allowed.includes(roleIri)) return;
+  await setAllowedRoles(webId, [...allowed, roleIri], resolveMembers);
+}
+
+/**
  * Die ACL aller vorhandenen Container unter <pod>data/ neu setzen.
  *
  * Best effort: ein einzelner Container, dessen ACL sich nicht schreiben

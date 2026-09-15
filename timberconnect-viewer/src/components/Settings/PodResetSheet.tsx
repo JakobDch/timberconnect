@@ -12,6 +12,7 @@ import {
   BookMarked,
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
+import { isDemoRole } from '../../config/roles';
 import {
   planPodReset,
   executePodReset,
@@ -38,6 +39,10 @@ import { SheetPortal, useBodyScrollLock } from '../UI/SheetPortal';
  * Voreinstellung ist bewusst NICHTS ausgewaehlt. Bei einer Loeschaktion ist die
  * gefaehrliche Richtung das versehentliche Zuviel — wer alles will, hat den
  * Knopf "Alle auswaehlen" einen Klick entfernt.
+ *
+ * Ausnahme Demo-Rolle: Das Vorfuehrkonto raeumt nach jeder Vorfuehrung den
+ * ganzen Pod; dort ist "alles" der Normalfall und wird vorausgewaehlt. Die
+ * Bestaetigungsstufe bleibt.
  */
 
 interface PodResetSheetProps {
@@ -50,7 +55,8 @@ interface PodResetSheetProps {
 type Stage = 'loading' | 'preview' | 'confirm' | 'running' | 'done' | 'error';
 
 export function PodResetSheet({ isOpen, onClose, onResetComplete }: PodResetSheetProps) {
-  const { webId } = useAuth();
+  const { webId, role } = useAuth();
+  const demoAccount = isDemoRole(role?.id);
   const [stage, setStage] = useState<Stage>('loading');
   const [plan, setPlan] = useState<ResetPlan | null>(null);
   const [outcome, setOutcome] = useState<ResetOutcome | null>(null);
@@ -68,14 +74,14 @@ export function PodResetSheet({ isOpen, onClose, onResetComplete }: PodResetShee
     try {
       const result = await planPodReset(webId);
       setPlan(result);
-      // Nichts vorausgewaehlt: siehe Kopfkommentar.
-      setSelected([]);
+      // Nichts vorausgewaehlt (Demo-Konto: alles): siehe Kopfkommentar.
+      setSelected(demoAccount ? result.containers.map((c) => c.url) : []);
       setStage('preview');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Vorschau fehlgeschlagen');
       setStage('error');
     }
-  }, [webId]);
+  }, [webId, demoAccount]);
 
   useEffect(() => {
     if (isOpen && webId) {

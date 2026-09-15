@@ -24,13 +24,18 @@ import { LoginReturnScreen } from "../components/Auth/LoginReturnScreen";
 import { getSolidDataset, getThing, getStringNoLocale, getUrl } from "@inrupt/solid-client";
 import { FOAF, VCARD } from "@inrupt/vocab-common-rdf";
 import { setAuthFetch, setCurrentRole } from "../services/authFetch";
-import { getOwnSetup, setOwnRole } from "../services/accessControlService";
+import {
+  getOwnSetup,
+  setOwnRole,
+  ensureRoleAllowed,
+} from "../services/accessControlService";
 import { invalidateCompanyPrefixes } from "../services/companyPrefixService";
 import {
   ensureRegisteredInFederation,
   refreshOwnGroupDocs,
+  resolveRoleMembers,
 } from "../services/registryService";
-import { type RoleDef } from "../config/roles";
+import { isDemoRole, type RoleDef } from "../config/roles";
 import { saveProfile, type UserProfile } from "../services/profileService";
 
 interface AuthState {
@@ -197,6 +202,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         companyPrefix: effectivePrefix,
         needsRoleSetup: false,
       }));
+      // Das Demo-Konto gibt sich selbst frei, sonst filtert der EPCIS-Proxy
+      // die eigenen Ereignisse weg (Begruendung bei ensureRoleAllowed).
+      // Fire-and-forget: Scheitert das, bleibt die Rolle trotzdem gesetzt;
+      // die Freigabe laesst sich in den Zugriffseinstellungen nachholen.
+      if (isDemoRole(role.id)) {
+        ensureRoleAllowed(webId, role.iri, resolveRoleMembers).catch((err) => {
+          console.warn("Self-release of demo role failed:", err);
+        });
+      }
     },
     [authState.webId],
   );
