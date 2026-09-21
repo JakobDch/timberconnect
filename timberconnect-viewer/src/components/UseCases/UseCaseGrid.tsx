@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Verified,
   AlertCircle,
   Loader2,
@@ -15,36 +16,12 @@ import {
   type UseCaseDefinition,
 } from '../../config/useCases';
 import { UseCaseToggleCard } from './UseCaseToggleCard';
-import { SegmentedControl, type SegmentedOption } from '../UI/SegmentedControl';
+import { ChainScopePicker } from './ChainScopePicker';
 import { detectProductStage, productImageFor } from '../../services/productImageService';
 import { ProductImageSection } from '../Dashboard';
 import type { Product, SupplyChainStep } from '../../types';
 import type { ProductDataResult } from '../../services/sparqlService';
 import type { ChainScope } from '../../services/supplyChainWalk';
-
-/**
- * Die drei Stufen des Ketten-Umfangs.
- *
- * "Ganze Kette" steht bewusst zuerst und ist die Voreinstellung: erst wer
- * sieht, was alles vorhanden ist, kann sinnvoll einschraenken.
- */
-const SCOPE_OPTIONS: SegmentedOption<ChainScope>[] = [
-  {
-    id: 'full',
-    label: 'Ganze Kette',
-    hint: 'Alles, was mit diesem Bauteil verknüpft ist — auch was daraus entstanden ist.',
-  },
-  {
-    id: 'upstream',
-    label: 'Herkunft',
-    hint: 'Das Bauteil und seine Vorstufen — nichts, was zeitlich danach kommt.',
-  },
-  {
-    id: 'self',
-    label: 'Nur dieses Produkt',
-    hint: 'Ausschließlich das erfasste Bauteil. Am schnellsten und günstigsten.',
-  },
-];
 
 interface UseCaseGridProps {
   productId: string;
@@ -59,6 +36,11 @@ interface UseCaseGridProps {
   isLoading?: boolean;
   error?: string | null;
   warnings?: string[];
+  /**
+   * Zusammenfassung des EPCIS-Abrufs -- technische Auskunft, aufklappbar am
+   * Erfolgsbanner statt als Warnung (Rueckmeldung Praxispartner, 17.09.2026).
+   */
+  epcisSummary?: string | null;
   sourcePods?: string[];
   /** Geladener Ketten-Umfang -- bestimmt Datenmenge, Preis und Verfuegbarkeit. */
   scope?: ChainScope;
@@ -77,6 +59,7 @@ export function UseCaseGrid({
   isLoading = false,
   error = null,
   warnings = [],
+  epcisSummary = null,
   sourcePods = [],
   scope = 'full',
   onScopeChange,
@@ -96,6 +79,19 @@ export function UseCaseGrid({
   // wird deshalb nur, was aus der Kurzinfo hervorgeht; die genaue Datenlage
   // entscheidet sich beim Oeffnen, wo ohnehin nachgeladen wird.
   const nurKurzinfo = !!productData && !productData.loadedFully;
+
+  // Stufe des gescannten Objekts -- steuert die Abbildung des Umfangs und
+  // sperrt z.B. CO2-Bilanz und Rueckbaubarkeit fuer Vorprodukte.
+  const productStage = product ? detectProductStage(product, productData) : null;
+
+  // Bei der BSP-Platte gibt es keinen Umfang zu waehlen (ChainScopePicker):
+  // steht aus einem Altzustand noch etwas anderes, zurueck auf die Kette.
+  useEffect(() => {
+    if (productStage === 'clt-panel' && scope !== 'full') onScopeChange?.('full');
+  }, [productStage, scope, onScopeChange]);
+
+  // Technische Details des Erfolgsbanners -- zugeklappt, bis jemand fragt.
+  const [showDetails, setShowDetails] = useState(false);
 
   const facts: ProductDataFacts | null = product
     ? {
@@ -117,9 +113,22 @@ export function UseCaseGrid({
           nurKurzinfo || (productData?.deconstruction?.length ?? 0) > 0,
         hasCertificates: nurKurzinfo || (productData?.certificates?.length ?? 0) > 0,
         hasCertifications: (product.certifications?.length ?? 0) > 0,
-        // Stufe des gescannten Objekts -- sperrt z.B. die CO2-Bilanz fuer
-        // Vorprodukte (nur fuer die fertige BSP-Platte definiert).
-        productStage: detectProductStage(product, productData),
+        productStage,
+        // Was aus dem erfassten Bauteil entstanden ist -- daran haengt, ob
+        // CO2-Bilanz und Rueckbaubarkeit sich ueber die Platte der Kette
+        // oeffnen lassen.
+        //
+        // Dieselbe Vorsicht wie bei den Sparten oben: Nach dem Scan ist die
+        // Liste leer, WEIL der schlanke Abruf gar keine Kette verfolgt
+        // (fetchScanData laeuft mit 'self'), nicht weil keine Platte
+        // existiert. Sie hier als "keine Platte" zu lesen, sperrte beide
+        // Kacheln bis zum ersten Vollabruf -- der aber nur stattfindet, wenn
+        // man eine Kachel oeffnet. Bei "Gesamte Kette" gelten sie deshalb
+        // zunaechst als moeglich; entschieden wird es beim Oeffnen, wo die
+        // Kette ohnehin geladen wird.
+        downstreamStages:
+          productData?.downstreamStages ??
+          (nurKurzinfo && scope === 'full' ? ['clt-panel' as const] : []),
         scope,
       }
     : null;
@@ -183,7 +192,7 @@ export function UseCaseGrid({
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-8 border ${
+            className={`px-4 py-3 rounded-xl mb-8 border ${
               error
                 ? 'bg-red-500/10 border-red-500/30'
                 : isLoading
@@ -191,6 +200,7 @@ export function UseCaseGrid({
                 : 'bg-acid-400/10 border-acid-400/30'
             }`}
           >
+          <div className="flex items-center gap-3">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 error ? 'bg-red-500/15' : isLoading ? 'bg-sky-500/15' : 'bg-acid-400/15'
@@ -228,7 +238,27 @@ export function UseCaseGrid({
                 </>
               )}
             </div>
-            {!error && !isLoading && <Verified className="w-5 h-5 text-acid-300" />}
+            {/* EPCIS-Zusammenfassung: nicht mehr als eigener Hinweis
+                (verwirrte Anwender ohne technischen Hintergrund), sondern
+                als Detail hier -- sichtbar nur auf Wunsch. */}
+            {!error && !isLoading && epcisSummary && (
+              <button
+                type="button"
+                onClick={() => setShowDetails((v) => !v)}
+                aria-expanded={showDetails}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-acid-300/80 hover:text-acid-200 transition-colors flex-shrink-0"
+              >
+                Details
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${showDetails ? 'rotate-180' : ''}`}
+                />
+              </button>
+            )}
+            {!error && !isLoading && <Verified className="w-5 h-5 text-acid-300 flex-shrink-0" />}
+          </div>
+          {!error && !isLoading && epcisSummary && showDetails && (
+            <p className="mt-2 pl-11 text-xs text-night-300 font-mono">{epcisSummary}</p>
+          )}
           </motion.div>
 
           {/* Warnings Banner */}
@@ -325,31 +355,15 @@ export function UseCaseGrid({
               Umfang der Kette. Steht VOR der Auswahl eines Anwendungsfalls,
               weil er bestimmt, wie viele Datenpunkte in die Abrechnung gehen --
               erst im Kaufdialog waere die Entscheidung schon gefallen.
+              Mit Abbildung der Kette und eingekreister Scan-Stufe
+              (Vorschlag Praxispartner, 17.09.2026).
             */}
-            {/*
-              Layout: auf dem Handy untereinander, die Leiste ueber die volle
-              Breite (Beschriftungen duerfen umbrechen). Ab ``sm`` in einer
-              Zeile: Beschriftung und Leiste behalten ihre Inhaltsbreite
-              (``shrink-0``), nur der Hinweistext nimmt den Restplatz und
-              bricht um.
-            */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-              <div className="flex items-center gap-2 text-sm text-night-300 shrink-0">
-                <span className="font-semibold text-white">Umfang</span>
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin text-sky-400" />}
-              </div>
-              <SegmentedControl
-                ariaLabel="Umfang der Lieferkette"
-                options={SCOPE_OPTIONS}
-                value={scope}
-                onChange={(next) => onScopeChange?.(next)}
-                disabled={isLoading || !onScopeChange}
-                className="w-full sm:w-auto sm:shrink-0"
-              />
-              <p className="text-xs text-night-400 sm:flex-1 sm:min-w-0 sm:max-w-md">
-                {SCOPE_OPTIONS.find((o) => o.id === scope)?.hint}
-              </p>
-            </div>
+            <ChainScopePicker
+              stage={productStage}
+              scope={scope}
+              onChange={onScopeChange}
+              loading={isLoading}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {USE_CASES.map((useCase, index) => (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -10,22 +10,36 @@ import {
   RotateCcw,
   Info,
   ExternalLink,
+  BookOpen,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { BrandWordmark } from '../Brand/TreeRingLogo';
 import { SheetPortal, useBodyScrollLock } from '../UI/SheetPortal';
 import { UseCaseIcon } from '../UseCases';
 import { USE_CASES, isAvailable } from '../../config/useCases';
+import { GUIDE_TOPICS, type GuideTopicId } from '../../config/guide';
 import logoNrwMunv from '/logo-nrw-munv.png';
 import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
 
 /**
  * Seitenfenstermenü (PDF-Vorgabe "Stand 1507", S. 2–3):
- * Drawer von links mit Navigation — Anwendungsfälle (aufklappbar),
- * Holzbauteil identifizieren, Dateien durchsuchen, Mehr erfahren,
- * Praxispartner — plus Förderlogos unten.
+ * Drawer von links mit Navigation plus Förderlogos unten.
  *
- * Reihenfolge nach Vorgabe Anni (26.08.2026): Praxispartner steht als
- * letzter Punkt, davor "Mehr erfahren" mit dem Link zum Forschungsprojekt.
+ * Aufbau seit 17.09.2026 (Rueckmeldung Praxispartner, "Feedback
+ * App_Allgemein", Folie 3):
+ *
+ *   NAVIGATION   Anwendungsfälle (aufklappbar)
+ *                Holzbauteil identifizieren
+ *                Anleitung (aufklappbar: Registrierung, Rechtemanagement,
+ *                           Daten teilen, Daten abrufen)
+ *                Mehr erfahren  -> DEUTSCHE Projektseite (vorher englisch)
+ *                Praxispartner
+ *   VERWALTUNG   Dateien durchsuchen  (von der Navigation hierher verschoben)
+ *                Vorgänge löschen     (nur mit Anmeldung)
+ *
+ * "Verwaltung" ist damit immer sichtbar -- vorher erschien der Abschnitt
+ * nur angemeldet, weil er allein das Loeschen enthielt. Das Durchsuchen der
+ * Dateien hat sein eigenes Berechtigungs-Gate und braucht hier keins.
  */
 
 interface SideMenuProps {
@@ -42,7 +56,48 @@ interface SideMenuProps {
   /** Waehlt einen Anwendungsfall. Fehlt noch ein Produkt, fuehrt App.tsx
       zuerst zum Scan und springt danach automatisch hierhin. */
   onUseCaseClick: (useCaseId: string) => void;
+  /** Oeffnet ein Thema der Anleitung. */
+  onGuideClick: (topicId: GuideTopicId) => void;
 }
+
+/** Ein Hauptpunkt: Icon-Kachel, Titel, Untertitel, optional Zubehoer rechts. */
+function MenuEntry({
+  icon: Icon,
+  title,
+  subtitle,
+  trailing,
+  tone = 'default',
+}: {
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+  trailing?: ReactNode;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <>
+      <span
+        className={`w-11 h-11 rounded-xl border flex items-center justify-center flex-shrink-0 ${
+          tone === 'danger'
+            ? 'bg-red-500/10 border-red-500/25'
+            : 'bg-white/5 border-white/10'
+        }`}
+      >
+        <Icon
+          className={`w-5 h-5 ${tone === 'danger' ? 'text-red-400' : 'text-night-200'}`}
+        />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block font-semibold text-white text-sm">{title}</span>
+        <span className="block text-xs text-night-400">{subtitle}</span>
+      </span>
+      {trailing}
+    </>
+  );
+}
+
+const ENTRY_CLASS =
+  'w-full flex items-center gap-3.5 px-2 py-2.5 mt-1 rounded-xl hover:bg-white/5 transition-colors text-left';
 
 export function SideMenu({
   isOpen,
@@ -53,8 +108,10 @@ export function SideMenu({
   onResetClick,
   isLoggedIn,
   onUseCaseClick,
+  onGuideClick,
 }: SideMenuProps) {
   const [useCasesOpen, setUseCasesOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useBodyScrollLock(isOpen);
 
@@ -113,24 +170,20 @@ export function SideMenu({
               {/* Anwendungsfälle (aufklappbar) */}
               <button
                 onClick={() => setUseCasesOpen((v) => !v)}
-                className="w-full flex items-center gap-3.5 px-2 py-2.5 rounded-xl hover:bg-white/5 transition-colors text-left"
+                className={`${ENTRY_CLASS} mt-0`}
                 aria-expanded={useCasesOpen}
               >
-                <span className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                  <Layers className="w-5 h-5 text-night-200" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-white text-sm">
-                    Anwendungsfälle
-                  </span>
-                  <span className="block text-xs text-night-400">
-                    Module &amp; Funktionen
-                  </span>
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-night-400 transition-transform ${
-                    useCasesOpen ? 'rotate-180' : ''
-                  }`}
+                <MenuEntry
+                  icon={Layers}
+                  title="Anwendungsfälle"
+                  subtitle="Module & Funktionen"
+                  trailing={
+                    <ChevronDown
+                      className={`w-4 h-4 text-night-400 transition-transform ${
+                        useCasesOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  }
                 />
               </button>
 
@@ -179,111 +232,124 @@ export function SideMenu({
               </AnimatePresence>
 
               {/* Holzbauteil identifizieren */}
-              <button
-                onClick={() => navigate(onScanClick)}
-                className="w-full flex items-center gap-3.5 px-2 py-2.5 mt-1 rounded-xl hover:bg-white/5 transition-colors text-left"
-              >
-                <span className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                  <ScanSearch className="w-5 h-5 text-night-200" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-white text-sm">
-                    Holzbauteil identifizieren
-                  </span>
-                  <span className="block text-xs text-night-400">
-                    Produkt scannen und zuordnen
-                  </span>
-                </span>
+              <button onClick={() => navigate(onScanClick)} className={ENTRY_CLASS}>
+                <MenuEntry
+                  icon={ScanSearch}
+                  title="Holzbauteil identifizieren"
+                  subtitle="Produkt scannen und zuordnen"
+                />
               </button>
 
-              {/* Dateien durchsuchen (von der Startseite hierher verlagert) */}
+              {/* Anleitung (aufklappbar) -- Vorgabe Praxispartner, Folie 3 */}
               <button
-                onClick={() => navigate(onFilesClick)}
-                className="w-full flex items-center gap-3.5 px-2 py-2.5 mt-1 rounded-xl hover:bg-white/5 transition-colors text-left"
+                onClick={() => setGuideOpen((v) => !v)}
+                className={ENTRY_CLASS}
+                aria-expanded={guideOpen}
               >
-                <span className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                  <FolderSearch className="w-5 h-5 text-night-200" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-white text-sm">
-                    Dateien durchsuchen
-                  </span>
-                  <span className="block text-xs text-night-400">
-                    Originaldateien &amp; Berechtigungen
-                  </span>
-                </span>
+                <MenuEntry
+                  icon={BookOpen}
+                  title="Anleitung"
+                  subtitle="Schritt für Schritt durch die Anwendung"
+                  trailing={
+                    <ChevronDown
+                      className={`w-4 h-4 text-night-400 transition-transform ${
+                        guideOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  }
+                />
               </button>
+
+              <AnimatePresence initial={false}>
+                {guideOpen && (
+                  <motion.ul
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden pl-6 pr-1"
+                  >
+                    {GUIDE_TOPICS.map((topic) => (
+                      <li key={topic.id}>
+                        <button
+                          onClick={() => navigate(() => onGuideClick(topic.id))}
+                          className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-colors hover:bg-white/5 text-night-100"
+                        >
+                          <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                            <topic.icon className="w-4 h-4 text-night-200" />
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm leading-snug">{topic.title}</span>
+                            <span className="block text-[11px] text-night-400 leading-snug">
+                              {topic.summary}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
 
               {/* Mehr erfahren — von der Startseite hierher verlagert
-                  (Vorgabe Anni, 26.08.2026). Fuehrt auf die Projektseite des
-                  Lehrstuhls DPBB (Uni Wuppertal) und damit aus der Anwendung
-                  heraus; deshalb steht es im Menue und nicht mehr neben den
-                  beiden Haupthandlungen der Startseite. Als <a> statt
-                  <button>, damit Aufziehen in neuem Tab moeglich bleibt. */}
+                  (Vorgabe Anni, 26.08.2026). Fuehrt auf die DEUTSCHE
+                  Projektseite des Lehrstuhls DPBB (Uni Wuppertal) -- die
+                  englische stand hier bis 17.09.2026 (Rueckmeldung
+                  Praxispartner, Folie 3). Als <a> statt <button>, damit
+                  Aufziehen in neuem Tab moeglich bleibt. */}
               <a
-                href="https://dpbb.uni-wuppertal.de/en/research/current-research-projects/timberconnect/"
+                href="https://dpbb.uni-wuppertal.de/de/forschung/aktuelle-forschungsprojekte/timberconnect/"
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={onClose}
-                className="w-full flex items-center gap-3.5 px-2 py-2.5 mt-1 rounded-xl hover:bg-white/5 transition-colors text-left"
+                className={ENTRY_CLASS}
               >
-                <span className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                  <Info className="w-5 h-5 text-night-200" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-white text-sm">
-                    Mehr erfahren
-                  </span>
-                  <span className="block text-xs text-night-400">
-                    Informationen zum Forschungsprojekt
-                  </span>
-                </span>
-                <ExternalLink className="w-4 h-4 text-night-400 flex-shrink-0" />
+                <MenuEntry
+                  icon={Info}
+                  title="Mehr erfahren"
+                  subtitle="Informationen zum Forschungsprojekt"
+                  trailing={<ExternalLink className="w-4 h-4 text-night-400 flex-shrink-0" />}
+                />
               </a>
 
               {/* Praxispartner — letzter Navigationspunkt (Vorgabe Anni) */}
-              <button
-                onClick={() => navigate(onPartnersClick)}
-                className="w-full flex items-center gap-3.5 px-2 py-2.5 mt-1 rounded-xl hover:bg-white/5 transition-colors text-left"
-              >
-                <span className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                  <Handshake className="w-5 h-5 text-night-200" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-white text-sm">
-                    Praxispartner
-                  </span>
-                  <span className="block text-xs text-night-400">
-                    Netzwerk &amp; Kooperationen
-                  </span>
-                </span>
+              <button onClick={() => navigate(onPartnersClick)} className={ENTRY_CLASS}>
+                <MenuEntry
+                  icon={Handshake}
+                  title="Praxispartner"
+                  subtitle="Netzwerk & Kooperationen"
+                />
               </button>
 
-              {/* Uploads zuruecksetzen — nur mit Session, denn zurueckgesetzt
-                  wird ausschliesslich der eigene Pod. Abgesetzt und in
-                  Warnfarbe, damit es sich nicht wie normale Navigation anfuehlt. */}
+              {/* Verwaltung: Dateien durchsuchen (immer), Vorgaenge loeschen
+                  (nur mit Session, denn zurueckgesetzt wird ausschliesslich
+                  der eigene Pod). Das Loeschen ist abgesetzt und in
+                  Warnfarbe, damit es sich nicht wie Navigation anfuehlt. */}
+              <div className="mt-5 mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-night-400">
+                Verwaltung
+              </div>
+              <button
+                onClick={() => navigate(onFilesClick)}
+                className={`${ENTRY_CLASS} mt-0`}
+              >
+                <MenuEntry
+                  icon={FolderSearch}
+                  title="Dateien durchsuchen"
+                  subtitle="Originaldateien & Berechtigungen"
+                />
+              </button>
               {isLoggedIn && (
-                <>
-                  <div className="mt-5 mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-night-400">
-                    Verwaltung
-                  </div>
-                  <button
-                    onClick={() => navigate(onResetClick)}
-                    className="w-full flex items-center gap-3.5 px-2 py-2.5 rounded-xl hover:bg-red-500/10 transition-colors text-left group"
-                  >
-                    <span className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center flex-shrink-0">
-                      <RotateCcw className="w-5 h-5 text-red-400" />
-                    </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block font-semibold text-white text-sm">
-                        Vorgänge löschen
-                      </span>
-                      <span className="block text-xs text-night-400">
-                        Einzeln wählbar oder alle
-                      </span>
-                    </span>
-                  </button>
-                </>
+                <button
+                  onClick={() => navigate(onResetClick)}
+                  className="w-full flex items-center gap-3.5 px-2 py-2.5 mt-1 rounded-xl hover:bg-red-500/10 transition-colors text-left group"
+                >
+                  <MenuEntry
+                    icon={RotateCcw}
+                    title="Vorgänge löschen"
+                    subtitle="Einzeln wählbar oder alle"
+                    tone="danger"
+                  />
+                </button>
               )}
             </nav>
 

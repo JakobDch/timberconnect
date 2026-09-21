@@ -240,8 +240,12 @@ export function mapToSupplyChain(
     });
   }
 
-  // Sawmill data (needed for transport and sawmill steps)
-  const sawmill = sawmillData[0];
+  // Sawmill data (needed for transport and sawmill steps).
+  // Die Saegewerks-Abfrage ist eine UNION aus Rundholz-Auftrag,
+  // Leistungserklaerung und Maschinendaten; welche Zeile zuerst kommt, ist
+  // nicht festgelegt. Die Zeile MIT Firma ist die, die die Station benennt --
+  // sonst hiess das Saegewerk nur "Saegewerk" (Befund 18.09.2026).
+  const sawmill = sawmillData.find((row) => !!getValue(row, 'company')) ?? sawmillData[0];
   const deliveryDate = getValue(sawmill, 'deliveryDate');
 
   // Add transport step between forest and sawmill
@@ -286,8 +290,12 @@ export function mapToSupplyChain(
     });
   }
 
-  // BSP-Werk (manufacturer) step with extended details
+  // BSP-Werk (manufacturer) step with extended details.
+  // Produktfelder stehen am tc:Panel, der Firmenname an der
+  // Leistungserklaerung -- zwei Zeilen derselben UNION. Den Namen deshalb
+  // aus der Zeile nehmen, die ihn traegt.
   const bspWerk = bspWerkData[0];
+  const bspCompany = getValue(bspWerkData.find((row) => !!getValue(row, 'company')), 'company');
   if (bspWerk) {
     const anzahlSchichten = getValue(bspWerk, 'anzahlSchichten');
     const brandschutzklasse = getValue(bspWerk, 'brandschutzklasse');
@@ -302,7 +310,7 @@ export function mapToSupplyChain(
     const produktionsstandort = getValue(bspWerk, 'produktionsstandort');
 
     const bspDetails = [
-      { label: 'Unternehmen', value: getValue(bspWerk, 'company') || 'Keine Daten verfügbar' },
+      { label: 'Unternehmen', value: bspCompany || 'Keine Daten verfügbar' },
       { label: 'Auftragsnr.', value: getValue(bspWerk, 'orderId') || 'Keine Daten verfügbar' },
       { label: 'Status', value: getValue(bspWerk, 'status') || 'Keine Daten verfügbar' },
       { label: 'Konstruktionsnr.', value: getValue(bspWerk, 'konstruktionsnummer') || 'Keine Daten verfügbar' },
@@ -322,7 +330,7 @@ export function mapToSupplyChain(
     steps.push({
       id: 4,
       stage: 'manufacturer',
-      company: getValue(bspWerk, 'company') || 'BSP-Werk',
+      company: bspCompany || 'BSP-Werk',
       date: parseDate(getValue(bspWerk, 'productionDate')),
       location: produktionsstandort || '',
       description: getValue(bspWerk, 'beschreibung') || 'BSP-Plattenproduktion',

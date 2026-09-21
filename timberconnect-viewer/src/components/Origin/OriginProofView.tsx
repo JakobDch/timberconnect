@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowLeft,
-  Building2,
-  ChevronDown,
-  Factory,
-  Package,
-  TreePine,
-} from 'lucide-react';
+import { ArrowLeft, ChevronDown, Package } from 'lucide-react';
 import type { Product, SupplyChainStep } from '../../types';
 import type { ProductDataResult } from '../../services/sparqlService';
 import {
@@ -18,6 +11,7 @@ import {
 import { geocodeActorLocation } from '../../services/geocodingService';
 import { ActorLocationMap, ACTOR_COLORS, ACTOR_LABELS, type ActorMarker } from '../Map';
 import { DocumentDownloadSection } from '../Documents';
+import { ActorStationList } from './ActorStationList';
 
 /**
  * Anwendungsfall "Herkunftsnachweis" (Awf-Vorgabe, Visualisierung S. 1).
@@ -44,12 +38,6 @@ interface OriginProofViewProps {
   /** Fuehrt zum Scan -- Ausweg aus dem Leerzustand. */
   onScanClick?: () => void;
 }
-
-const ACTOR_ICONS: Record<ActorKind, typeof TreePine> = {
-  forest: TreePine,
-  sawmill: Factory,
-  manufacturer: Building2,
-};
 
 const NO_DATA = 'Keine Daten verfügbar';
 
@@ -294,70 +282,17 @@ export function OriginProofView({
               )}
             </motion.section>
 
-            {/* Akteure (I-16..I-26) */}
+            {/* Akteure (I-16..I-26) -- dieselbe Liste wie im Bauproduktpass */}
             <motion.section
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
             >
-              {resolvedActors.length === 0 ? (
-                <div className="bg-night-800 border border-white/5 rounded-2xl p-5">
-                  <p className="text-sm text-night-400 italic">
-                    Keine Akteursdaten in den verfügbaren Quellen gefunden.
-                  </p>
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {resolvedActors.map((actor) => {
-                    const Icon = ACTOR_ICONS[actor.kind];
-                    const color = ACTOR_COLORS[actor.kind];
-                    const selected = selectedActorId === actor.id;
-                    return (
-                      <li key={actor.id}>
-                        <button
-                          onClick={() =>
-                            setSelectedActorId((prev) => (prev === actor.id ? null : actor.id))
-                          }
-                          className={`w-full text-left flex items-center gap-3 bg-night-800 border rounded-2xl p-4 transition-colors ${
-                            selected
-                              ? 'border-transparent ring-1'
-                              : 'border-white/5 hover:border-white/15'
-                          }`}
-                          style={selected ? { boxShadow: `0 0 0 1px ${color}` } : undefined}
-                        >
-                          <span
-                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: `${color}26`, border: `1px solid ${color}59` }}
-                          >
-                            <Icon className="w-5 h-5" style={{ color }} />
-                          </span>
-
-                          {/* Awf-Vorgabe: Name UND Anschrift jedes Akteurs
-                              (I-16..I-28). Die Belegnummer ist Zusatz und
-                              darf die Anschrift nicht verdraengen. */}
-                          <span className="flex-1 min-w-0">
-                            <span className="block font-semibold text-white text-sm truncate">
-                              {actor.name}
-                            </span>
-                            <span className="block text-[11px] text-night-300 truncate">
-                              {actor.address ?? ACTOR_LABELS[actor.kind]}
-                            </span>
-                            {actor.reference && (
-                              <span className="block text-[11px] font-mono text-night-400 truncate">
-                                {actor.reference}
-                              </span>
-                            )}
-                          </span>
-
-                          <span className="text-xs text-night-300 flex-shrink-0 tabular-nums">
-                            {actor.transportDate ?? '–'}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+              <ActorStationList
+                actors={resolvedActors}
+                selectedId={selectedActorId}
+                onSelect={(id) => setSelectedActorId((prev) => (prev === id ? null : id))}
+              />
             </motion.section>
 
             {/* Downloadbereich (geteilt, einklappbar) */}

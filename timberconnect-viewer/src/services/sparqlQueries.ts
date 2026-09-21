@@ -374,7 +374,15 @@ ${identGuard(epcs)}
     # Zweitquelle: die Saegewerks-Leistungserklaerung. Sie traegt den Ident
     # nicht selbst, sondern am Unterknoten tc:SawingProcess -- dafuer gibt es
     # dopIdentGuard.
+    #
+    # tc:hasSawingProcess ist hier PFLICHT, nicht nur Anker der Schranke:
+    # beide Leistungserklaerungen tragen dieselbe Klasse, und die BSP-Variante
+    # haengt ihren Ident direkt ans Dokument -- damit bestand sie die Schranke
+    # ebenfalls, und der Holzwerkstoffproduzent erschien als "Saegewerk"
+    # (Anmerkung des Projektpartners, 17.09.2026). Nur die Saegewerks-Vorlage
+    # hat einen Saegeprozess (pdf_leistungserklaerung.rml.ttl).
     ?dop a tc:DeclarationOfPerformance .
+    ?dop tc:hasSawingProcess ?sawingProcess .
     ?dop tc:manufacturer ?company .
     OPTIONAL { ?dop tc:manufacturerAddress ?street }
 ${dopIdentGuard(epcs)}
@@ -449,6 +457,15 @@ ${identGuard(epcs)}
     ?dop tc:manufacturer ?company .
     OPTIONAL { ?dop tc:epc ?dopEpc }
     OPTIONAL { ?dop tc:manufacturerAddress ?street }
+    # Das Spiegelbild des Leaks aus createSawmillQuery: die SAEGEWERKS-
+    # Leistungserklaerung traegt dieselbe Klasse, aber keinen tc:epc am
+    # Dokument (ihr Ident haengt am tc:SawingProcess). ?dopEpc blieb bei ihr
+    # ungebunden, und identGuard laesst Ungebundenes passieren -- so stand
+    # das Saegewerk als Holzwerkstoffproduzent in der Kette, sobald die echte
+    # BSP-Leistungserklaerung fehlte (Umfang "Vorangegangene Kette" fuer eine
+    # Lamelle, Befund 18.09.2026). Nur die Saegewerks-Vorlage hat einen
+    # Saegeprozess; wer einen hat, ist hier falsch.
+    FILTER NOT EXISTS { ?dop tc:hasSawingProcess ?anySawing }
 ${identGuard(epcs, '?dopEpc')}
   }
 }

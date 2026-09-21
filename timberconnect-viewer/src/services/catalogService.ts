@@ -26,6 +26,21 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // Cache instance
 let cache: CatalogCache | null = null;
 let catalogProducts: ProductConfig[] = [];
+/**
+ * Laufender Abruf, den alle gleichzeitigen Aufrufer teilen.
+ *
+ * Ohne diesen Schutz lief der Abruf zweimal an (App-Start und Scan-Screen
+ * bzw. Anmeldung), und der zweite Aufruf traf den Cache, sobald der erste
+ * die Datensatzliste hatte -- aber BEVOR er die langsame Gruppierung in
+ * Produkte (ein Dateiabruf je Datensatz, ~30 s) abgeschlossen hatte. Er
+ * meldete dann "0 Produkte", solidPods hielt den Katalog fuer initialisiert,
+ * und ein Scan in dieser Zeit fand keine Quellen: "Keine verknuepften
+ * Pod-Daten erreichbar". Eine halbe Minute spaeter ging dieselbe Anfrage
+ * durch (Befund 18.09.2026).
+ */
+let inFlight: Promise<CatalogDataset[]> | null = null;
+/** Zaehlt Invalidierungen: ein alter Lauf darf keinen neueren Stand ueberschreiben. */
+let generation = 0;
 
 // ============================================================================
 // FEDERATION: Pod Discovery
@@ -362,39 +377,59 @@ async function fetchFederatedDatasets(): Promise<CatalogDataset[]> {
  * Fetch all datasets from Federation Registry (Live Solid Pods)
  */
 export async function fetchCatalogDatasets(): Promise<CatalogDataset[]> {
+  // Laeuft schon ein Abruf, haengt sich der Aufrufer dran -- VOR der
+  // Cache-Pruefung, denn der Cache ist erst vollstaendig, wenn auch die
+  // Produkte gruppiert sind (siehe Kommentar an ``inFlight``).
+  if (inFlight) {
+    console.log('[CatalogService] Joining in-flight fetch');
+    return inFlight;
+  }
+
   // Check cache
   if (cache && Date.now() - cache.lastFetched < CACHE_TTL) {
     console.log('[CatalogService] Using cached datasets');
     return cache.datasets;
   }
 
-  let datasets: CatalogDataset[] = [];
+  const myGeneration = generation;
+  const run: Promise<CatalogDataset[]> = (async () => {
+    let datasets: CatalogDataset[] = [];
 
-  // Fetch from Federation
-  try {
-    datasets = await fetchFederatedDatasets();
-  } catch (error) {
-    console.error('[CatalogService] Federation fetch failed:', error);
-    throw error;
-  }
+    // Fetch from Federation
+    try {
+      datasets = await fetchFederatedDatasets();
+    } catch (error) {
+      console.error('[CatalogService] Federation fetch failed:', error);
+      throw error;
+    }
 
-  console.log('[CatalogService] Total datasets fetched:', datasets.length);
+    console.log('[CatalogService] Total datasets fetched:', datasets.length);
 
-  // Filter only public datasets with access URLs
-  const validDatasets = datasets.filter((d) => d.is_public && d.access_url_dataset);
-  console.log('[CatalogService] Valid datasets with access URLs:', validDatasets.length);
+    // Filter only public datasets with access URLs
+    const validDatasets = datasets.filter((d) => d.is_public && d.access_url_dataset);
+    console.log('[CatalogService] Valid datasets with access URLs:', validDatasets.length);
 
-  // Update cache
-  cache = {
-    datasets: validDatasets,
-    lastFetched: Date.now(),
-  };
+    // Group into products (async because TC-ID extraction may need to load data files)
+    const products = await groupDatasetsToProducts(validDatasets);
 
-  // Group into products (async because TC-ID extraction may need to load data files)
-  catalogProducts = await groupDatasetsToProducts(validDatasets);
-  console.log('[CatalogService] Grouped into', catalogProducts.length, 'products');
+    // Erst jetzt ist der Stand vollstaendig -- und nur, wenn er inzwischen
+    // nicht invalidiert wurde (Reset, Refresh).
+    if (myGeneration === generation) {
+      cache = { datasets: validDatasets, lastFetched: Date.now() };
+      catalogProducts = products;
+      console.log('[CatalogService] Grouped into', catalogProducts.length, 'products');
+    } else {
+      console.log('[CatalogService] Discarding stale fetch (cache was invalidated)');
+    }
 
-  return validDatasets;
+    return validDatasets;
+  })().finally(() => {
+    // Nur den eigenen Lauf austragen -- nach invalidateCache laeuft evtl. ein neuer.
+    if (inFlight === run) inFlight = null;
+  });
+  inFlight = run;
+
+  return run;
 }
 
 // ============================================================================
@@ -489,6 +524,16 @@ export async function groupDatasetsToProducts(
   }
 
   return Array.from(productMap.entries())
+    // Nur Bauteile mit einem echten Ident. Der Katalog ist ein GETEILTES
+    // Register: dieselbe Foederation traegt auch Datensaetze anderer
+    // Projekte (Reparaturquoten, Haushaltsabfaelle, Carsharing ...). Deren
+    // Dateien enthalten weder TC-Id noch EPC, also fiel ``extractTraceId``
+    // auf ``deriveGroupingId`` zurueck und machte die Katalog-UUID zur
+    // "Produkt-ID" -- und genau diese Fremddaten standen mit ihren langen
+    // Titeln unter "Verfuegbare Produkte" (Rueckmeldung Praxispartner,
+    // "Feedback App_Allgemein", 17.09.2026). Ein solcher Eintrag ist
+    // ohnehin nie scanbar: kein Etikett traegt eine Katalog-UUID.
+    .filter(([traceId]) => isTimberProductId(traceId))
     .map(([traceId, data]) => {
       const typedSources = [...data.forst, ...data.saegewerk, ...data.bspwerk];
       const allSources = [...typedSources, ...data.genericSources];
@@ -502,6 +547,17 @@ export async function groupDatasetsToProducts(
       };
     })
     .filter((p) => p.sources.length > 0);
+}
+
+/**
+ * Ist das eine ID, die ein Holzbauteil tragen kann?
+ *
+ * Zwei Id-Welten (siehe extractIdFromData): der Alt-Trace ``TC-YYYY-NNN`` der
+ * Demo-Daten und die GS1-EPCs (``urn:epc:id:sgtin`` / ``lgtin``) der
+ * hochgeladenen Vorgaenge. Alles andere ist eine abgeleitete Katalog-UUID.
+ */
+export function isTimberProductId(id: string): boolean {
+  return /^TC-\d{4}-\d{3}$/i.test(id) || /^urn:epc:(id|class):[sl]gtin:/i.test(id);
 }
 
 /**
@@ -573,12 +629,41 @@ async function extractIdFromData(downloadUrl: string): Promise<string | null> {
         //    haengt das Ergebnis an der Zeilenreihenfolge der Datei.
         //    Deshalb zuerst der explizite Bauteilbezug tc:epc; erst wenn
         //    er fehlt, der erste EPC ueberhaupt.
+        //
+        //    BEIDE Id-Welten, nicht nur ``urn:epc:id:``. Ein Pflanzvorgang
+        //    beschreibt Vermehrungsgut und traegt deshalb einen LOS-Ident
+        //    (``urn:epc:class:lgtin:...Pflanzung01``). Der frueher hier
+        //    stehende Regex suchte nur ``urn:epc:id:``, also lieferte
+        //    ``extractIdFromData`` fuer jedes Stammzertifikat ``null`` --
+        //    und ``groupDatasetsToProducts`` verwarf es per
+        //    ``filter(d => d.traceId !== null)`` samt seiner Quelle. Die
+        //    Pflanzung war damit zwar im Pod und in EPCIS vorhanden, ueber
+        //    den Katalog aber nicht mehr aufloesbar: Der Scan fiel auf
+        //    ``buildPotentialSources`` zurueck, das sechs URLs unter dem
+        //    zentralen Pod raet -- waehrend die Datei im Pod des Erzeugers
+        //    liegt. Ergebnis: "nicht gefunden" fuer eine ID, die es gibt.
+        //
+        //    Die Seriennummer darf nicht auf Ziffern eingeschraenkt werden:
+        //    Losnummern sind alphanumerisch ("Pflanzung01"). ``isTimberProductId``
+        //    laesst ``class:lgtin`` ohnehin laengst zu -- der Extraktor war
+        //    die einzige Stelle, die enger war als der Rest der Kette.
+        const EPC_IN_TTL = 'urn:epc:(?:id|class):[sl]gtin:[0-9]+\\.[0-9*]+\\.[A-Za-z0-9_-]+';
         const tagged = ttl.match(
-          /tc:epc\s+<(urn:epc:id:[sl]gtin:[0-9.*]+)>/i,
+          new RegExp(`tc:epc\\s+<(${EPC_IN_TTL})>`, 'i'),
         );
-        const anyEpc = ttl.match(/urn:epc:id:[sl]gtin:[0-9.*]+/i);
+        const anyEpc = ttl.match(new RegExp(EPC_IN_TTL, 'i'));
+        // GROSS-/KLEINSCHREIBUNG BLEIBT. Hier stand ``.toLowerCase()``, und
+        // solange Seriennummern reine Ziffern waren, fiel das nicht auf.
+        // Eine Losnummer ist alphanumerisch: aus "Pflanzung01" wurde
+        // "pflanzung01". Der Katalog findet damit zwar noch (er vergleicht
+        // beidseitig klein, s.u.), die Abfrage aber nicht mehr -- SPARQL
+        // vergleicht IRIs ZEICHENGENAU (``FILTER(?e IN (<...>))``), und
+        // ``fetchProductDataByEpc`` reicht genau diese Id als IRI weiter.
+        // Das Ergebnis waere der stille Fall: Quellen gefunden, Abfrage
+        // laeuft, null Treffer -- also wieder "keine Daten", nur eine Stufe
+        // spaeter.
         const epc = tagged?.[1] ?? anyEpc?.[0];
-        if (epc) result = epc.toLowerCase();
+        if (epc) result = epc;
       }
     }
   } catch (error) {
@@ -763,6 +848,10 @@ export function getCachedDatasets(): CatalogDataset[] {
 export function invalidateCache(): void {
   cache = null;
   catalogProducts = [];
+  // Ein laufender Abruf gehoert zum alten Stand: sein Ergebnis wird
+  // verworfen (generation), und der naechste Aufruf startet neu.
+  generation += 1;
+  inFlight = null;
   console.log('[CatalogService] Cache invalidated');
 }
 

@@ -21,6 +21,7 @@ import {
 } from '../../services/recentActivity';
 import { ScanInputModal } from './ScanInputModal';
 import { LocationScanSheet } from './LocationScanSheet';
+import { DataspacePanel } from '../Dataspace';
 import type { ScanSource } from '../../services/identifiers';
 import type { Product } from '../../types';
 
@@ -164,10 +165,14 @@ export function ScanView({
                 Holzbauteil
                 <span className="block text-acid-400">identifizieren</span>
               </h1>
+              {/* Wortlaut der Praxispartner ("Feedback App_Allgemein",
+                  17.09.2026, Folie 4): "Baum" statt "Pflanzung", weil das
+                  fuer Anwender das greifbare Ding ist -- technisch bleibt
+                  es die ueber ihre Flaeche identifizierte Pflanzung. */}
               <p className="text-night-300 mt-3 max-w-sm leading-relaxed">
                 Dotcode, Barcode oder RFID-Tag scannen oder die ID händisch
-                eingeben. Eine Pflanzung hat keinen Code — sie lässt sich über
-                ihren Standort finden.
+                eingeben. Ein Baum hat keinen physischen Kennzeichnungsträger
+                — er lässt sich mittels Geokoordinate bzw. dem Standort finden.
               </p>
 
               {targetUseCaseTitle && (
@@ -252,10 +257,10 @@ export function ScanView({
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-white">
-                    Pflanzung über Standort finden
+                    Baum finden
                   </span>
                   <span className="block text-xs text-night-400 mt-0.5">
-                    GPS oder Ort auf der Karte
+                    GPS-Koordinaten oder Fläche auf Karte
                   </span>
                 </span>
               </button>
@@ -289,6 +294,11 @@ export function ScanView({
             transition={{ delay: 0.3, duration: 0.4 }}
             className="mt-10 lg:mt-0 space-y-8"
           >
+            {/* Der Datenraum als Bild. Steht VOR dem Verlauf, weil er
+                waehrend einer laufenden Abfrage die eigentliche Auskunft
+                ist -- der Verlauf ist dann gerade uninteressant. */}
+            <DataspacePanel isLoading={isLoading} />
+
             {recentScans.length > 0 && (
               <section>
                 <h2 className="text-[11px] font-bold tracking-[0.16em] text-night-300 uppercase mb-3">

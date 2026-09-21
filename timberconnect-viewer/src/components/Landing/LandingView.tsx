@@ -74,17 +74,32 @@ export function LandingView({
                 Haelften derselben Anwendung, keine Haupt- und Nebenhandlung.
                 Vorher war "Produkt scannen" breit und lime, "Vorgang
                 registrieren" halb so breit und dunkel.
+                Beschriftung seit 17.09.2026 (Rueckmeldung Praxispartner,
+                "Feedback App_Allgemein", Folie 1): "Daten abrufen" und
+                "Daten teilen" -- das WOZU steht oben, die Handlung
+                (scannen / Vorgang registrieren) als Zeile darunter, damit
+                der bisherige Wortlaut nicht verloren geht.
                 "Mehr erfahren" ist von hier ins Seitenmenue gewandert -- es
                 fuehrt aus der Anwendung heraus auf die Projektwebseite und
                 gehoert damit nicht neben die beiden Haupthandlungen. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
               <button onClick={onScanClick} className="btn btn-acid btn-lg">
                 <Nfc className="w-5 h-5" />
-                <span>Produkt scannen</span>
+                <span className="text-left leading-tight">
+                  <span className="block">Daten abrufen</span>
+                  <span className="block text-xs font-medium opacity-75">
+                    Produkt scannen
+                  </span>
+                </span>
               </button>
               <button onClick={onUploadClick} className="btn btn-acid btn-lg">
                 <Upload className="w-5 h-5" />
-                <span>Vorgang registrieren</span>
+                <span className="text-left leading-tight">
+                  <span className="block">Daten teilen</span>
+                  <span className="block text-xs font-medium opacity-75">
+                    Vorgang registrieren
+                  </span>
+                </span>
               </button>
             </div>
           </motion.div>

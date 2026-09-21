@@ -99,3 +99,100 @@ describe('groupDatasetsToProducts — mehrere Dokumente derselben Station', () =
     expect(products[0].sources).toEqual([forst, ERP]); // Wald vor Werk
   });
 });
+
+/**
+ * Der Pflanzvorgang und seine Id-Welt.
+ *
+ * Gemeldeter Fall (21.09.2026): Ein Eintrag "Holzprodukt /
+ * urn:epc:class:lgtin:404711145.0001.Pflanzung01" stand in der letzten
+ * Aktivitaet, war aber nicht mehr aufloesbar -- "nicht gefunden".
+ *
+ * Die Daten waren nie weg: EPCAT liefert zu diesem Los weiterhin das
+ * TransformationEvent vom 02.09.2026 (Input = die Pflanzung, Output = 14
+ * Staemme), und die darin genannte Quelle liegt im Pod des Erzeugers.
+ * Verloren ging die VERKNUEPFUNG: ``extractIdFromData`` suchte nur
+ * ``urn:epc:id:``, das Los traegt aber ``urn:epc:class:lgtin``. Ohne Id
+ * verwarf die Gruppierung den Datensatz samt Quelle, der Scan fiel auf
+ * geratene URLs unter dem zentralen Pod zurueck und lief ins Leere.
+ */
+describe('groupDatasetsToProducts — Vermehrungsgut (class:lgtin)', () => {
+  const FOREST_POD = 'https://solid-community-server.tmdt.info/user2/data';
+  const CERT = `${FOREST_POD}/VG-2026-0902-7a04/f65cf310b7d10de35fc0b51e53218bc372380263_forst.ttl`;
+  const PLANTING_EPC = 'urn:epc:class:lgtin:404711145.0001.Pflanzung01';
+
+  it('erkennt den Los-Ident eines Stammzertifikats', async () => {
+    ttlFor.set(CERT, `<c> a tc:Certificate ; tc:epc <${PLANTING_EPC}> .`);
+
+    const products = await groupDatasetsToProducts([
+      ds('Stammzertifikat Pflanzung - VG-2026-0902-7a04', CERT),
+    ]);
+
+    // Frueher: [] -- die Quelle fiel mitsamt dem Vorgang heraus.
+    expect(products).toHaveLength(1);
+    expect(products[0].id).toBe(PLANTING_EPC);
+    expect(products[0].sources).toContain(CERT);
+  });
+
+  it('gruppiert Pflanzung und Faellung unter demselben Los-Ident', async () => {
+    // Beide Dokumente nennen dieselbe Pflanzung -- der Fellvorgang verweist
+    // auf sie als Herkunft. Sie muessen zusammenfinden, sonst bricht die
+    // Kante Pflanzung -> Rundholz genau dort, wo der Herkunftsnachweis sie
+    // braucht.
+    const FELL = `${FOREST_POD}/VG-2026-0902-7a04/faellung_forst.ttl`;
+    ttlFor.set(CERT, `<c> a tc:Certificate ; tc:epc <${PLANTING_EPC}> .`);
+    ttlFor.set(FELL, `<f> a tc:Stem ; tc:epc <${PLANTING_EPC}> .`);
+
+    const products = await groupDatasetsToProducts([
+      ds('Stammzertifikat Pflanzung - VG-2026-0902-7a04', CERT),
+      ds('Faellung StanForD - VG-2026-0902-7a04', FELL),
+    ]);
+
+    expect(products).toHaveLength(1);
+    expect(products[0].sources).toHaveLength(2);
+  });
+
+  it('nimmt den mit tc:epc ausgezeichneten Ident, nicht den erstbesten', async () => {
+    // Die Datei nennt zuerst das ERZEUGNIS und erst danach den beschriebenen
+    // Gegenstand. Ohne die tc:epc-Auszeichnung haenge das Ergebnis an der
+    // Zeilenreihenfolge.
+    const STEM_EPC = 'urn:epc:id:sgtin:404711145.0100.12A3D4567';
+    ttlFor.set(
+      CERT,
+      `<out> tc:derivedFrom <${STEM_EPC}> . <c> a tc:Certificate ; tc:epc <${PLANTING_EPC}> .`,
+    );
+
+    const products = await groupDatasetsToProducts([
+      ds('Stammzertifikat Pflanzung - VG-2026-0902-7a04', CERT),
+    ]);
+
+    expect(products[0].id).toBe(PLANTING_EPC);
+  });
+
+  it('erhaelt die Gross-/Kleinschreibung der Losnummer', async () => {
+    // SPARQL vergleicht IRIs zeichengenau. Ein kleingeschriebenes
+    // "pflanzung01" findet im Pod nichts -- Quellen da, Abfrage leer, also
+    // wieder "keine Daten", nur eine Stufe spaeter als zuvor.
+    ttlFor.set(CERT, `<c> a tc:Certificate ; tc:epc <${PLANTING_EPC}> .`);
+
+    const products = await groupDatasetsToProducts([
+      ds('Stammzertifikat Pflanzung - VG-2026-0902-7a04', CERT),
+    ]);
+
+    expect(products[0].id).toContain('Pflanzung01');
+    expect(products[0].id).not.toContain('pflanzung01');
+  });
+
+  it('laesst Fremddatensaetze ohne Ident weiterhin heraus', async () => {
+    // Die Erweiterung darf die Schranke nicht aufweichen: Der Katalog ist ein
+    // geteiltes Register, und Datensaetze anderer Projekte haben hier nichts
+    // zu suchen (Rueckmeldung Praxispartner, 17.09.2026).
+    const FOREIGN = `${FOREST_POD}/xyz/reparaturquoten.ttl`;
+    ttlFor.set(FOREIGN, `<r> a ex:Report ; ex:value "42" .`);
+
+    const products = await groupDatasetsToProducts([
+      ds('Reparaturquoten Hausgeraete 2026', FOREIGN),
+    ]);
+
+    expect(products).toHaveLength(0);
+  });
+});

@@ -5,6 +5,11 @@
  * und folgt grob der Lieferkette -- NICHT dem Alphabet. Sie wird hier
  * bewusst als Array-Reihenfolge gehalten und nirgends nachsortiert.
  *
+ * Namen und Rollen sind der Wortlaut der Praxispartner ("Feedback
+ * App_Allgemein", 17.09.2026, Folie 2): vollstaendige Firmierung als Name,
+ * die Funktion im Projekt als Rolle. Vorher standen dort Kurznamen und bei
+ * vier Partnern noch "Beschreibung der Rolle" als Platzhalter.
+ *
  * Logos liegen unter public/partners/ (aus "Logos.zip", auf den Inhalt
  * zugeschnitten). Fehlt eine Datei, faellt das PartnerSheet auf ein
  * Initialen-Monogramm zurueck.
@@ -20,8 +25,11 @@
 
 export interface Partner {
   id: string;
+  /** Vollstaendige Firmierung, wie vom Partner vorgegeben. */
   name: string;
-  /** Rollenbeschreibung entlang der Lieferkette (Platzhalter bis Texte vom Partner kommen). */
+  /** Kurzname fuer das Initialen-Monogramm, falls das Logo fehlt. */
+  shortName: string;
+  /** Funktion im Projekt (Wortlaut der Partner). */
   role: string;
   url: string;
   logo: string;
@@ -30,64 +38,73 @@ export interface Partner {
 export const partners: Partner[] = [
   {
     id: 'eecc',
-    name: 'EECC',
-    role: 'European EPC Competence Center',
+    name: 'European EPC Competence Center GmbH (EECC)',
+    shortName: 'EECC',
+    role: 'Dienstleister für Informationssysteme',
     url: 'https://www.eecc.info/',
     logo: `${import.meta.env.BASE_URL}partners/eecc.png`,
   },
   {
     id: 'baues-wunder',
-    name: 'Baues Wunder',
-    role: 'Beschreibung der Rolle',
+    name: '„BAUES WUNDER“ Lambertz & Friesdorf Beratende Ingenieure PartGmbB',
+    shortName: 'Baues Wunder',
+    role: 'Beratungs- und Zertifizierungsbüro',
     url: 'https://baueswunder.com/',
     logo: `${import.meta.env.BASE_URL}partners/baues-wunder.png`,
   },
   {
     id: 'prause',
-    name: 'Prause Holzbauplanung',
-    role: 'Büro für besseres Bauen',
+    name: 'Prause Holzbauplanung GmbH & Co. KG',
+    shortName: 'Prause',
+    role: 'Fachplaner Holzbau',
     url: 'https://holzbauplanung.io/',
     logo: `${import.meta.env.BASE_URL}partners/prause.png`,
   },
   {
     id: 'derix',
-    name: 'Derix',
-    role: 'Holz in neuer Dimension',
+    name: 'W. u. J. Derix GmbH & Co.',
+    shortName: 'Derix',
+    role: 'Holzwerkstoffproduzent',
     url: 'https://www.derix.de/',
     logo: `${import.meta.env.BASE_URL}partners/derix.png`,
   },
   {
     id: 'egger',
-    name: 'Egger',
-    role: 'Holzwerkstoffproduzent',
+    name: 'FRITZ EGGER GmbH & Co. OG',
+    shortName: 'Egger',
+    role: 'Sägewerk',
     url: 'https://www.egger.com/',
     logo: `${import.meta.env.BASE_URL}partners/egger.png`,
   },
   {
     id: 'wald-und-holz-nrw',
     name: 'Wald und Holz NRW',
-    role: 'Landesbetrieb Wald und Holz Nordrhein-Westfalen',
+    shortName: 'Wald und Holz NRW',
+    role: 'Landesforstbetrieb',
     url: 'https://www.wald-und-holz.nrw.de/',
     logo: `${import.meta.env.BASE_URL}partners/wald-und-holz-nrw.png`,
   },
   {
     id: 'madaster',
-    name: 'Madaster',
-    role: 'Beschreibung der Rolle',
+    name: 'Madaster Germany GmbH',
+    shortName: 'Madaster',
+    role: 'Softwareanbieter Zirkularität',
     url: 'https://madaster.de/',
     logo: `${import.meta.env.BASE_URL}partners/madaster.png`,
   },
   {
     id: 'art-invest',
-    name: 'Art-Invest Real Estate',
-    role: 'Beschreibung der Rolle',
+    name: 'Art-Invest Real Estate Management GmbH & Co. KG',
+    shortName: 'Art-Invest',
+    role: 'Projektentwickler',
     url: 'https://www.art-invest.de/',
     logo: `${import.meta.env.BASE_URL}partners/art-invest.png`,
   },
   {
     id: 'buildingsmart',
-    name: 'buildingSMART',
-    role: 'Beschreibung der Rolle',
+    name: 'buildingSMART Deutschland e. V.',
+    shortName: 'buildingSMART',
+    role: 'Kompetenznetzwerk Digitalisierung',
     url: 'https://www.buildingsmart.de/',
     logo: `${import.meta.env.BASE_URL}partners/buildingsmart.png`,
   },

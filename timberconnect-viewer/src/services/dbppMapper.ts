@@ -81,7 +81,7 @@ export interface DbppField {
   note?: string;
 }
 
-/** Eine der sieben aufklappbaren Kategorien. */
+/** Eine der sieben aufklappbaren Kategorien (die Lieferkette ist die achte, sie kommt aus provenanceMapper). */
 export interface DbppCategory {
   id: string;
   title: string;
@@ -399,9 +399,12 @@ export function mapToDbpp(
   const categories: DbppCategory[] = [
     {
       id: 'identification',
-      title: 'Produkt- und Akteursidentifikation',
+      // "Hersteller" statt "Akteure" (Projektpartner, 17.09.2026): die
+      // Kategorie identifiziert das Bauteil und seinen Hersteller -- die
+      // uebrigen Akteure stehen in der Lieferkette.
+      title: 'Produkt- und Herstelleridentifikation',
       description:
-        'Die Kennungen, über die das Bauteil und die beteiligten Wirtschaftsakteure eindeutig ansprechbar sind. Die Bauprodukteverordnung verlangt eine eindeutige Produktkennung; die Ökodesign-Verordnung verlangt zusätzlich Kennungen für Wirtschaftsakteur, Betriebsstätte und Register.',
+        'Die Kennungen, über die das Bauteil und sein Hersteller eindeutig ansprechbar sind. Die Bauprodukteverordnung verlangt eine eindeutige Produktkennung; die Ökodesign-Verordnung verlangt zusätzlich Kennungen für Wirtschaftsakteur, Betriebsstätte und Register.',
       legalBasis: 'CPR Art. 79 Abs. 1 · ESPR Art. 9',
       fields: [
         field(
@@ -555,9 +558,11 @@ export function mapToDbpp(
     },
     {
       id: 'lifecycle',
-      title: 'Verbau, Rückbau und Lebensende',
+      // "Einbau" statt "Verbau" (Projektpartner, 17.09.2026) -- der Begriff
+      // der Bauprodukteverordnung und des Awf "Dokumentation".
+      title: 'Einbau, Rückbau und Lebensende',
       description:
-        'Wo das Bauteil verbaut ist und was am Ende seiner Nutzung mit ihm geschieht. Die Zirkularität ist ein erklärtes Ziel beider Verordnungen; die Angaben dazu vertieft der Anwendungsfall „Rückbaubarkeit“.',
+        'Wo das Bauteil eingebaut ist und was am Ende seiner Nutzung mit ihm geschieht. Die Zirkularität ist ein erklärtes Ziel beider Verordnungen; die Angaben dazu vertieft der Anwendungsfall „Rückbaubarkeit“.',
       legalBasis: 'CPR Art. 76 · ESPR Art. 5 Abs. 1 (Zirkularität)',
       fields: [
         field('DPP-7.1', 'Bauteilart', elementIfcClass ?? elementName),

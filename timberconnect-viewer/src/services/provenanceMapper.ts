@@ -78,9 +78,18 @@ function orNull(value: string | undefined | null): string | null {
   return value && value.trim() !== '' ? value.trim() : null;
 }
 
-/** ISO-Datum zu "TT.MM.JJJJ"; unparsbares bleibt unveraendert. */
-function parseDate(dateStr: string | undefined | null): string | null {
+/**
+ * Datum zu "TT.MM.JJJJ"; unparsbares bleibt unveraendert.
+ *
+ * Neben ISO auch "TT/MM/JJJJ": so schreibt die Rundholz-Transportvorlage ihr
+ * tc:datum ("20/07/2026"). ``new Date`` liest das amerikanisch (Monat 20 --
+ * ungueltig), und der ISO-Regex greift nicht; der Wert stand deshalb im
+ * Fremdformat neben den uebrigen Daten der Liste.
+ */
+export function parseDate(dateStr: string | undefined | null): string | null {
   if (!dateStr) return null;
+  const dmy = dateStr.trim().match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (dmy) return `${dmy[1].padStart(2, '0')}.${dmy[2].padStart(2, '0')}.${dmy[3]}`;
   const date = new Date(dateStr);
   if (!isNaN(date.getTime())) {
     return date.toLocaleDateString('de-DE', {
@@ -91,6 +100,37 @@ function parseDate(dateStr: string | undefined | null): string | null {
   }
   const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : dateStr;
+}
+
+/**
+ * Erster nicht-leerer Wert einer Spalte ueber ALLE Zeilen.
+ *
+ * Die Sparten-Abfragen sind UNIONs mehrerer Quellen (Saegewerk: Rundholz-
+ * Auftrag, Leistungserklaerung, Maschinendaten). Welche Quelle die erste
+ * Zeile stellt, ist nicht festgelegt -- bei "Vorangegangene Kette" fuer eine
+ * Lamelle kam zuerst die Maschinendaten-Zeile ohne Firma, und das Saegewerk
+ * hiess nur noch "Saegewerk" (Befund 18.09.2026). Deshalb je Feld ueber die
+ * Zeilen suchen statt blind ``rows[0]`` zu lesen.
+ */
+function pick(rows: SparqlBinding[] | undefined, key: string): string | null {
+  for (const row of rows ?? []) {
+    const value = getValue(row, key);
+    if (value) return value.trim();
+  }
+  return null;
+}
+
+/**
+ * Gattungsnamen, die productMapper als Rueckfall einsetzt ("Saegewerk",
+ * "BSP-Werk"). Als Akteursname sind sie wertlos -- und fuer den Geocoder
+ * sogar schaedlich: "Saegewerk" allein fand irgendein Saegewerk bei
+ * Stuttgart und setzte dort einen Marker.
+ */
+const PLACEHOLDER_NAMES = new Set(['Sägewerk', 'Saegewerk', 'BSP-Werk', 'Forstbetrieb', 'Holztransport']);
+
+function realName(value: string | undefined | null): string | null {
+  const name = orNull(value);
+  return name && !PLACEHOLDER_NAMES.has(name) ? name : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +186,32 @@ export function classifyAddressParts(values: string[]): AddressParts {
 function joinAddress(street: string | null, city: string | null): string | null {
   const pieces = [street, city].filter((p): p is string => !!p);
   return pieces.length > 0 ? pieces.join(', ') : null;
+}
+
+/**
+ * Anschrift aus den Sparten-Zeilen (Saegewerk / Werk).
+ *
+ * Zwei Formen laufen hier zusammen: der Rundholz-Auftrag liefert Strasse,
+ * PLZ und Ort GETRENNT (?street ?postcode ?city) -- die haben Vorrang. Die
+ * Leistungserklaerung schreibt Name, Strasse und Ort dagegen alle auf
+ * tc:manufacturerAddress, also kommt je Literal eine Zeile mit ?street; das
+ * ist derselbe Beutel wie bei den Transportauftraegen und wird genauso ueber
+ * classifyAddressParts sortiert, statt das erste Literal als Strasse zu
+ * nehmen (das waere oft der Firmenname).
+ */
+function addressFromRows(rows: SparqlBinding[]): string | null {
+  const postcode = pick(rows, 'postcode');
+  const city = pick(rows, 'city');
+  if (postcode || city) {
+    const cityLine = postcode && city ? `${postcode} ${city}` : city;
+    return joinAddress(pick(rows, 'street'), cityLine);
+  }
+  const bag = rows
+    .map((r) => getValue(r, 'street'))
+    .filter((v): v is string => !!v);
+  if (bag.length === 0) return null;
+  const parts = classifyAddressParts(bag);
+  return joinAddress(parts.street, parts.city);
 }
 
 /**
@@ -327,8 +393,9 @@ export function mapToProvenance(
 ): ProvenanceData {
   const stem = data?.stem?.[0];
   const forest = data?.forest?.[0];
-  const sawmill = data?.sawmill?.[0];
-  const bspWerk = data?.bspWerk?.[0];
+  // Saegewerk und Werk: Felder ueber alle Zeilen suchen (siehe ``pick``).
+  const sawmillRows = data?.sawmill ?? [];
+  const bspWerkRows = data?.bspWerk ?? [];
 
   const deliveries = groupDeliveries(data?.transportOrders ?? []);
   const transportDates = shippingDates(data?.epcisEvents);
@@ -364,10 +431,10 @@ export function mapToProvenance(
   const description = orNull(declaredUse) ?? orNull(product?.description);
 
   const volumeM3 =
-    orNull(getValue(bspWerk, 'nettoVolumen')) ??
-    orNull(getValue(bspWerk, 'bruttoVolumen')) ??
-    orNull(getValue(sawmill, 'totalVolume'));
-  const pieces = orNull(getValue(sawmill, 'totalPieces'));
+    pick(bspWerkRows, 'nettoVolumen') ??
+    pick(bspWerkRows, 'bruttoVolumen') ??
+    pick(sawmillRows, 'totalVolume');
+  const pieces = pick(sawmillRows, 'totalPieces');
 
   const speciesGerman = orNull(product?.woodType);
 
@@ -386,7 +453,7 @@ export function mapToProvenance(
   );
 
   const productKind =
-    orNull(getValue(bspWerk, 'bspTypBezeichnung')) ??
+    pick(bspWerkRows, 'bspTypBezeichnung') ??
     (product?.productType === 'finished' ? 'Brettsperrholz' : null) ??
     tradeName;
   const hsCode = deriveHsCode(productKind ?? tradeName);
@@ -416,7 +483,7 @@ export function mapToProvenance(
     orNull(getValue(stem, 'ownerName')) ??
     orNull(getValue(stem, 'forestryOffice')) ??
     orNull(getValue(forest, 'forestryOffice')) ??
-    orNull(forestStep?.company);
+    realName(forestStep?.company);
   if (forestName) {
     actors.push({
       id: 'forest',
@@ -429,7 +496,7 @@ export function mapToProvenance(
           orNull(forestStep?.location),
       ),
       reference: orNull(getValue(stem, 'stemNumber')) ?? orNull(getValue(stem, 'stemKey')),
-      transportDate: transportDates[0] ?? parseDate(getValue(sawmill, 'deliveryDate')),
+      transportDate: transportDates[0] ?? parseDate(pick(sawmillRows, 'deliveryDate')),
       coordinates: fellingCoordinates,
       coordinateSource: fellingCoordinates ? 'measured' : null,
     });
@@ -437,14 +504,21 @@ export function mapToProvenance(
 
   // Saegewerk (I-19..I-21): die BELADEstelle des Schnittholz-Auftrags -- dort
   // wird die Lamelle abgeholt, also steht dort das Saegewerk. Der
-  // Rundholz-Auftrag taugt dafuer nicht: sein "Auftraggeber" ist der
-  // Forstbetrieb (siehe Kommentar oben), er wuerde den Wald ein zweites Mal
-  // als Saegewerk in die Liste schreiben.
+  // Rundholz-Auftrag taugt dafuer als ADRESSQUELLE sehr wohl: sein
+  // Empfaenger (tc:firmenname/strasse/pLZ/stadt) IST das Saegewerk -- genau
+  // so liest ihn createSawmillQuery. Nur sein "Auftraggeber"/"Lieferant" ist
+  // der Forstbetrieb; der wird hier nicht verwendet.
+  //
+  // Ohne Schnittholz-Auftrag (Umfang "Vorangegangene Kette" fuer Rundholz
+  // oder Lamelle) blieb die Anschrift bisher leer, obwohl sie in der
+  // Saegewerks-Zeile stand -- der Mapper las von dort nur den Namen.
   const sawmillStep = stepFor('sawmill');
   const sawmillName =
     orNull(lamellaDelivery?.loading.name) ??
-    orNull(getValue(sawmill, 'company')) ??
-    orNull(sawmillStep?.company);
+    pick(sawmillRows, 'company') ??
+    // Bestimmungssaegewerk aus den Maschinendaten -- nur ein Name.
+    pick(sawmillRows, 'destinationProduct') ??
+    realName(sawmillStep?.company);
   if (sawmillName) {
     actors.push({
       id: 'sawmill',
@@ -454,16 +528,18 @@ export function mapToProvenance(
         joinAddress(
           lamellaDelivery?.loading.street ?? null,
           lamellaDelivery?.loading.city ?? null,
-        ) ?? joinAddress(null, orNull(sawmillStep?.location)),
+        ) ??
+        addressFromRows(sawmillRows) ??
+        joinAddress(null, orNull(sawmillStep?.location)),
       reference:
-        orNull(getValue(sawmill, 'polterId')) ?? orNull(lamellaDelivery?.transportNumber),
+        pick(sawmillRows, 'polterId') ?? orNull(lamellaDelivery?.transportNumber),
       transportDate:
         // I-18: Ankunft des Rundholzes im Saegewerk -- das Datum des
         // Rundholz-Auftrags, das Einzige, was dieser beisteuert.
         roundwoodDelivery?.endDate ??
         transportDates[1] ??
         lamellaDelivery?.startDate ??
-        parseDate(getValue(sawmill, 'deliveryDate')),
+        parseDate(pick(sawmillRows, 'deliveryDate')),
       coordinates: null, // wird spaeter geocodiert
       coordinateSource: null,
     });
@@ -471,12 +547,16 @@ export function mapToProvenance(
 
   // Holzwerkstoffproduzent (I-23..I-25): die ENTladestelle des
   // Schnittholz-Auftrags -- dorthin gehen die Lamellen.
+  //
+  // Kein Gattungsname als Rueckfall (realName): fehlt die Werksstufe -- etwa
+  // bei "Vorangegangene Kette" fuer eine Lamelle -- gibt es hier schlicht
+  // keinen Akteur, und die Liste endet beim Saegewerk.
   const manufacturerStep = stepFor('manufacturer');
   const manufacturerDelivery = lamellaDelivery;
   const manufacturerName =
     orNull(manufacturerDelivery?.unloading.name) ??
-    orNull(getValue(bspWerk, 'company')) ??
-    orNull(manufacturerStep?.company);
+    pick(bspWerkRows, 'company') ??
+    realName(manufacturerStep?.company);
   if (manufacturerName) {
     actors.push({
       id: 'manufacturer',
@@ -487,17 +567,18 @@ export function mapToProvenance(
           manufacturerDelivery?.unloading.street ?? null,
           manufacturerDelivery?.unloading.city ?? null,
         ) ??
-        joinAddress(null, orNull(getValue(bspWerk, 'produktionsstandort'))) ??
+        addressFromRows(bspWerkRows) ??
+        joinAddress(null, pick(bspWerkRows, 'produktionsstandort')) ??
         joinAddress(null, orNull(manufacturerStep?.location)),
       reference:
-        orNull(getValue(bspWerk, 'konstruktionsnummer')) ??
+        pick(bspWerkRows, 'konstruktionsnummer') ??
         orNull(manufacturerDelivery?.transportNumber),
       transportDate:
         // I-22/I-26: Datum der Entladung beim Produzenten. Das Dokument ist
         // hier belastbarer als der Positionsindex in den EPCIS-Events.
         manufacturerDelivery?.endDate ??
         transportDates[2] ??
-        parseDate(getValue(bspWerk, 'productionDate')),
+        parseDate(pick(bspWerkRows, 'productionDate')),
       coordinates: null, // wird spaeter geocodiert
       coordinateSource: null,
     });

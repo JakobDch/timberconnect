@@ -18,7 +18,9 @@ import {
   mapToDeconstruction,
   type DeconstructionField,
 } from '../../services/deconstructionMapper';
-import { productImageFor } from '../../services/productImageService';
+import { detectProductStage, productImageFor } from '../../services/productImageService';
+import { useCaseRefersToDownstreamPanel } from '../../config/useCases';
+import { DownstreamSubjectNotice } from '../UI/DownstreamSubjectNotice';
 import { useOwnProductPhoto } from '../../hooks/useOwnProductPhoto';
 import { DocumentDownloadSection } from '../Documents';
 
@@ -188,6 +190,20 @@ export function DeconstructionView({
               sowie zur Demontierbarkeit.
             </p>
           </motion.div>
+
+          {/*
+            Wenn ein Vorprodukt erfasst wurde und die Angaben ueber die Platte
+            der Kette kommen: dranschreiben, wem sie gehoeren.
+          */}
+          <DownstreamSubjectNotice
+            show={useCaseRefersToDownstreamPanel(
+              'deconstruction',
+              detectProductStage(product ?? null, productData ?? null),
+              productData?.downstreamStages,
+            )}
+            product={product}
+            productData={productData}
+          />
 
           <div className="space-y-4">
             {/* Allgemeine Informationen zum Bauteil */}

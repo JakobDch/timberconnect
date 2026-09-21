@@ -31,7 +31,7 @@ interface PartnerSheetProps {
  */
 function PartnerLogo({ partner }: { partner: Partner }) {
   const [failed, setFailed] = useState(false);
-  const initials = partner.name
+  const initials = partner.shortName
     .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0])
@@ -109,11 +109,14 @@ export function PartnerSheet({ isOpen, onClose }: PartnerSheetProps) {
                   className="group flex items-center gap-4 p-3.5 rounded-2xl bg-night-700/50 border border-white/5 hover:border-acid-400/40 hover:bg-night-700 transition-colors"
                 >
                   <PartnerLogo partner={partner} />
+                  {/* Volle Firmierung darf umbrechen -- abgeschnitten
+                      ("Art-Invest Real Estate Management GmbH & ...") waere
+                      sie schlechter als der alte Kurzname. */}
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-white text-sm truncate">
+                    <div className="font-semibold text-white text-sm leading-snug">
                       {partner.name}
                     </div>
-                    <div className="text-xs text-night-300 truncate">
+                    <div className="text-xs text-night-300 mt-0.5">
                       {partner.role}
                     </div>
                   </div>

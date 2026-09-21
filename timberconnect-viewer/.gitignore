@@ -28,3 +28,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Mobile-Vorschau (preview/, nicht Teil des Docker-Builds)
+dist-preview

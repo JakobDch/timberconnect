@@ -57,3 +57,23 @@ JPEG mit Qualität 82 gespeichert — so bleiben sie unter 300 KB.
   ```
 
   Für den dauerhaften Stand die Datei hier einchecken und das Image neu bauen.
+
+## Ketten-Illustration (`chain-*.png`)
+
+Vier Ausschnitte aus der Grafik, die die Praxispartner mit dem Feedback vom
+17.09.2026 („Feedback App_Allgemein", Folien 6–7) geliefert haben. Sie zeigen
+die identifizierten Stufen der Kette und erscheinen in der
+Anwendungsfall-Übersicht beim **Umfang** (`ChainScopePicker.tsx`): die
+gescannte Stufe ist eingekreist, Stufen außerhalb des gewählten Umfangs sind
+abgeblendet.
+
+| Datei | Stufe | Motiv |
+|---|---|---|
+| `chain-seedling.png` | Baum | Stehende Bäume |
+| `chain-stem.png` | Rundholz | Polter |
+| `chain-lamella.png` | Schnittholz | Gestapelte Lamellen |
+| `chain-clt-panel.png` | BSP | Brettsperrholzplatte (ohne den Klebstoffeimer der Originalgrafik) |
+
+PNG mit Transparenz, auf den sichtbaren Inhalt beschnitten. Die Kacheln
+zeigen sie mit `object-contain` auf gemeinsamer Grundlinie; unterschiedliche
+Seitenverhältnisse sind deshalb unproblematisch.

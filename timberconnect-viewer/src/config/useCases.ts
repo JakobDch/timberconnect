@@ -121,13 +121,15 @@ export const USE_CASES: UseCaseDefinition[] = [
   },
   {
     // Id bleibt 'dbpp': sie steckt in gespeicherten Rollen-Toggles und in der
-    // Navigation. DBPP und DPP bezeichnen dieselbe Sache -- geaendert hat sich
-    // nur der angezeigte Name (Vorgabe Anni, 26.08.2026).
+    // Navigation. Der angezeigte Name hiess vom 26.08. bis 17.09.2026
+    // "DPP EU (Digitaler Produktpass)"; seither wieder DBPP -- Wortlaut von
+    // Titel und Beschreibung sind die Vorgabe des Projektpartners
+    // ("Anmerkungen App_DPP EU", 17.09.2026) und werden nicht umformuliert.
     id: 'dbpp',
-    title: 'DPP EU (Digitaler Produktpass)',
-    description: 'Alle Produktdaten in der Struktur eines digitalen Produktpasses',
+    title: 'Digitaler Bauproduktpass (DBPP)',
+    description: 'Branchenspezifischer Vorläufer zum EU-Produktpass für Holzbauteile',
     longDescription:
-      'Digitaler Produktpass in Anlehnung an künftige EU-Vorgaben (ESPR), der produktspezifische Herkunfts-, Zusammensetzungs- und Nachhaltigkeitsdaten über den gesamten Lebenszyklus hinweg bereitstellt.',
+      'Der Digitale Bauproduktpass (DBPP) wird im Forschungsprojekt TimberConnect als branchenspezifischer Vorläufer zum Digital Product Passport (DPP) gemäß der Bauproduktenverordnung (EU) 2024/3110 für Holzbauteile entwickelt.',
     icon: FileText,
     view: 'productpass',
   },
@@ -183,6 +185,14 @@ export interface ProductDataFacts {
    */
   productStage: ProductStage | null;
   /**
+   * Stufen, die DOWNSTREAM des erfassten Bauteils liegen -- was aus ihm
+   * entstanden ist. Nur beim Umfang "Gesamte Kette" gefuellt.
+   *
+   * Erlaubt die nur-fuer-BSP-Faelle auch dann, wenn ein Vorprodukt gescannt
+   * wurde, die Platte aber in der geladenen Kette liegt.
+   */
+  downstreamStages: ProductStage[];
+  /**
    * Wie weit die Kette geladen wurde. Bestimmt mit, welche Faelle sich
    * sinnvoll oeffnen lassen -- siehe die Regel in useCaseAvailability.
    */
@@ -190,13 +200,63 @@ export interface ProductDataFacts {
 }
 
 /**
- * Faelle, die auch fuer ein Vorprodukt eine vollstaendige Aussage treffen.
+ * Faelle, die es NUR fuer die fertige BSP-Platte gibt.
  *
- * Der Herkunftsnachweis zeigt, was VOR dem Bauteil liegt -- das ist bei einer
- * Lamelle genauso vollstaendig wie bei einer Platte, nur kuerzer. Der Assistent
- * antwortet ohnehin nur aus dem, was da ist.
+ * Vorgabe der Praxispartner ("Feedback App_Allgemein", 17.09.2026, Folie 8):
+ *   BSP                          -> alle Anwendungsfaelle
+ *   Schnittholz, Rundholz, Baum  -> alle bis auf CO2-Bilanz und Rueckbaubarkeit
+ *
+ * Die CO2-Bilanz ist nur fuer die Platte definiert (fuer Vorprodukte
+ * verschoeben sich die Lebenszyklusmodule), die Rueckbaubarkeit bewertet
+ * Verbindungstechnik und Wiederverwendbarkeit des BAUTEILS -- ein Stamm hat
+ * keine Verbindungsart. Alles andere (Herkunft, Dokumentation, Haftung,
+ * Produktpass, Assistent) trifft auch fuer ein Vorprodukt eine vollstaendige
+ * Aussage, nur eine kuerzere.
+ *
+ * Bis 17.09.2026 sperrte zusaetzlich der Umfang: im eingeschraenkten Umfang
+ * blieben fuer Vorprodukte nur Herkunft und Assistent offen. Das ist mit der
+ * Vorgabe entfallen -- der Umfang bestimmt seither nur noch, wie weit die
+ * Kette geladen wird, nicht mehr, welche Faelle sich oeffnen lassen.
+ *
+ * SEIT 18.09.2026 mit einer Ausnahme, und zwar der, um die es der Vorgabe
+ * eigentlich geht: Wer "Gesamte Kette" waehlt, laedt AUCH die Platte, die aus
+ * dem erfassten Vorprodukt entstanden ist. Dann gibt es die Angaben -- nur
+ * eben ueber die Platte. Sie deshalb zu verschweigen, waere das Gegenteil
+ * dessen, was der Umfang verspricht.
+ *
+ * Die Freigabe haengt an ``downstreamStages``, nicht am Umfang allein: ein
+ * Stamm, aus dem noch keine Platte hergestellt wurde, hat auch bei "Gesamte
+ * Kette" nichts vorzuweisen, und die Kachel muss das sagen statt eine leere
+ * Ansicht zu oeffnen.
+ *
+ * Wichtig fuer die ANSICHTEN: Sie zeigen dann Werte der Platte, waehrend der
+ * Nutzer ein Vorprodukt erfasst hat. Wofuer die Zahlen gelten, muss dort
+ * dranstehen -- ``useCaseSubject`` liefert den Bezug.
  */
-const SCOPE_INDEPENDENT_USE_CASES = new Set(['origin-proof', 'chatbot']);
+const CLT_PANEL_ONLY_USE_CASES = new Set(['co2', 'deconstruction']);
+
+/**
+ * Bezieht sich der Anwendungsfall auf ein ANDERES Bauteil als das erfasste?
+ *
+ * Genau dann, wenn ein nur-fuer-BSP-Fall ueber die Platte downstream
+ * freigegeben wurde. Die Ansicht nennt den Bezug damit im Kopf, sonst liest
+ * jemand die CO2-Bilanz der Platte als die seines Schnittholzes.
+ */
+export function useCaseRefersToDownstreamPanel(
+  useCaseId: string,
+  productStage: ProductStage | null,
+  downstreamStages: ProductStage[] | undefined,
+): boolean {
+  // ``null`` faellt hier heraus wie in useCaseAvailability: ohne erkannte
+  // Vorstufe wird der Fall gar nicht erst freigegeben, also gibt es auch
+  // nichts zu erklaeren.
+  return (
+    CLT_PANEL_ONLY_USE_CASES.has(useCaseId) &&
+    productStage !== null &&
+    productStage !== 'clt-panel' &&
+    (downstreamStages ?? []).includes('clt-panel')
+  );
+}
 
 export function useCaseAvailability(
   useCase: UseCaseDefinition,
@@ -218,47 +278,57 @@ export function useCaseAvailability(
     return { available: false, reason: 'Zuerst ein Bauteil erfassen.' };
   }
 
-  // Im eingeschraenkten Umfang bleiben fuer Vorprodukte nur die Faelle, die
-  // auch ohne die weitere Kette eine vollstaendige Aussage treffen.
-  //
-  // Ein Produktpass oder eine Rueckbaubarkeit fuer eine Lamelle waere
-  // zwangslaeufig halb befuellt -- und ein halb befuellter Nachweis hat keinen
-  // Erkenntniswert, er fuehrt nur Luecken vor. Fuer die fertige BSP-Platte
-  // gilt die Sperre nicht: bei ihr ist die Kette nach oben zu Ende, ihre
-  // Angaben sind auch ohne Nachfolger vollstaendig.
-  //
-  // Unbestimmbare Produktart (null) zaehlt hier wie ein Vorprodukt: geraten
-  // wird nicht (Philosophie von detectProductStage), und die vorsichtige
-  // Richtung ist die engere.
-  if (
-    facts.scope !== 'full' &&
-    facts.productStage !== 'clt-panel' &&
-    !SCOPE_INDEPENDENT_USE_CASES.has(useCase.id)
-  ) {
+  // Nur-BSP-Faelle. Es gibt zwei Wege hinein: das erfasste Bauteil IST die
+  // Platte -- oder es ist ein Vorprodukt, aus dem eine Platte entstanden ist,
+  // und diese Platte wurde mitgeladen ("Gesamte Kette"). Im zweiten Fall
+  // gelten die Angaben der Platte; die Ansicht sagt das im Kopf dazu
+  // (useCaseRefersToDownstreamPanel).
+  if (CLT_PANEL_ONLY_USE_CASES.has(useCase.id) && facts.productStage !== 'clt-panel') {
+    // Bei unbestimmbarer Produktart (null) wird gesperrt statt geraten
+    // (Philosophie von detectProductStage) -- die vorsichtige Richtung ist
+    // die engere.
+    //
+    // Das gilt AUCH, wenn downstream eine Platte liegt, und diese Reihenfolge
+    // ist der Punkt: Ohne bekannte Stufe ist gar nicht gesagt, dass das
+    // Erfasste ein Vorprodukt DIESER Platte ist -- es koennte ein Beleg sein,
+    // der nur zufaellig in derselben Quelle steht. Die Freigabe unten setzt
+    // eine erkannte Vorstufe voraus.
+    if (facts.productStage === null) {
+      return {
+        available: false,
+        reason: `${useCase.title} gibt es nur für BSP-Platten; die Produktart dieses Objekts ist aus den Stammdaten nicht bestimmbar.`,
+      };
+    }
+
+    // Die Platte liegt in der geladenen Kette: die Angaben gibt es, nur eben
+    // ueber sie. Die Ansicht nennt den Bezug im Kopf.
+    if (facts.downstreamStages.includes('clt-panel')) {
+      return { available: true };
+    }
+
+    // Der Umfang ist der Grund, an dem der Nutzer etwas aendern KANN --
+    // deshalb steht er zuerst. Bei "Vorangegangene Kette" wurde gar nicht
+    // nach unten gesucht; es kann also durchaus eine Platte geben.
+    if (facts.scope !== 'full') {
+      return {
+        available: false,
+        reason:
+          `${useCase.title} gibt es nur für die fertige BSP-Platte. Mit dem Umfang ` +
+          '„Gesamte Kette" werden die Angaben der Platte einbezogen, die aus diesem Bauteil entstanden ist.',
+      };
+    }
+
     return {
       available: false,
       reason:
-        'Im gewählten Umfang liegen für dieses Vorprodukt nur Teildaten vor. ' +
-        'Wählen Sie „Ganze Kette“, um diesen Anwendungsfall zu öffnen.',
+        useCase.id === 'co2'
+          ? // Awf-Vorgabe (Rueckmeldung Anni, 18.08.2026)
+            'Die CO₂-Bilanz ist nur für die fertige BSP-Platte definiert — für Vorprodukte würden sich die Lebenszyklusmodule verschieben. Zu diesem Bauteil ist keine Platte in der Kette hinterlegt.'
+          : 'Die Rückbaubarkeit ist nur für die fertige BSP-Platte definiert — Verbindungsart und Wiederverwendbarkeit betreffen das Bauteil, nicht seine Vorprodukte. Zu diesem Bauteil ist keine Platte in der Kette hinterlegt.',
     };
   }
 
   switch (useCase.id) {
-    case 'co2':
-      // Awf-Vorgabe (Rueckmeldung Anni, 18.08.2026): Die CO2-Bilanz ist nur
-      // fuer die FERTIGE BSP-Platte definiert -- fuer Vorprodukte wuerden
-      // sich die Lebenszyklusmodule verschieben. Deshalb ist der Fall fuer
-      // alles andere gesperrt; bei unbestimmbarer Produktart wird ebenfalls
-      // gesperrt statt geraten (Philosophie von detectProductStage).
-      return facts.productStage === 'clt-panel'
-        ? { available: true }
-        : {
-            available: false,
-            reason:
-              facts.productStage === null
-                ? 'Die CO₂-Bilanz ist nur für BSP-Platten definiert; die Produktart dieses Objekts ist aus den Stammdaten nicht bestimmbar.'
-                : 'Die CO₂-Bilanz ist nur für die fertige BSP-Platte definiert — für Vorprodukte würden sich die Lebenszyklusmodule verschieben.',
-          };
     case 'origin-proof':
       return facts.hasForest || facts.hasSupplyChain
         ? { available: true }

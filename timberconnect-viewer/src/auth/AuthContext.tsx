@@ -32,6 +32,7 @@ import {
 import { invalidateCompanyPrefixes } from "../services/companyPrefixService";
 import {
   ensureRegisteredInFederation,
+  invalidateMemberRoles,
   refreshOwnGroupDocs,
   resolveRoleMembers,
 } from "../services/registryService";
@@ -195,6 +196,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // frisch registrierter Teilnehmer bis zu fünf Minuten lang nicht mit —
       // seine eigenen Barcodes lösten so lange auf die falsche Lesart auf.
       invalidateCompanyPrefixes();
+      // Gleiches fuer den Rollen-Cache des Registers: die eigene, gerade
+      // geschriebene Rolle muss die Gruppenaufloesung sofort sehen.
+      invalidateMemberRoles();
       setCurrentRole(role.iri);
       setAuthState((prev) => ({
         ...prev,

@@ -16,7 +16,8 @@ import {
 import { getAuthFetch, getCurrentRole } from './authFetch';
 import { filterSourcesByRole, podBaseFromUrl } from './accessControlService';
 import { type EpcisEvent } from './epcisService';
-import { walkChain, type ChainScope } from './supplyChainWalk';
+import { walkChain, itemRefOf, type ChainScope } from './supplyChainWalk';
+import { stageFromTypeNames, type ProductStage } from './productImageService';
 
 import {
   createProductQuery,
@@ -46,6 +47,7 @@ import {
   type GeoPoint,
   type PlantingArea,
 } from './geoService';
+import { reportPodQuery } from './dataspaceActivity';
 
 // Singleton QueryEngine instance
 let engine: QueryEngine | null = null;
@@ -119,6 +121,12 @@ async function loadSource(url: string): Promise<Quad[]> {
   const laufend = inFlightSources.get(url);
   if (laufend) return laufend;
 
+  // Der Datenraum-Graph zeigt genau DIESE Anfragen. Gemeldet wird hier und
+  // nicht im Aufrufer, weil nur hier feststeht, dass wirklich ans Netz
+  // gegangen wird -- ein Treffer im Cache oben ist keine Abfrage und darf
+  // den Graphen auch nicht aufleuchten lassen.
+  reportPodQuery(url, 'request');
+
   const promise = (async (): Promise<Quad[]> => {
     try {
       const controller = new AbortController();
@@ -128,15 +136,23 @@ async function loadSource(url: string): Promise<Quad[]> {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (!response.ok) return [];
+      if (!response.ok) {
+        reportPodQuery(url, 'miss');
+        return [];
+      }
 
       const text = await response.text();
       const quads = new Parser({ baseIRI: url }).parse(text);
       sourceCache.set(url, { quads, loadedAt: Date.now() });
+      // "Treffer" heisst: die Datei existiert UND traegt etwas bei. Eine leere
+      // Datei als Treffer zu melden, waere dieselbe Beschoenigung, die
+      // filterAvailableSources weiter unten schon vermeidet.
+      reportPodQuery(url, quads.length > 0 ? 'hit' : 'miss');
       return quads;
     } catch (err) {
       console.debug('[SPARQL] Quelle nicht ladbar:', url, err);
       sourceCache.set(url, { quads: [], loadedAt: Date.now() });
+      reportPodQuery(url, 'miss');
       return [];
     } finally {
       inFlightSources.delete(url);
@@ -505,6 +521,17 @@ export interface ProductDataResult {
    * gesetzt; beim traceId-Abruf gibt es keinen gescannten Ident.
    */
   scannedEpc?: SparqlBinding[];
+  /**
+   * Wertschoepfungsstufen, die DOWNSTREAM des erfassten Idents liegen -- also
+   * das, was aus ihm entstanden ist.
+   *
+   * Nur beim Umfang "Gesamte Kette" gefuellt; bei "Vorangegangene Kette"
+   * laeuft der Walk nicht in diese Richtung und die Menge bleibt leer. Genau
+   * daran haengt, ob sich CO2-Bilanz und Rueckbaubarkeit fuer ein Vorprodukt
+   * oeffnen lassen: die Angaben gibt es nur fuer die fertige Platte, aber
+   * wenn die Platte mitgeladen wurde, gibt es sie eben ueber sie.
+   */
+  downstreamStages?: ProductStage[];
   sourceStatus: SourceStatus[];
   errors: string[];
   epcisInfo?: EpcisInfo;
@@ -701,6 +728,9 @@ export async function fetchProductDataByEpc(
   let eventsReturned = 0;
   let eventsFilteredOut = 0;
   let epcs = new Set<string>([epc]);
+  // Idente, die AUS dem erfassten Bauteil entstanden sind. Nur bei scope
+  // 'full' gefuellt -- 'upstream' laeuft gar nicht erst in diese Richtung.
+  let downstreamEpcs = new Set<string>();
   let bizTxUrls: string[] = [];
   try {
     const walk = await walkChain(epc, scope);
@@ -708,6 +738,7 @@ export async function fetchProductDataByEpc(
     eventsReturned = walk.eventsReturned;
     eventsFilteredOut = walk.eventsFilteredOut;
     epcs = walk.epcs;
+    downstreamEpcs = walk.downstreamEpcs;
     bizTxUrls = walk.bizTxUrls;
     console.log(
       `[SPARQL] EPCAT: ${walk.eventsReturned} events ` +
@@ -868,6 +899,7 @@ export async function fetchProductDataByEpc(
     liability,
     lca,
     dbpp,
+    downstreamStages,
   ] = await Promise.all([
     queryProduct(chainEpcs, available).catch(() => []),
     queryStem(epc, available, chainEpcs).catch(() => []),
@@ -884,6 +916,9 @@ export async function fetchProductDataByEpc(
     queryLiability(available, chainEpcs).catch(() => []),
     queryLca(available, chainEpcs).catch(() => []),
     queryDbpp(available, chainEpcs).catch(() => []),
+    // Welche Stufen liegen NACH dem erfassten Bauteil? Entscheidet, ob sich
+    // die nur-fuer-BSP-Faelle ueber die Platte der Kette oeffnen lassen.
+    resolveDownstreamStages(downstreamEpcs, available).catch(() => [] as ProductStage[]),
   ]);
 
   return {
@@ -909,12 +944,68 @@ export async function fetchProductDataByEpc(
     lca,
     dbpp,
     scannedEpc: scannedEpcBindings,
+    downstreamStages,
     sourceStatus: available.map((url) => ({ url, available: true, pod: extractPodHost(url) })),
     errors,
     epcisInfo,
     epcisEvents: events,
     loadedFully: true,
   };
+}
+
+/**
+ * Welche Wertschoepfungsstufen liegen DOWNSTREAM des erfassten Idents?
+ *
+ * Gebraucht fuer die Anwendungsfaelle, die es nur fuer die fertige BSP-Platte
+ * gibt (CO2-Bilanz, Rueckbaubarkeit). Wer Schnittholz scannt und "Gesamte
+ * Kette" waehlt, hat die Platte mitgeladen -- dann gibt es die Angaben, nur
+ * eben ueber die Platte und nicht ueber das Schnittholz. Bei "Vorangegangene
+ * Kette" bleibt die Menge leer, weil der Walk gar nicht erst nach unten
+ * laeuft; die Faelle bleiben dort gesperrt.
+ *
+ * Bewusst NICHT aus der Itemreference des EPC (0401 = Platte) abgeleitet:
+ * das ist eine Konvention der heutigen Demo-Idente, keine Auskunft. Gefragt
+ * wird stattdessen der RDF-Typ am jeweiligen Ident -- dieselbe Grundlage,
+ * auf der auch die Produktart des gescannten Bauteils bestimmt wird
+ * (stageFromTypeNames).
+ *
+ * Je Produktart nur EIN Vertreter: aus einer Platte koennen viele gleichartige
+ * Idente kommen, und die 169. Abfrage liefert denselben Typ wie die erste.
+ */
+async function resolveDownstreamStages(
+  downstreamEpcs: Set<string>,
+  sources: string[],
+): Promise<ProductStage[]> {
+  if (downstreamEpcs.size === 0 || sources.length === 0) return [];
+
+  // Je Produktart (itemRef) ein Vertreter. Die Itemreference entscheidet hier
+  // NICHT ueber die Stufe -- sie dient nur als Gruppierung, um nicht dieselbe
+  // Produktart mehrfach abzufragen.
+  const byItemRef = new Map<string, string>();
+  for (const candidate of downstreamEpcs) {
+    const key = itemRefOf(candidate);
+    if (!byItemRef.has(key)) byItemRef.set(key, candidate);
+  }
+
+  const found = await Promise.all(
+    [...byItemRef.values()].map(async (candidate) => {
+      const rows = await executeQuery(createEpcQuery(candidate), sources).catch((err) => {
+        // Eine einzelne Stufe darf die Auskunft nicht abreissen lassen: die
+        // uebrigen Vertreter bleiben gueltig.
+        console.debug('[SPARQL] Downstream-Typ nicht ermittelbar für', candidate, err);
+        return [] as SparqlBinding[];
+      });
+      const types = rows.map((row) => row.type?.value).filter((t): t is string => !!t);
+      return stageFromTypeNames(types);
+    }),
+  );
+
+  const stages = [...new Set(found.filter((s): s is ProductStage => s !== null))];
+  console.debug(
+    `[SPARQL] Downstream: ${byItemRef.size} Produktart(en) geprüft, Stufen:`,
+    stages.length ? stages : '(keine bestimmbar)',
+  );
+  return stages;
 }
 
 function emptyResult(sources: string[], errors: string[]): ProductDataResult {

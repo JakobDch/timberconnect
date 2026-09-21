@@ -10,12 +10,16 @@
  */
 
 import { getAuthFetch } from './authFetch';
+import { reportServiceQuery } from './dataspaceActivity';
 
 // Same-origin path is proxied to the EPCIS service in dev (see vite.config.ts).
 // Override with VITE_EPCIS_SERVICE_URL to point at an absolute service URL.
 const EPCIS_BASE =
   import.meta.env.VITE_EPCIS_SERVICE_URL ||
   (typeof window !== 'undefined' ? `${window.location.origin}/api/epcis` : '/api/epcis');
+
+/** Name des Knotens im Datenraum-Graphen — kein Host, sondern die Rolle. */
+const EPCIS_ENDPOINT = 'EPCIS';
 
 /** Mengenbehaftete Idente (LGTIN) stehen als epcClass in eigenen Listen. */
 interface QuantityEntry {
@@ -76,13 +80,23 @@ export async function queryEpcisEvents(
   epc?: string,
   params: Record<string, string> = {},
 ): Promise<EventQueryResult> {
-  const response = await getAuthFetch()(`${EPCIS_BASE}/events`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ epc, params }),
-  });
+  // Der EPCIS-Dienst ist im Datenraum-Graphen ein eigener Knoten: er steht am
+  // Anfang jedes Scans und entscheidet, welche Pods ueberhaupt gefragt werden.
+  reportServiceQuery(EPCIS_ENDPOINT, 'request');
+  let response: Response;
+  try {
+    response = await getAuthFetch()(`${EPCIS_BASE}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ epc, params }),
+    });
+  } catch (err) {
+    reportServiceQuery(EPCIS_ENDPOINT, 'miss');
+    throw err;
+  }
 
   if (!response.ok) {
+    reportServiceQuery(EPCIS_ENDPOINT, 'miss');
     if (response.status === 401) {
       throw new Error('Nicht authentifiziert — bitte mit Solid Pod anmelden.');
     }
@@ -97,6 +111,7 @@ export async function queryEpcisEvents(
   }
 
   const body = await response.json();
+  reportServiceQuery(EPCIS_ENDPOINT, (body.events ?? []).length > 0 ? 'hit' : 'miss');
   return {
     events: body.events ?? [],
     totalBeforeFilter: body.total_before_filter ?? 0,

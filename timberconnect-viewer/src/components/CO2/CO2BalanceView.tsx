@@ -27,6 +27,8 @@ import {
 } from '../../services/productImageService';
 import { useLcaDistances } from '../../hooks/useLcaDistances';
 import { useOwnProductPhoto } from '../../hooks/useOwnProductPhoto';
+import { DownstreamSubjectNotice } from '../UI/DownstreamSubjectNotice';
+import { useCaseRefersToDownstreamPanel } from '../../config/useCases';
 import { DocumentDownloadSection } from '../Documents';
 import type { PodFileEntry } from '../../services/fileBrowserService';
 
@@ -351,7 +353,20 @@ export function CO2BalanceView({
   // Ohne ihn wuerde die Ansicht die Bilanz der im Quellensatz gefundenen
   // Platte anzeigen, obwohl ein Stamm gescannt wurde.
   const scannedStage = detectProductStage(product ?? null, productData ?? null);
-  if (scannedStage !== 'clt-panel') {
+  // Liegt die Platte downstream in der geladenen Kette, gilt die Bilanz IHR --
+  // dann ist die Ansicht zulaessig und nennt den Bezug im Kopf.
+  //
+  // Dieselbe Entscheidung wie im Raster, und bewusst ueber dieselbe Funktion:
+  // zwei getrennt gepflegte Regeln waeren wieder die Doppel-Wahrheit, die
+  // useCases.ts vermeiden soll -- die Kachel liesse sich oeffnen und die
+  // Ansicht sperrte trotzdem.
+  const bezugIstPlatteDownstream = useCaseRefersToDownstreamPanel(
+    'co2',
+    scannedStage,
+    productData?.downstreamStages,
+  );
+
+  if (scannedStage !== 'clt-panel' && !bezugIstPlatteDownstream) {
     return (
       <div className="flex-1 bg-night-900">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -409,6 +424,16 @@ export function CO2BalanceView({
               zum Einbau (in Anlehnung an EN 15804+A2).
             </p>
           </motion.div>
+
+          {/*
+            Wenn ein Vorprodukt erfasst wurde und die Bilanz ueber die Platte
+            der Kette kommt: dranschreiben, wem die Zahlen gehoeren.
+          */}
+          <DownstreamSubjectNotice
+            show={bezugIstPlatteDownstream}
+            product={product}
+            productData={productData}
+          />
 
           <motion.p
             initial={{ opacity: 0 }}

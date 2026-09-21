@@ -146,6 +146,9 @@ export function registerUploadedProduct(
   console.log(`[solidPods] Registered uploaded product: ${traceId}`, sourceUrls);
 }
 
+/** Laufende Initialisierung, die alle gleichzeitigen Aufrufer teilen. */
+let initPromise: Promise<void> | null = null;
+
 /**
  * Initialize the catalog - fetches products from Semantic Data Catalog.
  * Call this on app startup.
@@ -155,25 +158,42 @@ export async function initializeCatalog(): Promise<void> {
     console.log('[solidPods] Catalog already initialized');
     return;
   }
+  // Gleichzeitige Aufrufer (App-Start, Scan-Screen, Anmeldung) teilen sich
+  // EINEN Lauf. Vorher startete jeder seinen eigenen; der zweite bekam vom
+  // Katalogdienst einen halbfertigen Stand (0 Produkte) und erklaerte den
+  // Katalog damit fuer initialisiert -- ein Scan in den ersten ~30 s nach
+  // dem Start fand dann keine Quellen (Befund 18.09.2026).
+  if (initPromise) {
+    return initPromise;
+  }
 
   console.log('[solidPods] Initializing catalog...');
   catalogError = null;
 
-  try {
-    catalogProducts = await getCatalogProducts();
-    catalogInitialized = true;
+  const run: Promise<void> = (async () => {
+    try {
+      catalogProducts = await getCatalogProducts();
+      catalogInitialized = true;
 
-    // Set default sources from first product if available
-    if (catalogProducts.length > 0) {
-      DEFAULT_SOURCES = catalogProducts[0].sources;
+      // Set default sources from first product if available
+      if (catalogProducts.length > 0) {
+        DEFAULT_SOURCES = catalogProducts[0].sources;
+      }
+
+      console.log('[solidPods] Catalog initialized with', catalogProducts.length, 'products');
+    } catch (error) {
+      catalogError = error instanceof Error ? error.message : 'Failed to load catalog';
+      console.error('[solidPods] Failed to initialize catalog:', error);
+      throw error;
     }
+  })().finally(() => {
+    // Nur die EIGENE Zusage loesen: nach refreshCatalog laeuft womoeglich
+    // schon eine neue, die ein alter Lauf nicht wegraeumen darf.
+    if (initPromise === run) initPromise = null;
+  });
+  initPromise = run;
 
-    console.log('[solidPods] Catalog initialized with', catalogProducts.length, 'products');
-  } catch (error) {
-    catalogError = error instanceof Error ? error.message : 'Failed to load catalog';
-    console.error('[solidPods] Failed to initialize catalog:', error);
-    throw error;
-  }
+  return run;
 }
 
 /**
@@ -196,6 +216,10 @@ export function getCatalogError(): string | null {
 export async function refreshCatalog(): Promise<void> {
   catalogInitialized = false;
   invalidateCatalogCache();
+  // Ein noch laufender alter Lauf darf den Neuaufbau nicht ersetzen: sein
+  // Ergebnis verwirft der Katalogdienst ohnehin (generation), hier wird nur
+  // die geteilte Zusage geloest, damit der naechste Aufruf neu startet.
+  initPromise = null;
   await initializeCatalog();
 }
 

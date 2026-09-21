@@ -221,6 +221,20 @@ describe('v6-Umstellung: die Daten kommen aus den richtigen Quellen', () => {
     expect(query).toContain('tc:firmenname');
   });
 
+  it('laesst nur die Saegewerks-Leistungserklaerung als Saegewerk gelten', () => {
+    // Beide Leistungserklaerungen tragen tc:DeclarationOfPerformance und
+    // tc:manufacturer. Die BSP-Variante haengt ihren Ident direkt ans Dokument
+    // und bestand die Schranke deshalb ebenfalls -- der Holzwerkstoffproduzent
+    // stand als "Saegewerk" in der Lieferkette. Nur die Saegewerks-Vorlage
+    // hat einen tc:SawingProcess; der muss im DoP-Zweig Pflicht sein.
+    const query = createSawmillQuery([PLATTE]);
+    const dopBranch = query.slice(query.indexOf('?dop a tc:DeclarationOfPerformance'));
+    const requiredLines = dopBranch
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('OPTIONAL') && !line.trim().startsWith('#'));
+    expect(requiredLines.join('\n')).toContain('?dop tc:hasSawingProcess ?sawingProcess .');
+  });
+
   it('holt den Herstellernamen aus der Leistungserklaerung', () => {
     // tc:organisation am Panel ist ein ERP-Schluessel, kein Klartextname.
     const query = createBspWerkQuery([PLATTE]);

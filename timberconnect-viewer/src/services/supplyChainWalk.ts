@@ -161,6 +161,34 @@ export async function walkChain(
           if (!epcs.has(found)) discovered.push({ epc: found, direction: entry.direction });
           epcs.add(found);
         }
+
+        // Das Vormaterial eines DOWNSTREAM gefundenen Erzeugnisses.
+        //
+        // Wer eine Lamelle scannt und "Gesamte Kette" waehlt, bekommt die
+        // Platte -- und soll damit dieselbe Datengrundlage haben wie beim
+        // Scan der Platte selbst. Dazu gehoeren deren uebrige 168 Lamellen:
+        // nicht als Herkunft der gescannten Lamelle (sie sind ihre
+        // Geschwister), sondern als Vormaterial der Platte.
+        //
+        // Ohne diesen Schritt fehlt jedes Dokument, das an einer ANDEREN
+        // Lamelle derselben Charge haengt. Der Transportauftrag Schnittholz
+        // ist genau so ein Fall: er transportiert 169 Lamellen, traegt im
+        // Datenraum aber nur einen Ident -- A2 der CO2-Bilanz blieb deshalb
+        // unberechenbar, obwohl der Auftrag im Pod liegt.
+        //
+        // Die Richtungsvererbung bleibt davon unberuehrt: Diese Geschwister
+        // kommen als 'upstream' DER PLATTE herein, nicht als Herkunft der
+        // gescannten Lamelle. Bei "Vorangegangene Kette" gibt es gar keinen
+        // Downstream-Schritt, also auch keine Charge -- die Trennung, die
+        // classifyEpcs zieht, gilt unveraendert weiter.
+        if (entry.direction === 'downstream') {
+          for (const sibling of classified.upstream) {
+            if (sibling === startEpc || epcs.has(sibling)) continue;
+            upstreamEpcs.add(sibling);
+            epcs.add(sibling);
+            discovered.push({ epc: sibling, direction: 'upstream' });
+          }
+        }
       }
     }
 

@@ -129,6 +129,28 @@ describe('walkChain — Scope "full"', () => {
     expect(r.downstreamEpcs).not.toContain(STAMM);
   });
 
+  it('nimmt von einer Lamelle aus die GESCHWISTER der Platte mit', async () => {
+    // Der Sinn von "Gesamte Kette": Wer eine Lamelle scannt, soll dieselben
+    // Daten sehen wie beim Scan der Platte, in die sie eingegangen ist.
+    //
+    // Dazu gehoeren die uebrigen Lamellen DIESER Platte. Nicht als Herkunft
+    // der gescannten Lamelle -- sie sind ihre Geschwister -- sondern als
+    // Vormaterial der Platte, die downstream gefunden wurde. Ohne sie fehlen
+    // alle Dokumente, die an einer anderen Lamelle derselben Charge haengen
+    // (der Transportauftrag Schnittholz zum Beispiel), und A2 der CO2-Bilanz
+    // blieb unberechenbar, obwohl der Auftrag im Datenraum liegt.
+    const r = await walkChain(LAMELLE_A, 'full');
+    expect(r.epcs).toContain(PANEL);
+    expect(r.epcs).toContain(LAMELLE_B);
+  });
+
+  it('bleibt bei "upstream" ohne die Geschwister', async () => {
+    // Die Gegenprobe: Der eingeschraenkte Umfang darf die Charge NICHT
+    // aufspannen -- sonst waere die Richtungsvererbung wirkungslos.
+    const r = await walkChain(LAMELLE_A, 'upstream');
+    expect(r.epcs).not.toContain(LAMELLE_B);
+  });
+
   it('zaehlt nur die erste Stufe als gefundene Ereignisse', async () => {
     // Die Anzeige "N Ereignisse" beschreibt das erfasste Bauteil, nicht die
     // halbe Lieferkette.

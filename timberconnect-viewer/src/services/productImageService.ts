@@ -230,6 +230,41 @@ function localName(uri: string): string {
 }
 
 /**
+ * Stufe aus einer Liste roher RDF-Typangaben bestimmen.
+ *
+ * Herausgeloest, weil dieselbe Zuordnung an zwei Stellen gebraucht wird: fuer
+ * den GESCANNTEN Ident (stageFromMasterData) und fuer die Idente, die
+ * downstream in der Kette liegen (downstreamStages in sparqlService). Beide
+ * muessen sich gleich entscheiden -- eine zweite, nebenher gepflegte Tabelle
+ * waere genau die Art von Doppel-Wahrheit, die useCases.ts oben ausdruecklich
+ * vermeidet.
+ *
+ * Erwartet werden Typangaben als URI, Praefixform oder lokaler Name; die
+ * Normalisierung passiert hier.
+ */
+export function stageFromTypeNames(rawTypes: string[]): ProductStage | null {
+  const types = rawTypes
+    .map(localName)
+    // Belegdokumente aussortieren: sie tragen den Ident, sagen aber nichts
+    // ueber die Produktart. Ohne diesen Schritt entschiede die Reihenfolge der
+    // geladenen Quellen, ob die Platte erkannt wird -- kommt die
+    // Leistungserklaerung zuerst, bliebe die Angabe leer.
+    .filter((t) => !NON_PRODUCT_CLASSES.includes(t));
+
+  // 1. Produktklasse am Ident (tc:Stem, tc:SawnTimber, tc:CLT ...).
+  for (const { classes, stage } of TYPE_TO_STAGE) {
+    if (types.some((t) => classes.includes(t))) return stage;
+  }
+
+  // 2. Vorgang am Ident: er bestimmt das Erzeugnis eindeutig.
+  for (const { classes, stage } of PROCESS_TO_STAGE) {
+    if (types.some((t) => classes.includes(t))) return stage;
+  }
+
+  return null;
+}
+
+/**
  * Alle RDF-Typen einsammeln, die zum erfassten Ident gehoeren.
  *
  * Wichtig ist die Einschraenkung auf das Subjekt mit DIESEM Ident: beim Scan
@@ -261,22 +296,8 @@ function stageFromMasterData(
     .filter((t): t is string => !!t)
     .map(localName);
 
-  const types = allTypes
-    // Belegdokumente aussortieren: sie tragen den Ident, sagen aber nichts
-    // ueber die Produktart. Ohne diesen Schritt entschiede die Reihenfolge der
-    // geladenen Quellen, ob die Platte erkannt wird -- kommt die
-    // Leistungserklaerung zuerst, bliebe die Angabe leer.
-    .filter((t) => !NON_PRODUCT_CLASSES.includes(t));
-
-  // 1. Produktklasse am Ident (tc:Stem, tc:SawnTimber, tc:CLT ...).
-  for (const { classes, stage } of TYPE_TO_STAGE) {
-    if (types.some((t) => classes.includes(t))) return stage;
-  }
-
-  // 2. Vorgang am Ident: er bestimmt das Erzeugnis eindeutig.
-  for (const { classes, stage } of PROCESS_TO_STAGE) {
-    if (types.some((t) => classes.includes(t))) return stage;
-  }
+  const stageFromTypes = stageFromTypeNames(allTypes);
+  if (stageFromTypes) return stageFromTypes;
 
   // 3. Stammdaten des Rundholzes. `createStemQuery` bindet ``?stem a tc:Stem``
   //    und liefert die Messwerte eines einzelnen Stammes (Durchmesser,
@@ -311,6 +332,18 @@ function stageFromMasterData(
   }
 
   return null;
+}
+
+/**
+ * Beschriftung einer Stufe ("Rundholz", "BSP-Platte" ...).
+ *
+ * Greift auf dieselbe Tabelle zu wie das Bild-Badge: waere die Beschriftung
+ * anderswo noch einmal aufgeschrieben, hiesse dieselbe Stufe je nach Ansicht
+ * anders -- genau der Fehler, den die Registry in config/useCases.ts fuer die
+ * Anwendungsfaelle behebt.
+ */
+export function stageLabel(stage: ProductStage): string {
+  return STAGE_IMAGES[stage].label;
 }
 
 /** Die alte Zweiteilung auf die neuen Stufen abbilden. */

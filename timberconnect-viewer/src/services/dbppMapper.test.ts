@@ -246,6 +246,16 @@ describe('mapToDbpp', () => {
     }
   });
 
+  it('benennt die Kategorien wie vom Projektpartner vorgegeben', () => {
+    // Anmerkungen 17.09.2026: "Hersteller" statt "Akteure", "Einbau" statt
+    // "Verbau". Die Ids bleiben, damit gespeicherte Zustaende weiter passen.
+    const titles = Object.fromEntries(
+      mapToDbpp(dataWith(), null).categories.map((c) => [c.id, c.title]),
+    );
+    expect(titles.identification).toBe('Produkt- und Herstelleridentifikation');
+    expect(titles.lifecycle).toBe('Einbau, Rückbau und Lebensende');
+  });
+
   it('gibt jeder Kategorie eine Rechtsgrundlage', () => {
     const result = mapToDbpp(dataWith([PANEL_ROW]), null, FULL_CARBON);
 

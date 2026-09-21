@@ -22,14 +22,14 @@ import {
   type DbppCarbonInput,
 } from '../../services/dbppMapper';
 import { computeLca, extractLcaInputs } from '../../services/lcaService';
+import { mapToProvenance } from '../../services/provenanceMapper';
 import { productImageFor } from '../../services/productImageService';
 import { isEpc } from '../../services/sparqlQueries';
 import { useLcaDistances } from '../../hooks/useLcaDistances';
 import { useOwnProductPhoto } from '../../hooks/useOwnProductPhoto';
 import { DocumentDownloadSection } from '../Documents';
 import { PlantingAreaCard } from '../Map';
-import { SupplyChainTimeline } from './SupplyChainTimeline';
-import { DppDisclosureSection } from './DppDisclosureSection';
+import { ActorStationList } from '../Origin';
 
 /**
  * Anwendungsfall "Digitaler Bauproduktpass" (DBPP).
@@ -38,10 +38,19 @@ import { DppDisclosureSection } from './DppDisclosureSection';
  * einen digitalen Produktpass vorsieht -- gegliedert nach der
  * Bauprodukteverordnung (EU) 2024/3110 und der Oekodesign-Verordnung (ESPR).
  *
- * Der Pass ist ausdruecklich KEIN konformer DPP; das Banner unter dem Titel
- * und der Abschnitt "Verhaeltnis zum EU-Produktpass" am Seitenende sagen das
- * unmissverstaendlich. Er zeigt, was mit den heute vorhandenen Daten moeglich
- * waere -- und wo die Kette reisst.
+ * Der Pass ist ausdruecklich KEIN konformer DPP; der Hinweisblock unter dem
+ * Titel sagt das unmissverstaendlich -- mit dem Wortlaut des Projektpartners
+ * (Anmerkungen 17.09.2026), einschliesslich der drei Aspekte, die der
+ * Demonstrator nicht abdeckt. Der frueher zusaetzliche Abschnitt
+ * "Verhaeltnis zum EU-Produktpass" am Seitenende ist damit entfallen: er
+ * sagte dasselbe ein zweites Mal, nur laenger.
+ *
+ * Die Lieferkette ist seit derselben Anmerkung die Akteursliste des
+ * Herkunftsnachweises (mapToProvenance + ActorStationList): nur die
+ * Stationen, keine Produktdaten je Station -- die stehen in den Kategorien
+ * darueber. Vorher hatte der Pass eine eigene Zeitachse mit eigenen
+ * Rollenetiketten, und dieselbe Firma hiess dort "Verarbeitung", im
+ * Herkunftsnachweis "Holzwerkstoffproduzent".
  *
  * Die Merkmale setzt services/dbppMapper.ts zusammen; hier wird nur
  * dargestellt. Wie in der Rueckbaubarkeit werden fehlende Merkmale NICHT
@@ -143,6 +152,14 @@ export function ProductPassView({
     [productData, product, carbon],
   );
 
+  // Dieselben Stationen wie im Herkunftsnachweis -- ohne Geocoding, weil
+  // der Pass keine Karte hat. Fehlt eine Station dort, fehlt sie auch hier:
+  // beide lesen aus denselben Vorgaengen.
+  const stations = useMemo(
+    () => mapToProvenance(productData, product, supplyChain).actors,
+    [productData, product, supplyChain],
+  );
+
   // Produktfoto der erkannten Stufe. Nennen die Stammdaten keinen Typ, wird
   // die Produktart nicht geraten -- dann bleibt der neutrale Platzhalter.
   const productImage = useMemo(
@@ -214,15 +231,20 @@ export function ProductPassView({
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
             Digitaler <span className="text-acid-400">Bauproduktpass</span>
           </h1>
+          {/* Wortlaut des Projektpartners (17.09.2026) -- identisch mit der
+              Beschreibung im Infoblock der Startseite (config/useCases.ts). */}
           <p className="text-sm text-night-300 mt-2 leading-relaxed">
-            Alle Angaben zu diesem Bauteil, gegliedert nach den Datenkategorien,
-            die die EU für einen digitalen Produktpass vorsieht.
+            Der Digitale Bauproduktpass (DBPP) wird im Forschungsprojekt
+            TimberConnect als branchenspezifischer Vorläufer zum Digital
+            Product Passport (DPP) gemäß der Bauproduktenverordnung (EU)
+            2024/3110 für Holzbauteile entwickelt.
           </p>
         </motion.div>
 
-        {/* Abgrenzung -- amber statt acid, damit das Banner nicht wie ein
-            Guetesiegel wirkt. Der ausklappbare Abschnitt am Seitenende
-            erlaeutert die Rechtslage im Einzelnen. */}
+        {/* Hinweisblock -- amber statt acid, damit er nicht wie ein
+            Guetesiegel wirkt. Wortlaut des Projektpartners (17.09.2026);
+            die "Stand"-Angabe ist Teil dieses Wortlauts und wird bei einer
+            Aktualisierung des Textes mitgezogen, nicht automatisch erzeugt. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -230,16 +252,31 @@ export function ProductPassView({
           className="mb-6 flex gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4"
         >
           <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-300 mt-0.5" />
-          <p className="text-xs leading-relaxed text-amber-100/90">
-            <strong className="font-semibold text-amber-200">
-              Demonstrator, kein amtlicher Produktpass.
-            </strong>{' '}
-            Diese Ansicht ist kein Digitaler Produktpass nach der
-            EU-Bauprodukteverordnung (EU) 2024/3110. Sie zeigt, welche der dort
-            vorgesehenen Angaben sich aus den Daten dieses Datenraums heute
-            bereits erzeugen ließen — und an welchen Stellen die Kette noch
-            reißt.
-          </p>
+          <div className="text-xs leading-relaxed text-amber-100/90 space-y-2 min-w-0">
+            <p className="font-semibold text-amber-200">
+              Demonstrator, kein amtlicher Produktpass (DPP) nach EU-Vorgaben!
+            </p>
+            <p>
+              Der Digitale Bauproduktpass (DBPP) soll aufzeigen, welche Daten
+              aus der Wertschöpfungskette Holz in Anlehnung an bis heute
+              (Stand September 2026) veröffentlichte Vorgaben des DPP EU
+              bereitgestellt werden können. Die produktspezifischen
+              delegierten Rechtsakte, die Inhalte für Holzbauteile vorgeben,
+              sind erst ab 2028 zu erwarten.
+            </p>
+            <p>
+              Folgende Aspekte des DPP EU werden im Digitalen Bauproduktpass
+              (DBPP) nicht berücksichtigt:
+            </p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Eintragung im EU-Produktpass-Register inkl. Registerkennung</li>
+              <li>Prüfung durch notifizierte Stelle</li>
+              <li>
+                Systemarchitektur und technische Umsetzung gemäß der
+                delegierten Rechtsakte
+              </li>
+            </ul>
+          </div>
         </motion.div>
 
         <div className="space-y-4">
@@ -372,8 +409,10 @@ export function ProductPassView({
               );
             })}
 
-            {/* Lieferkette -- als achte, gleichrangige Sektion */}
-            {supplyChain.length > 0 && (
+            {/* Lieferkette -- als achte, gleichrangige Sektion. Nur die
+                Stationen (Projektpartner, 17.09.2026); Produktdaten stehen
+                in den Kategorien darueber. */}
+            {stations.length > 0 && (
               <div
                 className={`bg-night-800 border rounded-2xl overflow-hidden transition-colors ${
                   chainOpen ? 'border-acid-400/40' : 'border-white/5'
@@ -391,7 +430,7 @@ export function ProductPassView({
                     Lieferkette
                   </span>
                   <span className="text-[11px] tabular-nums text-night-400 flex-shrink-0">
-                    {supplyChain.length}
+                    {stations.length}
                   </span>
                   <ChevronDown
                     className={`w-4 h-4 text-night-300 flex-shrink-0 transition-transform ${
@@ -410,11 +449,12 @@ export function ProductPassView({
                     >
                       <div className="px-4 pb-4">
                         <p className="text-xs text-night-300 leading-relaxed mb-3">
-                          Die belegten Stationen vom Wald bis zum Bauteil. Jede
-                          Station stammt aus einem eigenen Vorgang im
-                          Datenraum.
+                          Die belegten Stationen vom Wald bis zum Bauteil, wie
+                          im Herkunftsnachweis. Jede Station stammt aus einem
+                          eigenen Vorgang im Datenraum; fehlt eine, ist die
+                          Kette in den geladenen Quellen dort nicht belegt.
                         </p>
-                        <SupplyChainTimeline steps={supplyChain} />
+                        <ActorStationList actors={stations} />
                       </div>
                     </motion.div>
                   )}
@@ -441,9 +481,6 @@ export function ProductPassView({
             productData={productData}
             delay={0.2}
           />
-
-          {/* Rechtliche Einordnung */}
-          <DppDisclosureSection delay={0.25} />
         </div>
       </div>
     </div>

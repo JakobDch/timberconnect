@@ -119,6 +119,7 @@ export async function ensureRegisteredInFederation(webId: string): Promise<void>
       return;
     }
     memberCache = null; // Cache invalidieren, damit der neue Member sofort sichtbar ist
+    invalidateMemberRoles();
     console.log('[registry] WebID im Föderations-Register eingetragen:', webId);
   } catch (e) {
     console.warn('[registry] Föderations-Registrierung fehlgeschlagen:', e);
@@ -166,13 +167,54 @@ export async function getRoleForWebId(webId: string): Promise<string | null> {
 }
 
 /**
+ * Rollen ALLER Mitglieder, einmal gelesen und fuer MEMBER_TTL gehalten.
+ *
+ * Vorher las resolveRoleMembers je Aufruf die role.ttl jedes Mitglieds neu.
+ * refreshOwnGroupDocs ruft es beim Login je freigegebener Rolle auf: bei
+ * zehn Rollen und 23 Pods waren das 230 Anfragen, von denen die meisten
+ * mit 403 endeten (fremde role.ttl sind nicht oeffentlich) und die Konsole
+ * mit Stacktraces fuellten (Befund 18.09.2026). Jetzt eine Runde ueber die
+ * Mitglieder, danach nur noch Filtern im Speicher. Gleichzeitige Aufrufer
+ * teilen sich den laufenden Abruf.
+ */
+let roleMapCache: { roles: Map<string, string | null>; at: number } | null = null;
+let roleMapInFlight: Promise<Map<string, string | null>> | null = null;
+
+export async function resolveMemberRoles(): Promise<Map<string, string | null>> {
+  if (roleMapCache && Date.now() - roleMapCache.at < MEMBER_TTL) return roleMapCache.roles;
+  if (roleMapInFlight) return roleMapInFlight;
+
+  const run = (async () => {
+    const members = await discoverMemberWebIds();
+    const entries = await Promise.all(
+      members.map(async (webId) => [webId, await getRoleForWebId(webId)] as const),
+    );
+    const roles = new Map<string, string | null>(entries);
+    roleMapCache = { roles, at: Date.now() };
+    return roles;
+  })().finally(() => {
+    if (roleMapInFlight === run) roleMapInFlight = null;
+  });
+  roleMapInFlight = run;
+  return run;
+}
+
+/**
+ * Rollen-Cache verwerfen -- nach der eigenen Rollenwahl und nach einem
+ * Registrierungseintrag, damit der neue Stand sofort zaehlt.
+ */
+export function invalidateMemberRoles(): void {
+  roleMapCache = null;
+  roleMapInFlight = null;
+}
+
+/**
  * Resolve all member WebIDs that have declared the given role IRI.
  * Used to materialise a role's vcard:Group membership.
  */
 export async function resolveRoleMembers(roleIri: string): Promise<string[]> {
-  const members = await discoverMemberWebIds();
-  const results = await Promise.all(
-    members.map(async (webId) => ({ webId, role: await getRoleForWebId(webId) })),
-  );
-  return results.filter((r) => r.role === roleIri).map((r) => r.webId);
+  const roles = await resolveMemberRoles();
+  return Array.from(roles.entries())
+    .filter(([, role]) => role === roleIri)
+    .map(([webId]) => webId);
 }

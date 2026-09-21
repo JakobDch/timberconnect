@@ -209,11 +209,11 @@ export function LocationScanSheet({
               <div className="flex items-center justify-between px-5 sm:px-6 pt-4 pb-3 border-b border-white/10">
                 <div className="min-w-0">
                   <h2 className="text-lg sm:text-xl font-bold text-white truncate">
-                    Pflanzung über den Standort finden
+                    Baum finden
                   </h2>
                   <p className="text-xs text-night-400 mt-0.5">
-                    Eine Pflanzung ist über ihre Fläche identifiziert — kein
-                    Code nötig.
+                    Ein Baum trägt keinen Code — er ist über die Fläche seiner
+                    Pflanzung identifiziert.
                   </p>
                 </div>
                 <button

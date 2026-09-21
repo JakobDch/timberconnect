@@ -16,6 +16,8 @@ import { LiabilityView } from './components/Liability';
 import { ChatView } from './components/Chat';
 import { findUseCase, isAvailable, type UseCaseDefinition } from './config/useCases';
 import { PartnerSheet } from './components/Partners';
+import { GuideSheet } from './components/Guide';
+import type { GuideTopicId } from './config/guide';
 import {
   fetchProductData,
   fetchScanPreview,
@@ -40,6 +42,7 @@ import { LoginModal } from './components/Auth/LoginModal';
 import { useAuth } from './auth/AuthContext';
 import { useWallet } from './wallet/WalletContext';
 import { useScanInput } from './hooks/useScanInput';
+import { attachSequencer, beginRun, waitForIdle } from './services/dataspaceSequencer';
 import { describeProblem } from './services/identifiers';
 import type { ParsedIdentifier, ScanSource } from './services/identifiers';
 import type { AppView, Product, SupplyChainStep } from './types';
@@ -60,7 +63,20 @@ import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
  * wirklich hinzukommt.
  */
 const USE_CASE_DATA: Record<string, (d: ProductDataResult) => SparqlBinding[][]> = {
-  dbpp: (d) => [d.product, d.stem, d.forest, d.sawmill, d.bspWerk, d.supplyChain, d.dbpp],
+  // Die Lieferkette des Passes ist seit 17.09.2026 die Akteursliste des
+  // Herkunftsnachweises (mapToProvenance) -- deshalb zaehlen hier auch
+  // Transportauftraege und Akteure mit, aus denen sie ihre Stationen liest.
+  dbpp: (d) => [
+    d.product,
+    d.stem,
+    d.forest,
+    d.sawmill,
+    d.bspWerk,
+    d.supplyChain,
+    d.businessPartners,
+    d.transportOrders,
+    d.dbpp,
+  ],
   co2: (d) => [d.product, d.lca, d.transportOrders, d.declarations],
   'origin-proof': (d) => [
     d.forest,
@@ -104,6 +120,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [sourceStatus, setSourceStatus] = useState<SourceStatus[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  // Zusammenfassung des EPCIS-Abrufs ("6 Event(s) gefunden, 1 EPC(s)
+  // aufgeloest"). Stand bis 17.09.2026 als Warnhinweis ueber der Kurzinfo --
+  // fuer Anwender ohne technischen Hintergrund eher verwirrend (Rueckmeldung
+  // Praxispartner, "Feedback App_Allgemein", Folie 5). Seither ist sie ein
+  // aufklappbares Detail am Erfolgsbanner, getrennt von echten Warnungen.
+  const [epcisSummary, setEpcisSummary] = useState<string | null>(null);
+  // Offenes Thema der Anleitung (Seitenmenue).
+  const [guideTopic, setGuideTopic] = useState<GuideTopicId | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -150,6 +174,10 @@ function App() {
 
   // Initialize catalog on app startup (pre-fetch for better UX)
   useEffect(() => {
+    // Den Datenraum-Sequenzer GLEICH beim Start anhaengen, nicht erst wenn
+    // der Graph gemountet wird: sonst laufen die ersten Meldungen eines
+    // fruehen Scans ins Leere und die Folge beginnt mittendrin.
+    attachSequencer();
     initializeCatalog().catch((err) => {
       console.warn('[App] Catalog initialization failed:', err);
     });
@@ -188,6 +216,7 @@ function App() {
       setIsLoading(true);
       setError(null);
       setWarnings([]);
+      setEpcisSummary(null);
       setSourceStatus([]);
 
       try {
@@ -196,26 +225,42 @@ function App() {
             `(${preview ? 'nur Kurzinfo' : `Umfang: ${scope}`})`,
         );
 
+        // Die Folge ANKUENDIGEN, bevor abgefragt wird: liegen alle Quellen im
+        // Cache, meldet niemand etwas, und der Graph bliebe ohne diesen
+        // Anstoss stumm (siehe beginRun).
+        beginRun();
+
         const data = preview
           ? await fetchScanPreview(traceId)
           : await fetchProductData(traceId, undefined, scope);
+
+        // Die Datenraum-Animation zu Ende laufen lassen, BEVOR die Daten
+        // erscheinen.
+        //
+        // Liegen die Quellen im Cache, ist die Abfrage in Millisekunden
+        // zurueck -- der Graph blitzte dann kurz auf oder war gar nicht zu
+        // sehen, und vom Aufwand im Hintergrund bemerkte der Nutzer nichts
+        // (Rueckmeldung 21.09.2026). Genau das soll die Darstellung ja
+        // zeigen. Laeuft nichts, kehrt waitForIdle sofort zurueck; es wird
+        // also nie kuenstlich gewartet, wo es nichts zu sehen gibt.
+        await waitForIdle();
 
         console.log('[App] Received data:', data);
 
         // Store source status for UI display
         setSourceStatus(data.sourceStatus);
 
-        // Surface the EPCIS retrieval summary (EPC-centric flow) + any warnings.
-        const infoLines: string[] = [];
+        // EPCIS-Zusammenfassung getrennt von den Warnungen: sie ist eine
+        // technische Auskunft, kein Problem.
         if (data.epcisInfo) {
           const i = data.epcisInfo;
-          infoLines.push(
+          setEpcisSummary(
             `EPCIS: ${i.eventsReturned} Event(s) gefunden, ${i.epcsResolved} EPC(s) aufgelöst` +
               (i.eventsFilteredOut > 0 ? ` (${i.eventsFilteredOut} per Consent gefiltert)` : ''),
           );
         }
-        if (infoLines.length > 0 || data.errors.length > 0) {
-          setWarnings([...infoLines, ...data.errors]);
+        if (data.errors.length > 0) {
+          setWarnings(data.errors);
         }
 
         // Log source availability
@@ -583,6 +628,7 @@ function App() {
     // gekaufte Punkte trotzdem gratis bleiben.
     setUnlockedUseCases(new Set());
     setChainScope('full');
+    setEpcisSummary(null);
   };
 
   /**
@@ -637,6 +683,7 @@ function App() {
         onResetClick={() => setResetOpen(true)}
         isLoggedIn={isLoggedIn}
         onUseCaseClick={handleSelectUseCase}
+        onGuideClick={setGuideTopic}
       />
 
       <main className="flex-1 flex flex-col relative">
@@ -676,6 +723,7 @@ function App() {
               isLoading={isLoading}
               error={error}
               warnings={warnings}
+              epcisSummary={epcisSummary}
               sourcePods={sourceStatus.filter((s) => s.available).map((s) => s.pod)}
               scope={chainScope}
               onScopeChange={handleScopeChange}
@@ -841,6 +889,13 @@ function App() {
 
       {/* Praxispartner (Startseite / Seitenmenü) */}
       <PartnerSheet isOpen={partnersOpen} onClose={() => setPartnersOpen(false)} />
+
+      {/* Anleitung (Seitenmenue) */}
+      <GuideSheet
+        topicId={guideTopic}
+        onClose={() => setGuideTopic(null)}
+        onSelectTopic={setGuideTopic}
+      />
 
       {/* Footer: EU-Logo | NRW-Logo nebeneinander.
           Die Foerderlogos muessen lesbar sein (Rueckmeldung Anni, 24.08.2026),
