@@ -12,6 +12,8 @@ import { geocodeActorLocation } from '../../services/geocodingService';
 import { ActorLocationMap, ACTOR_COLORS, ACTOR_LABELS, type ActorMarker } from '../Map';
 import { DocumentDownloadSection } from '../Documents';
 import { ActorStationList } from './ActorStationList';
+import { JsonExportButton } from '../UI/JsonExportButton';
+import { buildOriginExport } from '../../services/useCaseExportService';
 
 /**
  * Anwendungsfall "Herkunftsnachweis" (Awf-Vorgabe, Visualisierung S. 1).
@@ -164,13 +166,17 @@ export function OriginProofView({
     <>
       <div className="flex-1 bg-night-900">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors mb-5"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Zurück</span>
-          </button>
+          {/* Kopfzeile: Zurueck links, JSON-Export rechts. */}
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Zurück</span>
+            </button>
+            <JsonExportButton build={() => buildOriginExport({ ...provenance, actors: resolvedActors }, productId ?? null)} />
+          </div>
 
           {/* Titel + Einleitung */}
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -181,6 +187,16 @@ export function OriginProofView({
               Durchgängige, digitale Rückverfolgbarkeit von Holzprodukten zu deren
               jeweiliger Herkunft: Vom Rundholz aus dem Wald, dem Schnittholz aus dem
               Sägewerk, bis hin zum fertigen Produkt des Holzwerkstoffproduzenten.
+            </p>
+            {/*
+              Herkunft der Merkmalsliste, von den Praxispartnern erbeten
+              (Feedback 22.09.2026): die 28 Informationsanforderungen folgen
+              der EUDR, damit der Awf fuer deren Nachweis taugt.
+            */}
+            <p className="text-xs text-night-400 mt-3 leading-relaxed">
+              Die Inhalte dieses Anwendungsfalls wurden in Anlehnung an die
+              EU-Verordnung für entwaldungsfreie Produkte – kurz EUDR – erstellt
+              und können für deren Nachweis verwendet werden.
             </p>
           </motion.div>
 

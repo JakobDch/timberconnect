@@ -19,6 +19,8 @@ import {
 import { productImageFor } from '../../services/productImageService';
 import { useOwnProductPhoto } from '../../hooks/useOwnProductPhoto';
 import { DocumentDownloadSection } from '../Documents';
+import { JsonExportButton } from '../UI/JsonExportButton';
+import { buildDocumentationExport } from '../../services/useCaseExportService';
 
 /**
  * Anwendungsfall "Dokumentation" (Awf-Vorgabe, Visualisierung S. 1).
@@ -50,6 +52,7 @@ interface DocumentationViewProps {
 }
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  general: Info,
   location: Home,
   dimensions: Box,
   installation: Link2,
@@ -101,8 +104,11 @@ export function DocumentationView({
   onBack,
   onScanClick,
 }: DocumentationViewProps) {
-  // Wie in der Visualisierung: eine Kategorie zur Zeit offen.
-  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  // Wie in der Visualisierung: eine Kategorie zur Zeit offen. Die
+  // allgemeinen Angaben starten offen -- sie standen frueher als fester
+  // Block ueber den Kategorien, und die Ansicht soll nicht voellig
+  // zugeklappt aufgehen (Partner-Feedback 22.09.2026).
+  const [openCategory, setOpenCategory] = useState<string | null>('general');
 
   const documentation = useMemo(
     () => mapToDocumentation(productData, product),
@@ -164,13 +170,17 @@ export function DocumentationView({
   return (
     <div className="flex-1 bg-night-900">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors mb-5"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Zurück</span>
-        </button>
+        {/* Kopfzeile: Zurueck links, JSON-Export rechts. */}
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Zurück</span>
+          </button>
+          <JsonExportButton build={() => buildDocumentationExport(documentation, productId ?? null)} />
+        </div>
 
         {/* Titel + Beschreibung */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -222,26 +232,8 @@ export function DocumentationView({
             </span>
           </motion.section>
 
-          {/* Allgemeine Informationen -- in der Visualisierung ueber den
-              Kategorien, nicht als eigene Klappe. */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="bg-night-800 border border-white/5 rounded-2xl p-4"
-          >
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white mb-3">
-              <Info className="w-4 h-4 text-acid-400 flex-shrink-0" />
-              Allgemeine Informationen
-            </h2>
-            <dl>
-              {documentation.general.map((field) => (
-                <FieldRow key={field.id} field={field} />
-              ))}
-            </dl>
-          </motion.section>
-
-          {/* Die vier Kategorien zum Aufklappen */}
+          {/* Alle Kategorien zum Aufklappen -- einschliesslich der
+              allgemeinen Angaben (Partner-Feedback 22.09.2026). */}
           <motion.section
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}

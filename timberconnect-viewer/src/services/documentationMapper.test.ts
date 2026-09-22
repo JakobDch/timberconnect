@@ -69,14 +69,28 @@ function findField(
 }
 
 describe('mapToDocumentation — Struktur', () => {
-  it('liefert die vier Kategorien der Visualisierung in der vorgegebenen Reihenfolge', () => {
+  // Die allgemeinen Angaben sind seit dem Partner-Feedback (22.09.2026)
+  // eine Kategorie wie jede andere -- vorher standen sie als fest
+  // aufgeklappter Block darueber und liessen sich als Einzige nicht zuklappen.
+  it('liefert die Kategorien der Visualisierung in der vorgegebenen Reihenfolge', () => {
     const result = mapToDocumentation(dataWith(), null);
     expect(result.categories.map((c) => c.id)).toEqual([
+      'general',
       'location',
       'dimensions',
       'installation',
       'manufacturer',
     ]);
+  });
+
+  it('zaehlt die allgemeinen Angaben nur einmal, obwohl general sie auch fuehrt', () => {
+    const result = mapToDocumentation(dataWith(), null);
+    const generalCategory = result.categories.find((c) => c.id === 'general');
+
+    expect(generalCategory?.fields).toEqual(result.general);
+    expect(result.coverage.total).toBe(
+      result.categories.reduce((sum, c) => sum + c.fields.length, 0),
+    );
   });
 
   it('zaehlt nur belegte Merkmale als abgedeckt', () => {

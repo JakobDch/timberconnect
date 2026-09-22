@@ -145,14 +145,31 @@ export interface AddressParts {
 
 const POSTCODE = /\b\d{5}\b/;
 const STREET = /(str|straße|strasse|weg|allee|platz|gasse|ring|damm)\.?\s*\d+/i;
+/**
+ * Rechtsform am Ende des Namens -- das verlaesslichste Merkmal einer Firma.
+ * Ohne diese Pruefung entschied die Reihenfolge der Literale, und die ist
+ * bei einem SPARQL-Kreuzprodukt beliebig: "Im Kissen 19" stand als Name in
+ * der Akteurskarte, "EGGER Saegewerk Brilon GmbH" als Anschrift darunter
+ * (Partner-Feedback 22.09.2026).
+ */
+const COMPANY = /\b(gmbh|mbh|ag|kg|ohg|gbr|se|ug|e\.\s?k|e\.\s?g)\b/i;
+/**
+ * Strasse ohne Stichwort: Wort(e), dann eine Hausnummer am Ende
+ * ("Im Kissen 19", "Am Hang 3a"). Bewusst erst NACH der Firmenpruefung,
+ * sonst verschluckte es Namen, die auf eine Zahl enden.
+ */
+const STREET_WITH_NUMBER = /^[^\d,]+\s\d+\s*[a-z]?$/i;
 
 /**
  * Drei ununterscheidbare Adressliterale nach Name / Strasse / Ort sortieren.
  *
  * Heuristik, bewusst an einer Stelle gebuendelt und exportiert, damit ihre
  * Fehleranfaelligkeit sichtbar und testbar bleibt:
- *   - enthaelt eine 5-stellige Zahl  -> Ort  ("70173 Stuttgart")
+ * Reihenfolge der Pruefungen ist wesentlich -- die spezifischste zuerst:
+ *   - Rechtsform (GmbH, KG, ...)     -> Name  ("EGGER Saegewerk Brilon GmbH")
+ *   - enthaelt eine 5-stellige Zahl  -> Ort   ("70173 Stuttgart")
  *   - Strassen-Stichwort + Hausnr.   -> Strasse
+ *   - Wort(e) + Hausnummer am Ende   -> Strasse ("Im Kissen 19")
  *   - sonst                          -> Name
  * Mehrfachtreffer: der erste gewinnt, weitere landen beim Namen.
  */
@@ -164,9 +181,13 @@ export function classifyAddressParts(values: string[]): AddressParts {
     const value = raw.trim();
     if (!value) continue;
 
-    if (POSTCODE.test(value) && !parts.city) {
+    if (COMPANY.test(value) && !parts.name) {
+      parts.name = value;
+    } else if (POSTCODE.test(value) && !parts.city) {
       parts.city = value;
     } else if (STREET.test(value) && !parts.street) {
+      parts.street = value;
+    } else if (STREET_WITH_NUMBER.test(value) && !parts.street) {
       parts.street = value;
     } else {
       leftovers.push(value);
@@ -180,6 +201,18 @@ export function classifyAddressParts(values: string[]): AddressParts {
   }
 
   return parts;
+}
+
+/**
+ * Belegnummer mit ihrer Bedeutung beschriften.
+ *
+ * Die nackte Zahl sagte nichts: unter dem Forstbetrieb stand bloss "1", und
+ * die Praxispartner fragten zurecht, was das sei (Feedback 22.09.2026). Es
+ * ist die laufende Stammnummer aus der Maschinendatei -- mit Beschriftung
+ * ist sie eine Angabe, ohne war sie ein Raetsel.
+ */
+function labelled(label: string, value: string | null): string | null {
+  return value ? `${label} ${value}` : null;
 }
 
 /** Strasse + Ort zu einer Anzeigezeile; null, wenn beides fehlt. */
@@ -423,11 +456,18 @@ export function mapToProvenance(
   // Leistungserklaerung (I-1 = M-1077, I-2 = M-1078). Das Produktobjekt kennt
   // sie nicht -- es speist sich nur aus den Maschinendaten -- deshalb hat hier
   // das Dokument Vorrang und das Produkt dient als Rueckfallebene.
+  //
+  // Der Handelsname ist tc:typeNumber ("X-LAM C24 Brettsperrholz nach
+  // ETA11/0189"), NICHT tc:title: letzteres ist der Titel des Dokuments, und
+  // in den Vorlagen steht dort schlicht "Leistungserklaerung". Genau das
+  // stand deshalb als Handelsname in der Ansicht (Partner-Feedback
+  // 22.09.2026). Die Rueckbaubarkeit loest es seit jeher so; der
+  // Herkunftsnachweis zieht nach.
   const declarations = data?.declarations ?? [];
-  const declaredTitle = declarations.map((r) => getValue(r, 'title')).find((v) => !!v);
+  const declaredType = declarations.map((r) => getValue(r, 'typeNumber')).find((v) => !!v);
   const declaredUse = declarations.map((r) => getValue(r, 'intendedUse')).find((v) => !!v);
 
-  const tradeName = orNull(declaredTitle) ?? orNull(product?.name);
+  const tradeName = orNull(declaredType) ?? orNull(product?.name);
   const description = orNull(declaredUse) ?? orNull(product?.description);
 
   const volumeM3 =
@@ -495,7 +535,10 @@ export function mapToProvenance(
           orNull(getValue(stem, 'district')) ??
           orNull(forestStep?.location),
       ),
-      reference: orNull(getValue(stem, 'stemNumber')) ?? orNull(getValue(stem, 'stemKey')),
+      reference: labelled(
+        'Stamm-Nr.',
+        orNull(getValue(stem, 'stemNumber')) ?? orNull(getValue(stem, 'stemKey')),
+      ),
       transportDate: transportDates[0] ?? parseDate(pick(sawmillRows, 'deliveryDate')),
       coordinates: fellingCoordinates,
       coordinateSource: fellingCoordinates ? 'measured' : null,
@@ -532,7 +575,8 @@ export function mapToProvenance(
         addressFromRows(sawmillRows) ??
         joinAddress(null, orNull(sawmillStep?.location)),
       reference:
-        pick(sawmillRows, 'polterId') ?? orNull(lamellaDelivery?.transportNumber),
+        labelled('Polter-Nr.', pick(sawmillRows, 'polterId')) ??
+        labelled('Transport-Nr.', orNull(lamellaDelivery?.transportNumber)),
       transportDate:
         // I-18: Ankunft des Rundholzes im Saegewerk -- das Datum des
         // Rundholz-Auftrags, das Einzige, was dieser beisteuert.
@@ -571,8 +615,8 @@ export function mapToProvenance(
         joinAddress(null, pick(bspWerkRows, 'produktionsstandort')) ??
         joinAddress(null, orNull(manufacturerStep?.location)),
       reference:
-        pick(bspWerkRows, 'konstruktionsnummer') ??
-        orNull(manufacturerDelivery?.transportNumber),
+        labelled('Konstruktions-Nr.', pick(bspWerkRows, 'konstruktionsnummer')) ??
+        labelled('Transport-Nr.', orNull(manufacturerDelivery?.transportNumber)),
       transportDate:
         // I-22/I-26: Datum der Entladung beim Produzenten. Das Dokument ist
         // hier belastbarer als der Positionsindex in den EPCIS-Events.

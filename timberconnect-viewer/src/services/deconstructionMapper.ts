@@ -399,7 +399,7 @@ export function mapToDeconstruction(
       id: 'general',
       title: 'Allgemeine Informationen',
       description:
-        'Produktkennzeichnung, Festigkeit und zeitliche Einordnung der Platte im Bauwerk.',
+        'Produktkennzeichnung, Festigkeit und zeitliche Einordnung der BSP-Platte im Bauwerk.',
       fields: [
         field('I-1', 'Handelsname', tradeName),
         field('I-29', 'Festigkeitsklasse', strengthClass),
@@ -433,7 +433,7 @@ export function mapToDeconstruction(
       id: 'dimensions',
       title: 'Gewicht & Abmessungen',
       description:
-        'Maße und Schichtaufbau der Platte — Grundlage für Demontageplanung, Hebezeug und Transport.',
+        'Maße und Schichtaufbau der BSP-Platte — Grundlage für Demontageplanung, Rückbau und Transport.',
       fields: [
         // Einheiten laut ERP-Tabelle: Volumen in m³, Staerke in mm, Breite und
         // Laenge in m. Die Leistungserklaerung bringt sie als Text schon mit
@@ -523,7 +523,7 @@ export function mapToDeconstruction(
         unsupported(
           'I-55',
           'Verbindungsart',
-          'Betrifft die Verbindung zu angrenzenden Bauteilen (z. B. Schrauben, Winkel) — nicht die Verklebung im Inneren. Angaben des Verbindungsmittelherstellers liegen nicht vor.',
+          'Betrifft die Verbindung zu angrenzenden Bauteilen (z. B. geschraubt, geklebt, etc.) — nicht die Verklebung der Lamellen. Angaben des Verbindungsmittelherstellers liegen nicht vor.',
         ),
         unsupported(
           'I-56',

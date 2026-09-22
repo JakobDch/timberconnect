@@ -79,7 +79,11 @@ export interface DocumentationData {
   componentName: string | null;
   /** Kopfbereich: Bauteilart aus der Planung, z.B. "Boden" (M-1177). */
   componentType: string | null;
-  /** Allgemeine Angaben ueber den Kategorien (Visualisierung S. 1). */
+  /**
+   * Allgemeine Angaben. Stehen zusaetzlich als erste Kategorie in
+   * `categories` -- die Ansicht rendert sie von dort, dieses Feld bleibt
+   * als direkter Zugriff fuer Tests und kuenftige Auswertungen.
+   */
   general: DocumentationField[];
   categories: DocumentationCategory[];
   /** Zaehlwerk fuer den Abdeckungshinweis. */
@@ -212,6 +216,13 @@ function planned(
   value: string | null,
   hasPlanning: boolean,
   note: string,
+  /**
+   * Begruendung, wenn ueberhaupt keine Planung vorliegt. Der Regelfall ist
+   * der Hinweis auf die fehlende IFC; die Kategorie "Einbau" setzt hier ihren
+   * eigenen Text, weil der Einbau nicht aus der Planung stammt, sondern aus
+   * der Bauwerksdokumentation (Partner-Feedback 22.09.2026).
+   */
+  missingPlanningNote = 'Zu diesem Bauteil wurde keine Ausführungsplanung (IFC) hinterlegt.',
 ): DocumentationField {
   if (value) return { id, label, value, availability: 'available' };
   return {
@@ -219,9 +230,7 @@ function planned(
     label,
     value: null,
     availability: 'missing',
-    note: hasPlanning
-      ? note
-      : 'Zu diesem Bauteil wurde keine Ausführungsplanung (IFC) hinterlegt.',
+    note: hasPlanning ? note : missingPlanningNote,
   };
 }
 
@@ -379,6 +388,17 @@ export function mapToDocumentation(
   ];
 
   const categories: DocumentationCategory[] = [
+    // Auf Wunsch der Praxispartner (Feedback 22.09.2026) sind die
+    // allgemeinen Angaben eine Kategorie wie jede andere -- vorher standen
+    // sie als fest aufgeklappter Block darueber und waren als Einzige nicht
+    // zusammenklappbar.
+    {
+      id: 'general',
+      title: 'Allgemeine Informationen',
+      description:
+        'Bezeichnung, Holzart, Zertifizierung und Verwendungszweck des Bauteils.',
+      fields: general,
+    },
     {
       id: 'location',
       title: 'Verortung im Gebäude',
@@ -514,7 +534,8 @@ export function mapToDocumentation(
           'Einbau & Anlieferung',
           installation,
           hasPlanning,
-          'Die Ausführungsplanung unterscheidet Werks- und Baustelleneinbau; der vorliegende IFC-Export schreibt diesen Parameter nicht mit.',
+          'Keine Bauwerksdokumentation/ kein Abnahmeprotokoll vorliegend.',
+          'Keine Bauwerksdokumentation/ kein Abnahmeprotokoll vorliegend.',
         ),
         // Laut Visualisierung ist die gesamte Kategorie "aktuell nicht
         // befuellbar". Der Einbau wird von der ausfuehrenden Firma
@@ -523,17 +544,17 @@ export function mapToDocumentation(
         unsupported(
           'I-90',
           'Einbaudatum',
-          'Wird beim Einbau von der ausführenden Firma erfasst; für dieses Bauteil liegt keine Baustellendokumentation vor.',
+          'Keine Bauwerksdokumentation/ kein Abnahmeprotokoll vorliegend.',
         ),
         unsupported(
           'I-91',
           'Einbauort im Bauwerk',
-          'Die genaue Einbaulage entsteht erst bei der Montage; im Datenraum ist bislang nur die geplante Verortung hinterlegt.',
+          'Keine Bauwerksdokumentation/ kein Abnahmeprotokoll vorliegend.',
         ),
         unsupported(
           'I-92',
           'Abnahme / Protokoll',
-          'Abnahmeprotokolle der Bauausführung sind im Demonstrator nicht angebunden.',
+          'Keine Bauwerksdokumentation/ kein Abnahmeprotokoll vorliegend.',
         ),
       ],
     },
@@ -557,7 +578,9 @@ export function mapToDocumentation(
     },
   ];
 
-  const all = [...general, ...categories.flatMap((c) => c.fields)];
+  // general ist Teil von categories -- nicht erneut dazurechnen, sonst
+  // zaehlte jedes allgemeine Merkmal zweimal.
+  const all = categories.flatMap((c) => c.fields);
 
   return {
     componentName: tradeName,

@@ -23,6 +23,8 @@ import { productImageFor } from '../../services/productImageService';
 import { useOwnProductPhoto } from '../../hooks/useOwnProductPhoto';
 import { DocumentDownloadSection } from '../Documents';
 import { DamageReportSheet } from './DamageReportSheet';
+import { JsonExportButton } from '../UI/JsonExportButton';
+import { buildLiabilityExport } from '../../services/useCaseExportService';
 
 /**
  * Anwendungsfall "Nachweis der Haftung".
@@ -211,13 +213,17 @@ export function LiabilityView({
   return (
     <div className="flex-1 bg-night-900">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors mb-5"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Zurück</span>
-        </button>
+        {/* Kopfzeile: Zurueck links, JSON-Export rechts. */}
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Zurück</span>
+          </button>
+          <JsonExportButton build={() => buildLiabilityExport({ ...liability, damageReports }, productId ?? null)} />
+        </div>
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">

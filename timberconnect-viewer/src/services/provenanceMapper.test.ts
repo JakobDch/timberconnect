@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapToProvenance, parseDate } from './provenanceMapper';
+import { classifyAddressParts, mapToProvenance, parseDate } from './provenanceMapper';
 import type { ProductDataResult, SparqlBinding } from './sparqlService';
 import type { Product, SupplyChainStep } from '../types';
 
@@ -35,6 +35,46 @@ const steps: SupplyChainStep[] = [
   { id: 3, stage: 'sawmill', company: 'Sägewerk', date: '', location: '', description: '', details: [], icon: 'factory' },
   { id: 4, stage: 'manufacturer', company: 'BSP-Werk', date: '', location: '', description: '', details: [], icon: 'building' },
 ] as SupplyChainStep[];
+
+/**
+ * Partner-Feedback 22.09.2026: in der Akteurskarte des Saegewerks standen
+ * Name und Anschrift vertauscht -- "Im Kissen 19" fett als Firma, die Firma
+ * klein darunter. Ursache war die Reihenfolge im Adress-Beutel: eine Strasse
+ * ohne Stichwort ("Kissen" ist keine "-strasse") fiel durch beide Muster und
+ * beanspruchte als erster Rest den Namen.
+ */
+describe('classifyAddressParts', () => {
+  it('erkennt die Firma an der Rechtsform, auch wenn die Strasse zuerst kommt', () => {
+    const parts = classifyAddressParts([
+      'Im Kissen 19',
+      'EGGER Sägewerk Brilon GmbH',
+      '59929 Brilon',
+    ]);
+
+    expect(parts.name).toBe('EGGER Sägewerk Brilon GmbH');
+    expect(parts.street).toBe('Im Kissen 19');
+    expect(parts.city).toBe('59929 Brilon');
+  });
+
+  it('sortiert eine Strasse mit Stichwort weiterhin richtig', () => {
+    const parts = classifyAddressParts([
+      'Poppensieker & Derix GmbH & Co.KG',
+      'Industriestraße 24',
+      '49492 Westerkappeln-Velpe',
+    ]);
+
+    expect(parts.name).toBe('Poppensieker & Derix GmbH & Co.KG');
+    expect(parts.street).toBe('Industriestraße 24');
+    expect(parts.city).toBe('49492 Westerkappeln-Velpe');
+  });
+
+  it('haelt einen Ortsnamen ohne Hausnummer vom Strassenfeld fern', () => {
+    const parts = classifyAddressParts(['Forstbetrieb A1 GmbH', 'Arnsberg']);
+
+    expect(parts.name).toBe('Forstbetrieb A1 GmbH');
+    expect(parts.street).toBe('Arnsberg');
+  });
+});
 
 describe('parseDate', () => {
   it('liest das Datum der Rundholz-Vorlage (TT/MM/JJJJ)', () => {

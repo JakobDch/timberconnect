@@ -31,6 +31,8 @@ import { DownstreamSubjectNotice } from '../UI/DownstreamSubjectNotice';
 import { useCaseRefersToDownstreamPanel } from '../../config/useCases';
 import { DocumentDownloadSection } from '../Documents';
 import type { PodFileEntry } from '../../services/fileBrowserService';
+import { JsonExportButton } from '../UI/JsonExportButton';
+import { buildCo2Export } from '../../services/useCaseExportService';
 
 /**
  * Anwendungsfall "CO2-Bilanz" (Awf-Vorgabe 08/2026, Visualisierung S. 1-2).
@@ -405,13 +407,17 @@ export function CO2BalanceView({
     <>
       <div className="flex-1 bg-night-900">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors mb-5"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Zurück</span>
-          </button>
+          {/* Kopfzeile: Zurueck links, JSON-Export rechts. */}
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-night-300 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Zurück</span>
+            </button>
+            <JsonExportButton build={() => buildCo2Export(info, lca, productId ?? null)} />
+          </div>
 
           {/* Titel + Beschreibung */}
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
