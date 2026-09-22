@@ -488,7 +488,11 @@ export function mapToLiability(
   const durability = firstValue(rows, 'dopDurability');
   const sampleIds = allValues(rows, 'sampleId');
   const tester = firstValue(rows, 'tester');
-  const testDateTime = firstValue(rows, 'testDateTime') ?? firstValue(rows, 'printedAt');
+  // Kein Rueckfall auf tc:printedAt: das Druckdatum des Berichts ist ein
+  // anderes Ereignis als der Pruefzeitpunkt und liegt oft Wochen spaeter.
+  // Fuer den Regress ist "wann wurde geprueft" die Frage -- ein Druckdatum
+  // an dieser Stelle waere ein falscher Nachweis, keine Naeherung.
+  const testDateTime = firstValue(rows, 'testDateTime');
 
   // Geltungsbereich des Pruefergebnisses: Die Vorlage der Biegepruefung
   // verlangt den Materialbezug als Pflichtfeld, und materialEpc ist eine
@@ -544,11 +548,19 @@ export function mapToLiability(
   // Luecken, die den Regress gegen den Klebstoffhersteller unscharf laesst.
   const adhesiveLgtin = firstEpcMatching(events, /lgtin.*(?:kleb|adhes)/i);
   const adhesiveQuantity = quantityFromEvents(events);
-  const adhesiveName =
-    firstValue(rows, 'adhesiveProductName') ?? firstValue(deconRows, 'adhesiveName');
+  // Zwei benachbarte, aber nicht deckungsgleiche Praedikate: tc:productName
+  // ist die "Herstellerbezeichnung" des Datenblatts, tc:name die
+  // "Produktbezeichnung" aus der Rueckbau-Abfrage. Statt sie stillschweigend
+  // gleichzusetzen, wird der Ersatzwert als abgeleitet ausgewiesen.
+  const adhesiveProductName = firstValue(rows, 'adhesiveProductName');
+  const adhesiveName = firstValue(deconRows, 'adhesiveName');
   const curingType = firstValue(rows, 'curingType');
   const storageConditions = firstValue(rows, 'storageConditions');
-  const disclaimer = firstValue(rows, 'safetyNote') ?? firstValue(rows, 'processingNote');
+  // Kein Rueckfall auf tc:processingNote: das Sicherheitsdatenblatt fuehrt
+  // "Sicherheitsmassnahmen" und "Verarbeitungshinweise" als zwei getrennte
+  // Felder. Einen Verarbeitungshinweis als Sicherheitsangabe auszugeben,
+  // waere im Haftungsfall die folgenreichste der moeglichen Verwechslungen.
+  const disclaimer = firstValue(rows, 'safetyNote');
 
   const adhesiveFields: LiabilityField[] = [
     field(
@@ -563,7 +575,14 @@ export function mapToLiability(
       adhesiveQuantity,
       'Zu diesem Bauteil liegt kein Herstellungsvorgang mit Klebstoffmenge vor.',
     ),
-    field('I-18', 'Produktbezeichnung', adhesiveName),
+    adhesiveProductName
+      ? field('I-18', 'Produktbezeichnung', adhesiveProductName)
+      : derived(
+          'I-18',
+          'Produktbezeichnung',
+          adhesiveName,
+          'Das Sicherheitsdatenblatt führt keine Herstellerbezeichnung (tc:productName). Gezeigt wird ersatzweise die Produktbezeichnung aus den Rückbaudaten (tc:name).',
+        ),
     field('I-19', 'Aushärtung', curingType),
     field('I-20', 'Lagerbedingungen', storageConditions),
     field(
@@ -594,7 +613,12 @@ export function mapToLiability(
   // Rueckbaubarkeit sortiert sie nach Strasse/PLZ/Ort/Land (I-31..I-34).
   const address = classifyManufacturerAddress(allValues(deconRows, 'dopAddress'));
   const moisture = firstValue(rows, 'moistureContent');
-  const adhesiveType = firstValue(rows, 'bspAdhesiveType') ?? firstValue(deconRows, 'adhesiveType');
+  // I-37 verlangt den Klebstoff-NORMBEZUG (tc:adhesiveType, z.B.
+  // "PUR-EN 15425:2017: I90GP 0,3w"). Ein Handelsname ist keine Norm --
+  // frueher fiel das Feld stillschweigend auf den Produktnamen zurueck und
+  // gab damit im Haftungsnachweis etwas anderes aus, als die Zeile behauptet.
+  const adhesiveType =
+    firstValue(rows, 'bspAdhesiveType') ?? firstValue(deconRows, 'adhesiveType');
   const delamination = firstValue(rows, 'delamination');
   const bendingFlatwise = firstValue(rows, 'bendingFlatwise');
   const rollingShear = firstValue(rows, 'rollingShear');
@@ -631,7 +655,12 @@ export function mapToLiability(
     field('I-34', 'Land', address.country),
     field('I-35', 'Festigkeitsklasse', strengthClass),
     field('I-36', 'Feuchte im Lieferzustand', withUnit(moisture, '%')),
-    field('I-37', 'Verwendete Klebstoffe', adhesiveType ?? adhesiveName),
+    field(
+      'I-37',
+      'Verwendete Klebstoffe',
+      adhesiveType,
+      'Die Leistungserklärung weist keinen Klebstoff-Normbezug (tc:adhesiveType) aus.',
+    ),
     field('I-38', 'Klebfugenintegrität / Delaminierung', delamination),
     field('I-39', 'Biegefestigkeit senkrecht', withUnit(bendingFlatwise, 'N/mm²')),
     field('I-40', 'Rollschubfestigkeit', withUnit(rollingShear, 'N/mm²')),

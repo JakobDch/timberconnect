@@ -405,6 +405,98 @@ describe('mapToLiability', () => {
     expect(byId('I-21').value).toContain('Keine Haftung');
   });
 
+  // Die folgenden vier Faelle sichern Merkmale ab, die frueher still auf ein
+  // NACHBARPRAEDIKAT zurueckfielen. Im Haftungsnachweis ist ein plausibler
+  // Ersatzwert schaedlicher als eine sichtbare Luecke: er sieht aus wie ein
+  // Beleg. Geprueft wird deshalb jeweils, dass die Luecke Luecke bleibt.
+
+  it('gibt den Klebstoff-Normbezug nicht aus dem Handelsnamen aus (I-37)', () => {
+    // BSP-DoP ohne tc:adhesiveType. Beide Handelsnamen-Quellen sind belegt:
+    // tc:productName im Datenblatt und tc:name in den Rueckbaudaten -- genau
+    // die zwei Werte, auf die I-37 frueher ausgewichen ist.
+    const deconWithAdhesiveName = {
+      ...DECON_ROW,
+      adhesiveName: lit('Purbond HB S309'),
+    } as unknown as SparqlBinding;
+    const result = mapToLiability(
+      dataWith([BSP_DOP_ROW, ADHESIVE_ROW], [deconWithAdhesiveName]),
+      null,
+    );
+    const production = result.categories.find((c) => c.id === 'production')!;
+    const field = production.fields.find((f) => f.id === 'I-37')!;
+
+    expect(field.value).toBeNull();
+    expect(field.availability).toBe('missing');
+    // Kein Handelsname darf an der Stelle des Normbezugs erscheinen.
+    expect(field.value ?? '').not.toContain('Loctite');
+    expect(field.value ?? '').not.toContain('Purbond');
+  });
+
+  it('weist den Klebstoff-Normbezug aus, wenn er vorliegt (I-37)', () => {
+    const withType = {
+      ...BSP_DOP_ROW,
+      bspAdhesiveType: lit('PUR-EN 15425:2017: I90GP 0,3w'),
+    } as unknown as SparqlBinding;
+    const result = mapToLiability(dataWith([withType, ADHESIVE_ROW], [DECON_ROW]), null);
+    const production = result.categories.find((c) => c.id === 'production')!;
+    const field = production.fields.find((f) => f.id === 'I-37')!;
+
+    expect(field.value).toBe('PUR-EN 15425:2017: I90GP 0,3w');
+    expect(field.availability).toBe('available');
+  });
+
+  it('setzt kein Druckdatum an die Stelle des Pruefzeitpunkts (I-15)', () => {
+    const printedOnly = {
+      report: iri('http://timberconnect.2050.de/resource/bendingtest/abc'),
+      tester: lit('M. Beispiel'),
+      printedAt: lit('2026-04-30T08:00:00'),
+    } as unknown as SparqlBinding;
+    const result = mapToLiability(dataWith([printedOnly]), null);
+    const sawmill = result.categories.find((c) => c.id === 'sawmill')!;
+    const field = sawmill.fields.find((f) => f.id === 'I-15')!;
+
+    expect(field.value).toBeNull();
+    expect(field.availability).toBe('missing');
+    // Gegenprobe ueber alle Felder der Stufe: das Druckdatum darf nirgends
+    // als Pruefangabe erscheinen.
+    const values = sawmill.fields.map((f) => f.value ?? '').join(' | ');
+    expect(values).not.toContain('2026-04-30');
+  });
+
+  it('gibt Verarbeitungshinweise nicht als Haftungsausschluss aus (I-21)', () => {
+    const noSafetyNote = {
+      adhesive: iri('http://timberconnect.2050.de/resource/adhesive/x'),
+      adhesiveProductName: lit('Loctite HB S309'),
+      processingNote: lit('Offene Zeit 20 Minuten bei 20 °C einhalten.'),
+    } as unknown as SparqlBinding;
+    const result = mapToLiability(dataWith([noSafetyNote]), null);
+    const adhesive = result.categories.find((c) => c.id === 'adhesive')!;
+    const field = adhesive.fields.find((f) => f.id === 'I-21')!;
+
+    expect(field.value).toBeNull();
+    expect(field.availability).toBe('missing');
+    expect(field.value ?? '').not.toContain('Offene Zeit');
+  });
+
+  it('kennzeichnet die ersatzweise Produktbezeichnung als abgeleitet (I-18)', () => {
+    // Kein tc:productName im Datenblatt, aber ein tc:name aus dem Rueckbau.
+    const withoutProductName = {
+      adhesive: iri('http://timberconnect.2050.de/resource/adhesive/x'),
+      curingType: lit('Feuchtigkeitshärtend'),
+    } as unknown as SparqlBinding;
+    const deconWithName = {
+      ...DECON_ROW,
+      adhesiveName: lit('Purbond HB S309'),
+    } as unknown as SparqlBinding;
+    const result = mapToLiability(dataWith([withoutProductName], [deconWithName]), null);
+    const adhesive = result.categories.find((c) => c.id === 'adhesive')!;
+    const field = adhesive.fields.find((f) => f.id === 'I-18')!;
+
+    expect(field.value).toBe('Purbond HB S309');
+    expect(field.availability).toBe('derived');
+    expect(field.note).toContain('Herstellerbezeichnung');
+  });
+
   it('liest die Verantwortung in der Fertigung (M-984, M-1026)', () => {
     const result = mapToLiability(dataWith([PANEL_ROW, BSP_DOP_ROW], [DECON_ROW]), null);
     const production = result.categories.find((c) => c.id === 'production')!;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ScanLine,
@@ -75,6 +75,8 @@ export function ScanView({
 }: ScanViewProps) {
   const [isInputOpen, setIsInputOpen] = useState(false);
   const [isLocationOpen, setIsLocationOpen] = useState(false);
+  /** Der Datenraum-Graph — wird beim Abfragestart ins Bild geholt. */
+  const dataspaceRef = useRef<HTMLDivElement>(null);
 
   // Der globale Hardware-Scan pausiert, solange EINER der beiden Dialoge offen
   // ist. Im Standort-Sheet steckt die Ortssuche mit einem Textfeld — ein
@@ -93,15 +95,38 @@ export function ScanView({
     loadProducts();
   }, []);
 
-  // Verlauf aktualisieren und die Erfassung schliessen, sobald ein Treffer da
-  // ist — gleich ueber welchen der beiden Wege er kam.
+  // Verlauf aktualisieren, sobald ein Treffer da ist — gleich ueber welchen
+  // der beiden Wege er kam. Geschlossen sind die Dialoge zu diesem Zeitpunkt
+  // laengst (siehe den Effekt darunter).
   useEffect(() => {
-    if (scannedProduct) {
-      setRecentScans(getRecentScans());
-      setIsInputOpen(false);
-      setIsLocationOpen(false);
-    }
+    if (scannedProduct) setRecentScans(getRecentScans());
   }, [scannedProduct]);
+
+  /**
+   * Die Dialoge schliessen, SOBALD die Abfrage laeuft — nicht erst mit dem
+   * Ergebnis.
+   *
+   * Beide sind Vollbild-Overlays. Blieben sie waehrend der Abfrage offen,
+   * verdeckten sie genau das, was der Datenraum-Graph in dieser Zeit zeigt,
+   * und der Nutzer sah statt der Kette nur einen Kreisel — ueber "Produkt
+   * erfassen" war die Animation deshalb nie zu sehen, ueber "Zuletzt
+   * gescannt" (kein Overlay) dagegen schon (Rueckmeldung 22.09.2026).
+   *
+   * Der Ladezustand geht damit nicht verloren: der Scan-Knopf zeigt ihn
+   * weiter, und die Statuszeile des Graphen sagt genauer, woran es gerade
+   * liegt. Fehler stehen nach dem Schliessen im Scan-Screen selbst.
+   */
+  useEffect(() => {
+    if (!isLoading) return;
+    setIsInputOpen(false);
+    setIsLocationOpen(false);
+
+    // Auf dem Handy stehen Graph und Verlauf UNTER dem Scan-Knopf; nach dem
+    // Schliessen des Dialogs laege der Graph sonst ausserhalb des Bildes und
+    // die Animation liefe ungesehen ab. Am Desktop (zweispaltig) ist er
+    // ohnehin sichtbar — `scrollIntoView` bleibt dort folgenlos.
+    dataspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [isLoading]);
 
   async function loadProducts() {
     setCatalogLoading(true);
@@ -297,7 +322,9 @@ export function ScanView({
             {/* Der Datenraum als Bild. Steht VOR dem Verlauf, weil er
                 waehrend einer laufenden Abfrage die eigentliche Auskunft
                 ist -- der Verlauf ist dann gerade uninteressant. */}
-            <DataspacePanel isLoading={isLoading} />
+            <div ref={dataspaceRef}>
+              <DataspacePanel isLoading={isLoading} />
+            </div>
 
             {recentScans.length > 0 && (
               <section>
