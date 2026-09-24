@@ -28,6 +28,7 @@ const VIEWS = [
   'menu',
   'guide',
   'partners',
+  'footer',
   'origin',
   'dataspace',
   'dataspace-active',

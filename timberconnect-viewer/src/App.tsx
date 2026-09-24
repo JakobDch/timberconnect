@@ -46,8 +46,7 @@ import { attachSequencer, beginRun, waitForIdle } from './services/dataspaceSequ
 import { describeProblem } from './services/identifiers';
 import type { ParsedIdentifier, ScanSource } from './services/identifiers';
 import type { AppView, Product, SupplyChainStep } from './types';
-import logoNrwMunv from '/logo-nrw-munv.png';
-import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
+import { FundingLogos } from './components/Brand/FundingLogos';
 
 /**
  * Welche Abfrageergebnisse ein Anwendungsfall tatsaechlich anzeigt.
@@ -897,34 +896,14 @@ function App() {
         onSelectTopic={setGuideTopic}
       />
 
-      {/* Footer: EU-Logo | NRW-Logo nebeneinander.
-          Die Foerderlogos muessen lesbar sein (Rueckmeldung Anni, 24.08.2026),
-          insbesondere das des Ministeriums. Zwei Dinge machen sie gross:
-          die Bilddateien sind auf ihren Inhalt zugeschnitten (das NRW-Logo
-          bestand zu ~64% aus Weissraum, der bei fester CSS-Hoehe die eigentliche
-          Marke schrumpfte), und die Hoehen sind angehoben. Das NRW-Logo bekommt
-          mehr, weil es die dreizeilige Ministeriumszeile traegt. */}
+      {/* Footer: Foerderhinweis als gebundene Logo-Kombination,
+          Vorgaben siehe FundingLogos. */}
       <footer className="bg-night-900 border-t border-white/5 py-5 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-5">
           <p className="text-sm text-night-300">
             TimberConnect – Transparenz in der Holzlieferkette
           </p>
-          <div className="flex items-center gap-4 sm:gap-5 max-w-full">
-            <div className="bg-white rounded-xl px-4 py-3">
-              <img
-                src={logoEuKofinanziert}
-                alt="Kofinanziert von der Europäischen Union"
-                className="h-10 sm:h-12 w-auto object-contain"
-              />
-            </div>
-            <div className="bg-white rounded-xl px-4 py-3">
-              <img
-                src={logoNrwMunv}
-                alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-                className="h-14 sm:h-16 w-auto object-contain"
-              />
-            </div>
-          </div>
+          <FundingLogos variant="footer" />
         </div>
       </footer>
     </div>

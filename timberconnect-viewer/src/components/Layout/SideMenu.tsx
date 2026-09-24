@@ -18,8 +18,7 @@ import { SheetPortal, useBodyScrollLock } from '../UI/SheetPortal';
 import { UseCaseIcon } from '../UseCases';
 import { USE_CASES, isAvailable } from '../../config/useCases';
 import { GUIDE_TOPICS, type GuideTopicId } from '../../config/guide';
-import logoNrwMunv from '/logo-nrw-munv.png';
-import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
+import { FundingLogos } from '../Brand/FundingLogos';
 
 /**
  * Seitenfenstermenü (PDF-Vorgabe "Stand 1507", S. 2–3):
@@ -353,24 +352,9 @@ export function SideMenu({
               )}
             </nav>
 
-            {/* Förderhinweis — lesbare Groesse, siehe Kommentar im Footer */}
-            <div className="px-5 py-4 border-t border-white/5 flex-shrink-0">
-              <div className="flex items-center justify-center gap-3">
-                <div className="bg-white rounded-lg px-3 py-2">
-                  <img
-                    src={logoEuKofinanziert}
-                    alt="Kofinanziert von der Europäischen Union"
-                    className="h-8 w-auto object-contain"
-                  />
-                </div>
-                <div className="bg-white rounded-lg px-3 py-2">
-                  <img
-                    src={logoNrwMunv}
-                    alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-                    className="h-11 w-auto object-contain"
-                  />
-                </div>
-              </div>
+            {/* Förderhinweis — Vorgaben siehe FundingLogos */}
+            <div className="px-5 py-4 border-t border-white/5 flex-shrink-0 flex justify-center">
+              <FundingLogos variant="menu" />
             </div>
           </motion.aside>
         </motion.div>

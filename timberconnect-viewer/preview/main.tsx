@@ -9,6 +9,7 @@ import { UseCaseGrid, ChainScopePicker } from '../src/components/UseCases';
 import { SideMenu } from '../src/components/Layout';
 import { GuideSheet } from '../src/components/Guide';
 import { PartnerSheet } from '../src/components/Partners';
+import { FundingLogos } from '../src/components/Brand/FundingLogos';
 import { OriginProofView } from '../src/components/Origin';
 import { DataspacePanel } from '../src/components/Dataspace';
 import { reportPodQuery } from '../src/services/dataspaceActivity';
@@ -30,7 +31,7 @@ import type { ProductDataResult } from '../src/services/sparqlService';
  *   node preview/shot.mjs
  *
  * Ansicht per ?view=landing|scanner|usecases-lamella|usecases-panel|
- *                   usecases-unknown|menu|guide|partners
+ *                   usecases-unknown|menu|guide|partners|footer
  */
 
 const noop = () => {};
@@ -213,6 +214,20 @@ function View() {
       return <GuideSheet topicId="registration" onClose={noop} onSelectTopic={noop} />;
     case 'partners':
       return <PartnerSheet isOpen onClose={noop} />;
+    case 'footer':
+      // Gleiche Auszeichnung wie der Footer in App.tsx.
+      return (
+        <div className="min-h-screen flex flex-col bg-night-950">
+          <footer className="bg-night-900 border-t border-white/5 py-5 mt-auto">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-5">
+              <p className="text-sm text-night-300">
+                TimberConnect – Transparenz in der Holzlieferkette
+              </p>
+              <FundingLogos variant="footer" />
+            </div>
+          </footer>
+        </div>
+      );
     default:
       return (
         <LandingView

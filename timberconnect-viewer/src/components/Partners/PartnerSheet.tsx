@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ExternalLink } from 'lucide-react';
 import { partners, type Partner } from '../../data/partners';
 import { SheetPortal, useBodyScrollLock } from '../UI/SheetPortal';
-import logoNrwMunv from '/logo-nrw-munv.png';
-import logoEuKofinanziert from '/logo-eu-kofinanziert.png';
+import { FundingLogos } from '../Brand/FundingLogos';
 
 /**
  * "Praxispartner"-Sheet (PDF-Vorgabe "Stand 1507", S. 6):
@@ -127,21 +126,8 @@ export function PartnerSheet({ isOpen, onClose }: PartnerSheetProps) {
 
             {/* Förderhinweis */}
             <div className="px-5 sm:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-white/5">
-              <div className="flex items-center justify-center gap-3">
-                <div className="bg-white rounded-lg px-3 py-2">
-                  <img
-                    src={logoEuKofinanziert}
-                    alt="Kofinanziert von der Europäischen Union"
-                    className="h-9 w-auto object-contain"
-                  />
-                </div>
-                <div className="bg-white rounded-lg px-3 py-2">
-                  <img
-                    src={logoNrwMunv}
-                    alt="Ministerium für Umwelt, Naturschutz und Verkehr des Landes Nordrhein-Westfalen"
-                    className="h-12 w-auto object-contain"
-                  />
-                </div>
+              <div className="flex justify-center">
+                <FundingLogos variant="sheet" />
               </div>
             </div>
           </motion.div>
