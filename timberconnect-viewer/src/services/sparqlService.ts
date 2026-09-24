@@ -678,9 +678,15 @@ export async function fetchScanData(epc: string): Promise<ProductDataResult> {
     return { ...emptyResult(sources, errors), epcisInfo };
   }
 
+  // Den Fehler MELDEN statt nur zu loggen: sonst endet eine gescheiterte
+  // Abfrage als "Keine Daten gefunden -- ID pruefen", und am Handscanner,
+  // wo keine Konsole mitlaeuft, ist die eigentliche Ursache unsichtbar.
   const scannedEpcBindings = await executeQuery(createEpcQuery(epc), available).catch(
     (err) => {
       console.error('[SPARQL] EPC query failed for', epc, err);
+      errors.push(
+        `Abfrage der Pod-Daten fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return [] as SparqlBinding[];
     },
   );
@@ -809,9 +815,15 @@ export async function fetchProductDataByEpc(
   // mehr ansehen, welche Zeile ihr gehoert und welche ihrem Vormaterial --
   // die Produktart wurde so zur "Lamelle", weil die Leistungserklaerung der
   // Lamellen ``tc:SawingProcess`` beisteuert.
+  // Den Fehler MELDEN statt nur zu loggen: sonst endet eine gescheiterte
+  // Abfrage als "Keine Daten gefunden -- ID pruefen", und am Handscanner,
+  // wo keine Konsole mitlaeuft, ist die eigentliche Ursache unsichtbar.
   const scannedEpcBindings = await executeQuery(createEpcQuery(epc), available).catch(
     (err) => {
       console.error('[SPARQL] EPC query failed for', epc, err);
+      errors.push(
+        `Abfrage der Pod-Daten fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return [] as SparqlBinding[];
     },
   );
