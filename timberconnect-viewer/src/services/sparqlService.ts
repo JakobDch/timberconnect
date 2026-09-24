@@ -58,12 +58,17 @@ const SOURCE_CHECK_TIMEOUT = 5000;
 /**
  * Zeitgrenze fuer das Laden EINER Quelle.
  *
- * Bewusst knapp: Die Quellen werden parallel geholt, aber der Browser laesst
- * je Gegenstelle nur sechs Verbindungen gleichzeitig zu -- lange Zeitgrenzen
- * addieren sich deshalb ueber die Warteschlange. Eine Quelle, die laenger
- * braucht, fehlt lieber in der Ansicht, als sie zum Stehen zu bringen.
+ * Die Quellen werden parallel geholt, aber der Browser laesst je Gegenstelle
+ * nur sechs Verbindungen gleichzeitig zu -- lange Zeitgrenzen addieren sich
+ * deshalb ueber die Warteschlange. Eine Quelle, die laenger braucht, fehlt
+ * lieber in der Ansicht, als sie zum Stehen zu bringen.
+ *
+ * Die Uhr laeuft ab dem Einreihen, nicht ab dem Absenden: die Wartezeit in
+ * der Warteschlange zaehlt mit. 4 s reichten am Laptop, am Handscanner im
+ * WLAN aber nicht -- dort fielen gerade die entscheidenden Dateien heraus,
+ * und der Scan meldete "Keine Daten" (24.09.2026).
  */
-const SOURCE_FETCH_TIMEOUT = 4000;
+const SOURCE_FETCH_TIMEOUT = 12000;
 
 /** Wie lange eine geladene Quelle wiederverwendet wird. */
 const STORE_CACHE_TTL = 5 * 60 * 1000;
@@ -99,6 +104,29 @@ interface CachedSource {
 }
 const sourceCache = new Map<string, CachedSource>();
 const inFlightSources = new Map<string, Promise<Quad[]>>();
+
+/**
+ * Quellen, deren letzter Ladeversuch an Netz oder Zeitgrenze scheiterte, mit
+ * Grund. Anders als ein 404 ist das kein Befund ueber die Daten, sondern ueber
+ * die Verbindung -- und muss deshalb sichtbar werden, wenn ein Scan leer
+ * ausgeht. Sonst sieht ein langsames Netz aus wie eine falsche Produkt-ID.
+ */
+const failedSources = new Map<string, string>();
+
+/**
+ * Meldung fuer einen leeren Treffer, falls dabei Quellen am Netz scheiterten.
+ * null, wenn alle Quellen sauber geladen wurden -- dann ist "keine Daten"
+ * tatsaechlich der Befund.
+ */
+function describeFailedSources(sources: string[]): string | null {
+  const failed = sources.filter((url) => failedSources.has(url));
+  if (failed.length === 0) return null;
+  const reasons = Array.from(new Set(failed.map((url) => failedSources.get(url))));
+  return (
+    `${failed.length} von ${sources.length} Pod-Dateien konnten nicht geladen werden ` +
+    `(${reasons.join(', ')}). Bitte erneut versuchen, ggf. mit besserer Netzverbindung.`
+  );
+}
 
 /** Cache leeren -- nach einem Upload, damit neue Dokumente sofort erscheinen. */
 export function invalidateSourceCache(): void {
@@ -144,14 +172,22 @@ async function loadSource(url: string): Promise<Quad[]> {
       const text = await response.text();
       const quads = new Parser({ baseIRI: url }).parse(text);
       sourceCache.set(url, { quads, loadedAt: Date.now() });
+      failedSources.delete(url);
       // "Treffer" heisst: die Datei existiert UND traegt etwas bei. Eine leere
       // Datei als Treffer zu melden, waere dieselbe Beschoenigung, die
       // filterAvailableSources weiter unten schon vermeidet.
       reportPodQuery(url, quads.length > 0 ? 'hit' : 'miss');
       return quads;
     } catch (err) {
-      console.debug('[SPARQL] Quelle nicht ladbar:', url, err);
-      sourceCache.set(url, { quads: [], loadedAt: Date.now() });
+      console.warn('[SPARQL] Quelle nicht ladbar:', url, err);
+      // NICHT als leer cachen: ein Netzfehler oder eine Zeitueberschreitung
+      // sagt nichts ueber die Datei. Frueher blieb sie danach fuenf Minuten
+      // lang "leer", und jeder weitere Scan scheiterte ohne neuen Versuch.
+      const aborted = err instanceof DOMException && err.name === 'AbortError';
+      failedSources.set(
+        url,
+        aborted ? 'Zeitüberschreitung' : err instanceof Error ? err.message : 'Netzfehler',
+      );
       reportPodQuery(url, 'miss');
       return [];
     } finally {
@@ -690,6 +726,10 @@ export async function fetchScanData(epc: string): Promise<ProductDataResult> {
       return [] as SparqlBinding[];
     },
   );
+  if (scannedEpcBindings.length === 0) {
+    const netz = describeFailedSources(allowed);
+    if (netz) errors.push(netz);
+  }
 
   console.log(
     `[SPARQL] Scan fertig: ${scannedEpcBindings.length} Treffer am erfassten Ident, ` +
@@ -827,6 +867,10 @@ export async function fetchProductDataByEpc(
       return [] as SparqlBinding[];
     },
   );
+  if (scannedEpcBindings.length === 0) {
+    const netz = describeFailedSources(allowed);
+    if (netz) errors.push(netz);
+  }
 
   // Nachvollziehbar machen, woran die Produktart haengt: welche Typen der
   // GESCANNTE Ident hergibt und -- falls keine -- ob die Quelle ueberhaupt
