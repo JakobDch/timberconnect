@@ -38,8 +38,6 @@ export const LCA_CONSTANTS = {
   sawnTimberPerBsp: 1.2,
   /** Menge Rundholz je m³ BSP [m³] (Materialfluss). */
   roundwoodPerBsp: 2.95,
-  /** Menge Baeume (Derbholz) je m³ BSP [m³] (Materialfluss). */
-  treesPerBsp: 5.13,
   /** CO2-Gehalt Fichte, biogene Speicherung [kg CO2/m³] (Kaulen et al. 2024). */
   biogenicCo2PerM3: 722.39,
   /** Holzernte inkl. Transport zum Polter [kg CO2/m³ RH] (Kaulen et al. 2024). */
@@ -406,14 +404,20 @@ export function computeLca(inputs: LcaInputs, distances: ResolvedDistances): Lca
   });
 
   // --- A1.0 Biogene Speicherung (negativ) ---------------------------------
+  // Gespeichert ist nur das Holz, das IN der Platte steckt: die
+  // Eingangsmenge Schnittholzlamellen des BSP-Herstellers (1,2 m³ je m³ BSP)
+  // -- nicht das Rundholz oder gar der Baum, aus dem sie entstanden ist.
+  // Frueher stand hier der Derbholz-Faktor 5,13; das ueberzeichnete die
+  // Speicherung gut um das Vierfache (Rechenfehler laut Feedback des
+  // Projektpartners, 28.09.2026: richtig -722,39 x V x 1,2).
   const a10 = module(
     'a1_0',
     'A1.0',
     'Biogene Speicherung',
-    `−${C.biogenicCo2PerM3} kg CO₂/m³ × (${C.treesPerBsp} m³ Derbholz/m³ BSP × Nettovolumen)`,
+    `−${C.biogenicCo2PerM3} kg CO₂/m³ × (${C.sawnTimberPerBsp} m³ SH/m³ BSP × Nettovolumen)`,
     V === null
       ? noVolume
-      : { value: -C.biogenicCo2PerM3 * C.treesPerBsp * V, availability: 'available' },
+      : { value: -C.biogenicCo2PerM3 * C.sawnTimberPerBsp * V, availability: 'available' },
   );
 
   // --- A1.1 Holzernte ------------------------------------------------------
@@ -719,6 +723,8 @@ interface DopDoc {
   manufacturer: string | null;
   intendedUse: string | null;
   holzart: string | null;
+  /** true = Saegewerks-Vorlage (hat einen tc:SawingProcess). */
+  isSawmill: boolean;
 }
 
 function collectDops(rows: SparqlBinding[]): DopDoc[] {
@@ -733,18 +739,20 @@ function collectDops(rows: SparqlBinding[]): DopDoc[] {
       manufacturer: null,
       intendedUse: null,
       holzart: null,
+      isSawmill: false,
     };
     doc.title ??= getValue(row, 'dopTitle') ?? null;
     doc.typeNumber ??= getValue(row, 'dopTypeNumber') ?? null;
     doc.manufacturer ??= getValue(row, 'dopManufacturer') ?? null;
     doc.intendedUse ??= getValue(row, 'dopIntendedUse') ?? null;
     doc.holzart ??= getValue(row, 'dopHolzart') ?? null;
+    doc.isSawmill ||= getValue(row, 'dopIsSawmill') === 'true';
     byIri.set(iri, doc);
   }
   return [...byIri.values()];
 }
 
-/** Erkennt die Schnittholz-Leistungserklaerung am Titel/Typ. */
+/** Rueckfall fuer Quellen ohne ?dopIsSawmill: Titel/Typ nennt das Produkt. */
 const LAMELLA_RE = /schnittholz|lamelle/i;
 
 /**
@@ -756,14 +764,22 @@ const LAMELLA_RE = /schnittholz|lamelle/i;
 export function mapToLcaInfo(
   data: ProductDataResult | null,
   product: Product | null,
+  /** Aufgeloeste Strecken (useLcaDistances) -- fuer den km-Wert von I-74. */
+  distances?: ResolvedDistances,
 ): LcaInfo {
   const rows = data?.lca ?? [];
   const inputs = extractLcaInputs(data);
 
   // Zwei Leistungserklaerungen moeglich (BSP-Platte + Schnittholzlamelle);
-  // unterschieden wird am Titel -- eine IRI-Konvention gibt es nicht.
+  // unterschieden am Saegeprozess, den nur die Saegewerks-Vorlage hat. Die
+  // fruehere Titel-Regel allein verfehlte die echte Schnittholz-DoP (kein
+  // Titel, Typ "Konstruktionsvollholz S10/ C24") -- die Ansicht meldete dann
+  // "keine Leistungserklaerung der Schnittholzlamelle", obwohl sie geladen
+  // war, und die BSP-DoP hing vom Zufall der Zeilenreihenfolge ab.
   const dops = collectDops(rows);
-  const lamellaDop = dops.find((d) => LAMELLA_RE.test(d.title ?? d.typeNumber ?? ''));
+  const lamellaDop =
+    dops.find((d) => d.isSawmill) ??
+    dops.find((d) => LAMELLA_RE.test(d.title ?? d.typeNumber ?? ''));
   const bspDop = dops.find((d) => d !== lamellaDop) ?? null;
 
   const componentName =
@@ -869,13 +885,19 @@ export function mapToLcaInfo(
           formatM3(inputs.bspTransportTotalM3),
           inputs.bspTransportTotalM3.note,
         ),
+        // Angezeigt wird die Zahl, mit der A4 rechnet -- nicht nur die Route.
+        // Die Route allein liess offen, welcher Wert in die Bilanz eingeht
+        // (Feedback des Projektpartners, 28.09.2026: "Was ist der Wert?").
         infoDerived(
           'I-74',
           'Strecke zur Baustelle',
-          inputs.pickupLocation && inputs.deliveryLocation
-            ? `${inputs.pickupLocation} → ${inputs.deliveryLocation}`
+          distances?.bspToSiteKm.value != null
+            ? `ca. ${withUnit(String(distances.bspToSiteKm.value), 'km')}`
             : null,
-          'GPS-Gesamtstrecke (M-849) nicht im Datenraum; geschätzt aus Abhol- und Lieferort des ERP-Vorgangs.',
+          inputs.pickupLocation && inputs.deliveryLocation
+            ? `Geschätzt aus Abhol- und Lieferort des ERP-Vorgangs (${inputs.pickupLocation} → ${inputs.deliveryLocation}): Luftlinie × Umwegfaktor ${LCA_CONSTANTS.detourFactor.toLocaleString('de-DE')}. Die GPS-Gesamtstrecke (M-849) liegt nicht im Datenraum.`
+            : (distances?.bspToSiteKm.note ??
+                'GPS-Gesamtstrecke (M-849) nicht im Datenraum; Abhol-/Lieferort des ERP-Vorgangs fehlen.'),
         ),
       ],
     },

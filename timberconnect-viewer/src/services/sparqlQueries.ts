@@ -1005,6 +1005,7 @@ SELECT ?panel ?panelEpc ?nettovolumen ?nettogewicht ?gesamtmengeBsp ?hoehe ?brei
        ?order ?ladezoneDistanz ?mengeFestmeter ?summeFestmeter ?orderVolume
        ?loadingAddress ?unloadingAddress
        ?dop ?dopTitle ?dopTypeNumber ?dopManufacturer ?dopIntendedUse ?dopHolzart
+       ?dopIsSawmill
        ?adhesive ?adhesiveName
 WHERE {
   {
@@ -1054,6 +1055,13 @@ ${identGuard(epcs, '?orderEpc')}
     OPTIONAL { ?dop tc:manufacturer ?dopManufacturer }
     OPTIONAL { ?dop tc:intendedUse ?dopIntendedUse }
     OPTIONAL { ?dop tc:holzart ?dopHolzart }
+    # Welche der beiden Leistungserklaerungen? Nur die Saegewerks-Vorlage hat
+    # einen Saegeprozess (pdf_leistungserklaerung.rml.ttl). Am Titel liess
+    # sich das nicht ablesen: sie traegt gar keinen tc:title, und ihr Typ
+    # ("Konstruktionsvollholz S10/ C24") nennt weder Schnittholz noch Lamelle.
+    # EXISTS statt OPTIONAL-Join: 24 Saegeprozesse wuerden die Zeile sonst
+    # vervielfachen.
+    BIND (EXISTS { ?dop tc:hasSawingProcess ?dopAnySawing } AS ?dopIsSawmill)
     # Zwei Vorlagen, zwei Anker: die BSP-Leistungserklaerung traegt tc:epc
     # selbst, die Saegewerk-Variante haengt ihn an den tc:SawingProcess
     # (pdf_leistungserklaerung.rml.ttl). Beide Wege gelten.

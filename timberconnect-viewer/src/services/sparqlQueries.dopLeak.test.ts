@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { QueryEngine } from '@comunica/query-sparql';
 import { Store, Parser as N3Parser } from 'n3';
-import { createBspWerkQuery, createSawmillQuery } from './sparqlQueries';
+import { createBspWerkQuery, createLcaQuery, createSawmillQuery } from './sparqlQueries';
 
 /**
  * Die beiden Leistungserklaerungen tragen dieselbe Klasse -- und jede darf
@@ -64,5 +64,15 @@ describe('Leistungserklaerungen bleiben in ihrer Sparte', { timeout: 120_000 }, 
 
     const platte = await frage(createSawmillQuery([PLATTE]));
     expect(platte.map((r) => r.company).filter(Boolean)).toEqual([]);
+  });
+
+  it('CO2-Abfrage: markiert die Saegewerks-DoP ueber den Saegeprozess', async () => {
+    // Die CO2-Bilanz unterscheidet die beiden DoPs an ?dopIsSawmill -- am
+    // Titel geht es nicht, die Saegewerks-DoP hat keinen (Feedback 28.09.2026).
+    const rows = await frage(createLcaQuery([PLATTE, LAMELLE, STAMM]));
+    const flag = (dop: string) =>
+      rows.filter((r) => r.dop === dop).map((r) => r.dopIsSawmill);
+    expect(flag('urn:dop:saege')).toEqual(['true']);
+    expect(flag('urn:dop:bsp')).toEqual(['false']);
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  AlertTriangle,
   ArrowLeft,
   ChevronDown,
   Factory,
@@ -308,16 +309,16 @@ export function CO2BalanceView({
     () => extractLcaInputs(productData ?? null),
     [productData],
   );
-  const info = useMemo(
-    () => mapToLcaInfo(productData ?? null, product ?? null),
-    [productData, product],
-  );
-
   // --- Transportstrecken A2/A4 aufloesen ----------------------------------
   // Geocoding laeuft ausserhalb der reinen Rechnung, im gemeinsamen Hook:
   // der Bauproduktpass braucht dieselbe Zahl, und zwei Kopien der
   // Aufloesung waeren auseinandergelaufen.
   const distances = useLcaDistances(inputs);
+
+  const info = useMemo(
+    () => mapToLcaInfo(productData ?? null, product ?? null, distances),
+    [productData, product, distances],
+  );
 
   const lca = useMemo(() => computeLca(inputs, distances), [inputs, distances]);
 
@@ -451,6 +452,39 @@ export function CO2BalanceView({
           </motion.p>
 
           <div className="space-y-4">
+            {/*
+              Berechnungshinweis -- Wortlaut vom Projektpartner vorgegeben
+              (Feedback 28.09.2026), bewusst VOR dem Ergebnis: wer die Zahl
+              liest, soll vorher wissen, dass sie nicht normkonform ist.
+            */}
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-night-800 border border-white/5 rounded-2xl p-4"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-4 h-4 text-amber-300 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-white mb-1.5">
+                    Berechnungshinweis
+                  </h2>
+                  <p className="text-xs text-night-200 leading-relaxed">
+                    Die Inhalte des Anwendungsfalls „CO2-Bilanz“ wurden in
+                    Anlehnung an die DIN EN 15804 erstellt, sind jedoch nicht
+                    verifiziert und damit nicht normkonform.
+                  </p>
+                  <p className="text-xs text-night-200 leading-relaxed mt-1.5">
+                    Der Anwendungsfall soll aufzeigen, welche Daten aus der
+                    Wertschöpfungskette Holz bereits heute zur Berechnung von
+                    Umweltwirkungen – am Beispiel der Treibhausgasemissionen
+                    (GWP) – bereitgestellt werden können, um zukünftig die
+                    Granularität und Genauigkeit der Datengrundlage zu
+                    verbessern.
+                  </p>
+                </div>
+              </div>
+            </motion.section>
+
             {/* Bauteil-Karte */}
             <motion.section
               initial={{ opacity: 0, y: 16 }}

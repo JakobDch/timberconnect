@@ -160,8 +160,10 @@ describe('computeLca -- Formeln mit Demo-Werten (V = 5,22)', () => {
   const byCode = (code: string) =>
     [...result.modules, ...(result.modules[0].sub ?? [])].find((m) => m.code === code)!;
 
-  it('A1.0 Biogene Speicherung = −722,39 × 5,13 × V', () => {
-    expect(byCode('A1.0').value).toBeCloseTo(-19344.6, 1);
+  it('A1.0 Biogene Speicherung = −722,39 × 1,2 × V (nur das Holz IN der Platte)', () => {
+    // Rechenweg des Projektpartners (Feedback 28.09.2026):
+    // −722,39 × 5,22 m³ × 1,2 = −4.525 kg CO2e -- NICHT mit 5,13 m³ Derbholz.
+    expect(byCode('A1.0').value).toBeCloseTo(-4525.1, 1);
   });
 
   it('A1.1 Holzernte = 4 × 2,95 × V', () => {
@@ -178,7 +180,7 @@ describe('computeLca -- Formeln mit Demo-Werten (V = 5,22)', () => {
   });
 
   it('A1 ist die Summe der vier Teilmodule', () => {
-    expect(byCode('A1').value).toBeCloseTo(-18666.6, 1);
+    expect(byCode('A1').value).toBeCloseTo(-3847.1, 1);
     expect(byCode('A1').isPartial).toBe(false);
   });
 
@@ -202,7 +204,7 @@ describe('computeLca -- Formeln mit Demo-Werten (V = 5,22)', () => {
   });
 
   it('Gesamtergebnis ist negativ (Speicherung dominiert)', () => {
-    expect(result.total).toBeCloseTo(-17742.0, 1);
+    expect(result.total).toBeCloseTo(-2922.5, 1);
     expect(result.totalIsPartial).toBe(false);
     expect(result.missingModules).toEqual([]);
   });
@@ -210,7 +212,7 @@ describe('computeLca -- Formeln mit Demo-Werten (V = 5,22)', () => {
   it('Diagramm trennt Speicherung von den A1-Emissionen', () => {
     const bio = result.chart.find((b) => b.id === 'bio')!;
     const a1e = result.chart.find((b) => b.id === 'a1e')!;
-    expect(bio.value).toBeCloseTo(-19344.6, 1);
+    expect(bio.value).toBeCloseTo(-4525.1, 1);
     // 61,6 + 38,9 + 577,5 = 678
     expect(a1e.value).toBeCloseTo(678, 1);
     expect(result.chart).toHaveLength(6);
@@ -243,7 +245,7 @@ describe('computeLca -- Luecken', () => {
     expect(result.totalIsPartial).toBe(true);
     expect(result.missingModules).toContain('A4');
     // Teilsumme = Gesamt ohne A4-Beitrag (37,9)
-    expect(result.total).toBeCloseTo(-17742.0 - 37.9, 1);
+    expect(result.total).toBeCloseTo(-2922.5 - 37.9, 1);
   });
 
   it('fehlende Rundholz-Gesamtmenge trifft nur A1.2, A1 wird Teilsumme', () => {
@@ -433,5 +435,60 @@ describe('mapToLcaInfo', () => {
     expect(info.coverage.total).toBeGreaterThan(20);
     expect(info.coverage.filled).toBeGreaterThan(10);
     expect(info.coverage.filled).toBeLessThan(info.coverage.total);
+  });
+
+  it('erkennt die echte Saegewerks-DoP am Saegeprozess, auch ohne Titel', () => {
+    // So kommt sie aus pdf_leistungserklaerung.rml.ttl: kein tc:title, und
+    // der Typ nennt weder Schnittholz noch Lamelle.
+    const real = mapToLcaInfo(
+      dataWith([
+        {
+          dop: lit('urn:dop:bsp'),
+          dopTitle: lit('Leistungserklärung Brettsperrholz Nr. 1'),
+          dopTypeNumber: lit('X-LAM L-150/5s'),
+          dopManufacturer: lit('Poppensieker & Derix GmbH & Co. KG'),
+          dopIsSawmill: lit('false'),
+        },
+        {
+          dop: lit('urn:dop:saege'),
+          dopTypeNumber: lit('Konstruktionsvollholz S10/ C24'),
+          dopManufacturer: lit('EGGER Sägewerk Brilon GmbH'),
+          dopIsSawmill: lit('true'),
+        },
+      ]),
+      null,
+    );
+    const components = real.categories.find((c) => c.id === 'components')!;
+    expect(components.fields.find((f) => f.id === 'I-76')!.value).toBe(
+      'Konstruktionsvollholz S10/ C24',
+    );
+    expect(components.fields.find((f) => f.id === 'I-77')!.value).toBe(
+      'EGGER Sägewerk Brilon GmbH',
+    );
+    expect(real.manufacturer).toBe('Poppensieker & Derix GmbH & Co. KG');
+  });
+
+  it('zeigt bei der Strecke zur Baustelle den km-Wert, mit dem A4 rechnet', () => {
+    const withRoute = dataWith([
+      ...rows,
+      {
+        abholungPlz: lit('49492.0'),
+        abholungOrt: lit('Westerkappeln-Velpe'),
+        lieferungPlz: lit('50668'),
+        lieferungOrt: lit('Köln'),
+      },
+    ]);
+    const field = (i: ReturnType<typeof mapToLcaInfo>) =>
+      i.categories.find((c) => c.id === 'inputs')!.fields.find((f) => f.id === 'I-74')!;
+
+    const resolved = field(mapToLcaInfo(withRoute, null, DISTANCES));
+    expect(resolved.value).toBe(`ca. ${DISTANCES.bspToSiteKm.value} km`);
+    expect(resolved.availability).toBe('derived');
+    expect(resolved.note).toContain('49492 Westerkappeln-Velpe → 50668 Köln');
+
+    // Ohne aufgeloeste Strecke: sichtbare Luecke, nicht die Route als "Wert".
+    const pending = field(mapToLcaInfo(withRoute, null));
+    expect(pending.value).toBeNull();
+    expect(pending.availability).toBe('missing');
   });
 });
