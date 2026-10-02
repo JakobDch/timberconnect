@@ -73,7 +73,7 @@ const MODULE_ICONS: Record<string, LucideIcon> = {
 const MODULE_DESCRIPTIONS: Record<string, string> = {
   A1: 'Rohstoffbereitstellung: biogene Speicherung, Holzernte, Transport zum Sägewerk und Produktion des Schnittholzes.',
   A2: 'Transport der Schnittholzlamellen vom Sägewerk zum BSP-Werk, anteilig nach Lademenge.',
-  A3: 'Herstellung der BSP-Platte im Holzwerkstoffwerk, inklusive Verklebung.',
+  A3: 'Herstellung der BSP-Platte, inklusive Verklebung.',
   A4: 'Transport der fertigen Platte vom Werk zur Baustelle, anteilig nach Lademenge.',
   A5: 'Einbau der Platte auf der Baustelle.',
 };

@@ -340,7 +340,7 @@ export function extractLcaInputs(data: ProductDataResult | null): LcaInputs {
     ),
     sawnTimberTransportTotalM3: derived(
       parseGermanNumber(firstValue(rows, 'orderVolume')),
-      'Gesamtmenge Schnittholzlamelle (M-584) existiert nicht als Merkmal; ersatzweise das Transportvolumen des Schnittholz-Transportauftrags.',
+      'Ersatzweise das Transportvolumen des Schnittholz-Transportauftrags.',
     ),
     bspTransportTotalM3: available(
       parseGermanNumber(firstValue(rows, 'gesamtmengeBsp')),
@@ -518,8 +518,10 @@ export function computeLca(inputs: LcaInputs, distances: ResolvedDistances): Lca
         C.co2PerLitre *
         ((C.sawnTimberPerBsp * V) / total584.value),
       // Strecke geocodiert + Ersatzmerkmal fuer die Gesamtmenge -> abgeleitet.
+      // Begruendet wird nur die Strecke: den Satz zum Ersatzmerkmal hat der
+      // Projektpartner gestrichen (30.09.2026); er steht weiter bei I-70.
       availability: 'derived',
-      note: [distA2.note, total584.note].filter(Boolean).join(' '),
+      note: distA2.note,
     };
   }
   const a2 = module(
@@ -895,7 +897,7 @@ export function mapToLcaInfo(
             ? `ca. ${withUnit(String(distances.bspToSiteKm.value), 'km')}`
             : null,
           inputs.pickupLocation && inputs.deliveryLocation
-            ? `Geschätzt aus Abhol- und Lieferort des ERP-Vorgangs (${inputs.pickupLocation} → ${inputs.deliveryLocation}): Luftlinie × Umwegfaktor ${LCA_CONSTANTS.detourFactor.toLocaleString('de-DE')}. Die GPS-Gesamtstrecke (M-849) liegt nicht im Datenraum.`
+            ? `Strecke aus Distanz zwischen Abhol- und Lieferort (${inputs.pickupLocation} → ${inputs.deliveryLocation}) errechnet (Luftlinie × ${LCA_CONSTANTS.detourFactor.toLocaleString('de-DE')}).`
             : (distances?.bspToSiteKm.note ??
                 'GPS-Gesamtstrecke (M-849) nicht im Datenraum; Abhol-/Lieferort des ERP-Vorgangs fehlen.'),
         ),
@@ -913,7 +915,7 @@ export function mapToLcaInfo(
         infoUnsupported(
           'I-75',
           'Hersteller Klebstoff',
-          'Im technischen Datenblatt nicht enthalten (laut Awf-Vorgabe „nicht vorhanden").',
+          'Im technischen Datenblatt nicht enthalten.',
         ),
         infoField(
           'I-76',

@@ -28,6 +28,10 @@ import {
 import { geocodeAddress } from '../services/geocodingService';
 import { haversineKm } from '../services/geoService';
 
+/** Begruendung einer aufgeloesten Strecke (A2 und A4). */
+const STRECKE_ERRECHNET =
+  'Strecke aus Distanz zwischen Abhol- und Lieferort (Luftlinie × 1,3) errechnet.';
+
 /** Ausgangszustand: noch nichts aufgeloest, Begruendung schon gesetzt. */
 const PENDING: ResolvedDistances = {
   sawmillToBspKm: {
@@ -92,7 +96,9 @@ export function useLcaDistances(inputs: LcaInputs): ResolvedDistances {
             ? {
                 value: a2,
                 availability: 'derived',
-                note: 'Aus den geocodierten Transportadressen geschätzt (Luftlinie × Umwegfaktor 1,3).',
+                // Wortlaut des Projektpartners (30.09.2026), fuer A2 und A4
+                // gleich -- ohne M-Nummern, mit denen Externe nichts anfangen.
+                note: STRECKE_ERRECHNET,
               }
             : {
                 value: null,
@@ -120,7 +126,7 @@ export function useLcaDistances(inputs: LcaInputs): ResolvedDistances {
             ? {
                 value: a4,
                 availability: 'derived',
-                note: 'GPS-Gesamtstrecke (M-849) nicht im Datenraum; aus Abhol- und Lieferort des ERP-Vorgangs geschätzt (Luftlinie × 1,3).',
+                note: STRECKE_ERRECHNET,
               }
             : {
                 value: null,
