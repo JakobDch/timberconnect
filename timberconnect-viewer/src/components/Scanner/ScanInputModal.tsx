@@ -218,12 +218,7 @@ export function ScanInputModal({
                 <div className="w-11 h-11 rounded-xl bg-acid-400/15 border border-acid-400/30 flex items-center justify-center">
                   <ScanLine className="w-5 h-5 text-acid-300" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-white">Produkt erfassen</h2>
-                  <p className="text-xs text-night-300 mt-0.5">
-                    Scannen oder ID eingeben
-                  </p>
-                </div>
+                <h2 className="text-base font-bold text-white">Produkt erfassen</h2>
               </div>
               <button
                 onClick={onClose}
@@ -357,11 +352,9 @@ export function ScanInputModal({
                   </div>
                 )}
 
-                {!error && !preview && (
+                {!error && !preview && mode === 'review' && (
                   <p className="text-xs text-night-400 mt-2.5 leading-relaxed">
-                    {mode === 'instant'
-                      ? 'Gescannte Codes werden sofort gesucht — RFID, DotCode und Barcode.'
-                      : 'EPC-URN, GS1-Elementstring, Digital-Link-URL oder Trace-ID.'}
+                    EPC-URN, GS1-Elementstring, Digital-Link-URL oder Trace-ID.
                   </p>
                 )}
 

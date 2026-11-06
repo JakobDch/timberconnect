@@ -41,12 +41,10 @@ interface DamageReportSheetProps {
 function Field({
   id,
   label,
-  hint,
   children,
 }: {
   id: string;
   label: string;
-  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -55,7 +53,6 @@ function Field({
         {label}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-night-300 leading-relaxed">{hint}</p>}
     </div>
   );
 }
@@ -171,11 +168,7 @@ export function DamageReportSheet({
               </select>
             </Field>
 
-            <Field
-              id="damage-description"
-              label="Beschreibung"
-              hint="Was ist zu sehen, wo am Bauteil, seit wann?"
-            >
+            <Field id="damage-description" label="Beschreibung">
               <textarea
                 id="damage-description"
                 rows={4}
@@ -197,11 +190,7 @@ export function DamageReportSheet({
               />
             </Field>
 
-            <Field
-              id="damage-moisture"
-              label="Gemessene Holzfeuchte (%)"
-              hint="Optional — aber der Wert, an dem sich die Schuldfrage bei Feuchteschäden entscheidet."
-            >
+            <Field id="damage-moisture" label="Gemessene Holzfeuchte (%)">
               <input
                 id="damage-moisture"
                 type="text"

@@ -20,7 +20,7 @@ import type { ChainScope } from '../../services/supplyChainWalk';
  *
  * Bei der BSP-Platte gibt es keine Wahl: sie ist das Ende der Kette, ihre
  * "vorangegangene" und ihre "gesamte" Kette sind dasselbe. Der Schalter
- * entfaellt dort, der Text sagt, warum.
+ * entfaellt dort.
  *
  * "Nur dieses Produkt" (scope 'self') wird nicht mehr angeboten. Der Wert
  * bleibt im Typ ChainScope, weil Kettenverfolgung und Kaufregister ihn
@@ -75,11 +75,6 @@ export function ChainScopePicker({
     return index === scannedIndex; // 'self' -- nur noch aus Altzustand erreichbar
   };
 
-  const hint = isPanel
-    ? 'Bei einer BSP-Platte wird immer die gesamte Kette angezeigt — sie ist das Ende der Kette.'
-    : (SCOPE_OPTIONS.find((o) => o.id === scope)?.hint ??
-      SCOPE_OPTIONS[0].hint);
-
   return (
     <div className="mb-6 rounded-2xl bg-night-800 border border-white/5 p-4 sm:p-5">
       {/* Kopfzeile: Beschriftung + Schalter (oder Festwert bei BSP) */}
@@ -102,7 +97,6 @@ export function ChainScopePicker({
             className="w-full sm:w-auto sm:shrink-0"
           />
         )}
-        <p className="text-xs text-night-400 sm:flex-1 sm:min-w-0">{hint}</p>
       </div>
 
       {/* Abbildung der Kette */}

@@ -203,9 +203,6 @@ export function PlantingAreaCard({ epc, position, sources }: PlantingAreaCardPro
             <Download className="w-3.5 h-3.5 text-acid-300" />
             Als GeoJSON exportieren (EUDR/TRACES)
           </button>
-          <p className="text-[11px] text-night-400 mt-1.5 text-center">
-            EPSG:4326 — direkt in TRACES als Geolokalisierung importierbar
-          </p>
         </div>
       </div>
     </div>

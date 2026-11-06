@@ -79,10 +79,6 @@ export function PdfReviewSheet({
                   <h2 className="text-lg sm:text-xl font-bold text-white">
                     Bitte prüfen Sie die ausgelesenen Daten
                   </h2>
-                  <p className="text-xs text-night-300 mt-1 leading-relaxed">
-                    Diese Werte wurden aus Ihren Dokumenten gelesen und werden
-                    nach Ihrer Bestätigung im Datenraum veröffentlicht.
-                  </p>
                 </div>
                 <button
                   onClick={onCancel}

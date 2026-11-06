@@ -96,14 +96,6 @@ export function UseCaseInfoSheet({
                   <Nfc className="w-5 h-5" />
                   <span>Jetzt Produkt scannen</span>
                 </button>
-                {/* Jeder Anwendungsfall trifft eine Aussage ueber ein
-                    bestimmtes Bauteil -- ohne erfasstes Produkt gibt es
-                    nichts anzuzeigen. Das gehoert hier gesagt, damit der
-                    Scan nicht als willkuerliche Huerde erscheint. */}
-                <p className="text-xs text-night-400 text-center mt-3 leading-relaxed">
-                  Der Anwendungsfall bezieht sich immer auf ein bestimmtes
-                  Bauteil.
-                </p>
               </div>
             </motion.div>
           </motion.div>

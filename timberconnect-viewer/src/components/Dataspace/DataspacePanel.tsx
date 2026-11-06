@@ -60,11 +60,6 @@ export function DataspacePanel({ isLoading = false, className = '' }: DataspaceP
         </span>
       </div>
 
-      <p className="text-xs text-night-400 leading-relaxed mb-1">
-        Ein Datenraum, viele Akteure: Ihre Daten bleiben bei Ihnen. Eine
-        Abfrage holt sie dort ab, wo sie liegen — bei jedem einzeln.
-      </p>
-
       <DataspaceGraph />
     </motion.section>
   );

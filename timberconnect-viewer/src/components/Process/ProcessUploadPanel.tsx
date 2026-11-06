@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Building2,
+  Download,
   Camera,
   CheckCircle2,
   Clock,
@@ -57,6 +58,7 @@ import {
   checkProcessIdents,
   createProcess,
   defaultProcessTitle,
+  forgetProcessesByContainer,
   formatRegisteredAt,
   getProcess,
   getProcessType,
@@ -83,6 +85,21 @@ import { ProcessTypePicker } from './ProcessTypePicker';
 import { LeadDocumentSlot } from './LeadDocumentSlot';
 import { ProcessSearchSheet } from './ProcessSearchSheet';
 import { OriginLinkSheet } from './OriginLinkSheet';
+import { IdentCheckSheet } from './IdentCheckSheet';
+import { TemplateDownloadSheet } from './TemplateDownloadSheet';
+import {
+  checkProposedDocuments,
+  clearOwnContainer,
+  collectProposedDocuments,
+  collectReferenceDocuments,
+  findExistingDocuments,
+  mergeExistingDocuments,
+  resolveOwnContainer,
+  summarizePreflight,
+  type PreflightSummary,
+} from '../../services/uploadPreflightService';
+import { removeOwnDocument } from '../../services/podResetService';
+import { invalidateCache as invalidateCatalogCache } from '../../services/catalogService';
 import { proposeOrigin, type OriginProposal } from '../../services/stemOriginService';
 import { captureOriginLink } from '../../services/originEventService';
 import { loadPlantingAreasWithReason } from '../../services/plantingLookupService';
@@ -154,6 +171,17 @@ const DATA_TYPE_ICONS: Record<string, typeof TreePine> = {
 };
 
 type Step = 'choose' | 'collect' | 'done';
+
+/**
+ * Der fruehere eigene Vorgang, den dieser Upload ERSETZT (Ergebnis der
+ * Vorab-Pruefung, vom Nutzer bestaetigt). `skipFiles` sind die Dateien, deren
+ * Event bereits im EPCAT liegt -- fuer sie unterbleibt das Capture.
+ */
+interface ReplaceTarget {
+  containerUrl: string;
+  processId: string | null;
+  skipFiles: Set<string>;
+}
 
 interface ProcessUploadPanelProps {
   isLoading?: boolean;
@@ -354,6 +382,30 @@ export function ProcessUploadPanel({
    * Wird im Ergebnisschritt gezeigt -- der Upload selbst gilt als gelungen.
    */
   const [originWarning, setOriginWarning] = useState<string | null>(null);
+  /**
+   * Vorab-Pruefung der Material-IDs -- der ERSTE Vorschaltschritt.
+   *
+   * `identSummary` null bei offenem Sheet heisst: die Pruefung laeuft. Nur
+   * "ersetzen" und "gesperrt" zeigen das Sheet; "frei" geht ohne Dialog
+   * weiter. Die Entscheidung zum Ersetzen liegt zusaetzlich in einem Ref,
+   * weil sie im selben Handler gebraucht wird, in dem sie faellt -- der
+   * State waere dort noch der alte.
+   */
+  const [identCheckOpen, setIdentCheckOpen] = useState(false);
+  const [identSummary, setIdentSummary] = useState<PreflightSummary | null>(null);
+  const [identBusy, setIdentBusy] = useState(false);
+  /** Hinweise der Pruefung, die nicht sperren (unbekanntes Vormaterial). */
+  const [identNotes, setIdentNotes] = useState<string[]>([]);
+  const replaceRef = useRef<ReplaceTarget | null>(null);
+  /** Eigene Dokumente ohne Event, die der Upload ersetzt (bestaetigt). */
+  const replaceDocsRef = useRef<string[]>([]);
+  /**
+   * Vorlage herunterladen (mit eingebetteten Material-IDs). `null` = zu;
+   * sonst die vorausgewaehlte Vorlage ('' = keine Vorauswahl).
+   */
+  const [templateDownload, setTemplateDownload] = useState<string | null>(null);
+  /** Fuer die Ergebnisansicht: Der Vorgang hat einen frueheren ersetzt. */
+  const [wasReplaced, setWasReplaced] = useState(false);
   /**
    * Material-ID des in der IFC geplanten Bauteils (Vorgang "Ausführungsplanung").
    *
@@ -628,6 +680,11 @@ export function ProcessUploadPanel({
     setOriginProposal(null);
     setOriginSelection([]);
     setOriginWarning(null);
+    setIdentCheckOpen(false);
+    setIdentSummary(null);
+    setIdentNotes([]);
+    replaceRef.current = null;
+    setWasReplaced(false);
     setStep('choose');
   };
 
@@ -809,6 +866,149 @@ export function ProcessUploadPanel({
     }
     setError(null);
 
+    // Anmeldung und Prefix VOR der Vorab-Pruefung: Sie fragt den EPCIS-Dienst
+    // mit der Session (wessen Vorgaenge sind "eigene"?) und den Konverter mit
+    // dem Prefix (welche Seriennummern entstuenden?). Ohne beides waere der
+    // Befund wertlos -- und runSubmit wiese den Upload ohnehin ab.
+    if (!isLoggedIn || !webId) {
+      setError(
+        'Bitte zuerst mit Ihrem Solid Pod anmelden. Ohne Anmeldung können die Daten nicht zugriffsgeschützt gespeichert werden.',
+      );
+      onLoginClick?.();
+      return;
+    }
+    if (!companyPrefix) {
+      setError(
+        'Registrierung unvollständig: Bitte legen Sie zuerst Rolle und GS1 Company Prefix fest (Dialog öffnet sich nach dem Login automatisch).',
+      );
+      return;
+    }
+
+    void runIdentCheck();
+  };
+
+  /**
+   * Vorschaltschritt 0: Sind die Material-IDs im Datenraum schon vergeben?
+   *
+   * Steht VOR Flaeche, Herkunft und Pruefansicht, damit niemand erst eine
+   * Flaeche zeichnet, um dann abgewiesen zu werden. Drei Ausgaenge:
+   *   frei      weiter ohne Dialog
+   *   ersetzen  Rueckfrage; erst die Bestaetigung setzt replaceRef
+   *   gesperrt  Meldung, der Entwurf bleibt zum Dateitausch stehen
+   *
+   * Scheitert die Pruefung selbst (Dienst nicht erreichbar), wird NICHT
+   * hochgeladen: Ein ungeprueft durchgewinkter Upload waere genau die
+   * Dublette, die der Schritt verhindern soll.
+   */
+  const runIdentCheck = async () => {
+    setIdentSummary(null);
+    setIdentNotes([]);
+    replaceRef.current = null;
+    replaceDocsRef.current = [];
+    setIdentCheckOpen(true);
+    try {
+      const drafts = draftFiles.map((item) => ({
+        file: item.file,
+        isPdf: isPdf(item),
+        template: isPdf(item) ? templateForFile(item) : null,
+        ifcEpc: ifcFileEpc ?? (isEpc(ifcEpc) ? ifcEpc.trim() : null),
+      }));
+      const { documents, errors } = await collectProposedDocuments(drafts, companyPrefix!);
+      if (errors.length > 0) {
+        console.warn('[process-upload] Ident-Vorschau mit Fehlern:', errors);
+      }
+
+      // Dokumente mit Event: Befund des EPCAT. Ohne solche Dokumente gibt es
+      // dort nichts zu fragen.
+      let summary = documents.length
+        ? summarizePreflight((await checkProposedDocuments(documents)).verdicts, documents)
+        : summarizePreflight([], []);
+
+      // Dokumente OHNE Event (Planung, Beidokumente): Befund des Datenraums.
+      // Ohne diesen Schritt ging am 06.11.2026 dieselbe Ausfuehrungsplanung
+      // ein zweites Mal durch.
+      const references = await collectReferenceDocuments(drafts);
+      const existing = await findExistingDocuments(references, podBaseFromWebId(webId!));
+      summary = mergeExistingDocuments(summary, existing);
+
+      if (summary.outcome === 'free') {
+        setIdentNotes(summary.notes);
+        setIdentCheckOpen(false);
+        continueAfterIdentCheck();
+        return;
+      }
+      setIdentSummary(summary);
+    } catch (err) {
+      setIdentCheckOpen(false);
+      setError(
+        `Der Vorgang wurde nicht hochgeladen, weil die Material-IDs nicht geprüft werden konnten. ${
+          err instanceof Error ? err.message : 'Bitte später erneut versuchen.'
+        }`,
+      );
+    }
+  };
+
+  /**
+   * Ersetzen bestaetigt: den frueheren Vorgang im eigenen Pod finden.
+   *
+   * Der neue Stand MUSS in denselben Container, auf den das vorhandene Event
+   * zeigt -- sonst zeigte es ins Leere. Wird der Container nicht gefunden,
+   * wird nicht geraten, sondern auf das Loeschen im Verwaltungsbereich
+   * verwiesen. Beim Nachreichen steht der Container ohnehin fest.
+   */
+  const handleReplace = async () => {
+    if (!identSummary || !webId) return;
+    setIdentBusy(true);
+    try {
+      replaceDocsRef.current = identSummary.replaceDocuments ?? [];
+      const skipFiles = new Set(identSummary.replaceFiles);
+      // Nur Dokumente ohne Event zu ersetzen: kein Vorgangscontainer noetig,
+      // der Upload laeuft normal, vorher werden die alten Dokumente entfernt.
+      if (identSummary.replaceFiles.length === 0) {
+        setIdentNotes(identSummary.notes);
+        setIdentCheckOpen(false);
+        continueAfterIdentCheck();
+        return;
+      }
+      if (targetProcess) {
+        replaceRef.current = {
+          containerUrl: targetProcess.containerUrl,
+          processId: targetProcess.id,
+          skipFiles,
+        };
+      } else {
+        const match = await resolveOwnContainer(
+          identSummary.replaceEpcs,
+          identSummary.ownBizTransactions,
+          podBaseFromWebId(webId),
+        );
+        if (!match) {
+          setIdentSummary({
+            ...identSummary,
+            outcome: 'blocked',
+            title: 'Frühere Daten nicht gefunden',
+            message:
+              'Dieser Vorgang ist im Datenraum bereits von Ihnen registriert, die zugehörigen Dateien wurden in Ihrem Pod aber nicht gefunden. ' +
+              'Bitte löschen Sie den früheren Vorgang unter „Verwaltung → Vorgänge löschen“ und laden Sie danach erneut hoch.',
+          });
+          return;
+        }
+        replaceRef.current = {
+          containerUrl: match.containerUrl,
+          processId: match.processId,
+          skipFiles,
+        };
+      }
+      setIdentNotes(identSummary.notes);
+      setIdentCheckOpen(false);
+      continueAfterIdentCheck();
+    } finally {
+      setIdentBusy(false);
+    }
+  };
+
+  /** Die Vorschaltkette nach der Ident-Pruefung: Flaeche, Herkunft, Pruefansicht. */
+  const continueAfterIdentCheck = () => {
     const pending = nextAreaFile(plantingAreas);
     if (pending) {
       setAreaPrompt(pending);
@@ -824,8 +1024,11 @@ export function ProcessUploadPanel({
     // und die Herkunft wurde nie geprueft. Genau daran fehlte am 02.09.2026
     // zweimal das TransformationEvent, obwohl Flaeche, Polygon und
     // Koordinaten vollstaendig vorlagen.
+    //
+    // Beim ERSETZEN entfaellt sie: Die Herkunftskante ist ein Event, und
+    // Events bleiben beim Ersetzen unangetastet -- sie liegt bereits vor.
     const hpr = draftFiles.find(isHarvesterLog);
-    if (hpr) {
+    if (hpr && !replaceRef.current) {
       void openOriginCheck(hpr);
       return;
     }
@@ -864,21 +1067,49 @@ export function ProcessUploadPanel({
       }
 
       // 1. Vorgang anlegen (oder bestehenden weiterverwenden)
+      //
+      // Beim ERSETZEN wird zuerst der fruehere Vorgang aus dem Pod geraeumt
+      // (Dateien + Katalogeintraege, nie das EPCAT) und der neue unter
+      // demselben Container-Pfad angelegt: Das vorhandene Event zeigt per
+      // bizTransaction genau dorthin. Beim Nachreichen bleibt der Container
+      // unangetastet -- er IST der laufende Vorgang.
+      const replacing = replaceRef.current;
+
+      // Ersetzte Dokumente ohne Event einzeln entfernen -- ausser sie liegen
+      // in dem Vorgang, der beim Ersetzen ohnehin ganz geraeumt wird.
+      for (const url of replaceDocsRef.current) {
+        if (replacing && url.startsWith(replacing.containerUrl)) continue;
+        setProgress('Früheres Dokument wird entfernt...');
+        const removed = await removeOwnDocument(webId, url, targetProcess?.containerUrl ?? null);
+        if (removed.removedContainer) {
+          forgetProcessesByContainer([url.slice(0, url.lastIndexOf('/') + 1)]);
+        }
+      }
+      if (replaceDocsRef.current.length > 0) invalidateCatalogCache();
+      replaceDocsRef.current = [];
+
       let record: ProcessRecord;
       if (targetProcess) {
         record = targetProcess;
         setProgress(`Dateien werden dem ${getProcessType(record.type).label} zugeordnet...`);
       } else {
+        if (replacing) {
+          setProgress('Frühere Daten des Vorgangs werden entfernt...');
+          await clearOwnContainer(replacing.containerUrl, webId);
+        }
         setProgress('Vorgang wird registriert...');
         record = await createProcess(
           {
             type: processType!,
             title: title.trim() || defaultProcessTitle(processType!),
             ownerWebId: webId,
+            containerUrl: replacing?.containerUrl ?? null,
           },
           authenticatedFetch,
         );
       }
+      const skipCaptureFor = (fileName: string) =>
+        replacing?.skipFiles.has(fileName) ?? false;
 
       // 2. Alle Dateien des Vorgangs: Pflichtdatei zuerst, dann Anhaenge.
       const pdfItems = draftFiles.filter(isPdf);
@@ -914,6 +1145,7 @@ export function ProcessUploadPanel({
               // eigenen Ordner und der Vorgang zerfiele im Pod in mehrere
               // gleichrangige Eintraege.
               record.containerUrl,
+              { skipCapture: skipCaptureFor(item.file.name) },
             );
             newPdfResults.push(pdfResult);
             if (pdfResult.warning) uploadErrors.push(pdfResult.warning);
@@ -984,6 +1216,10 @@ export function ProcessUploadPanel({
           // eigenen Ordner aus der trace_id — bei hpr/eldat ist das der rohe
           // EPC, und der Doppelpunkt darin zerlegt den Pfad (401).
           record.containerUrl,
+          // Alle Maschinendateien gehen in EINEM Aufruf; ein Vorgang hat
+          // genau eine Event-erzeugende Pflichtdatei, deshalb gilt deren
+          // Entscheidung fuer den Aufruf.
+          { skipCapture: machineItems.some((f) => skipCaptureFor(f.file.name)) },
         );
         setResult(uploadResult);
 
@@ -1034,7 +1270,7 @@ export function ProcessUploadPanel({
           // Faellvorgangs ist geschrieben. Den ganzen Vorgang wegen der
           // fehlenden Zusatzkante als gescheitert zu melden waere falsch — sie
           // laesst sich nachtragen, der Upload nicht zurueckdrehen.
-          if (originProposal && originSelection.length > 0) {
+          if (originProposal && originSelection.length > 0 && !replacing) {
             setProgress('Herkunft wird verknüpft...');
             const forstResult = uploadResult.files['forst'];
             try {
@@ -1100,6 +1336,7 @@ export function ProcessUploadPanel({
       setProgress('Vorgang wird abgeschlossen...');
       const updated = await registerProcessFiles(record.id, registered, authenticatedFetch);
       setSavedProcess(updated ?? record);
+      setWasReplaced(!!replacing);
 
       setProgress(null);
 
@@ -1188,13 +1425,9 @@ export function ProcessUploadPanel({
       {step === 'choose' && (
         <>
           <div>
-            <h3 className="text-sm font-bold text-white mb-1">
+            <h3 className="text-sm font-bold text-white mb-4">
               Welcher Vorgang wird registriert?
             </h3>
-            <p className="text-xs text-night-300 mb-4">
-              Alle Dateien eines Lebensabschnitts werden gemeinsam hochgeladen.
-              Jeder Vorgang braucht sein Pflichtdokument.
-            </p>
             <ProcessTypePicker
               selected={processType}
               onSelect={(type) => {
@@ -1218,6 +1451,18 @@ export function ProcessUploadPanel({
           </div>
 
           <button
+            onClick={() => setTemplateDownload('')}
+            className="w-full flex items-center gap-3 px-4 py-3.5 bg-night-700/50 hover:bg-night-700/80 border border-white/5 hover:border-acid-400/40 rounded-2xl text-left transition-all"
+          >
+            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+              <Download className="w-5 h-5 text-night-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-semibold text-white">Vorlage herunterladen</span>
+            </div>
+          </button>
+
+          <button
             onClick={() => setSearchOpen(true)}
             className="w-full flex items-center gap-3 px-4 py-3.5 bg-night-700/50 hover:bg-night-700/80 border border-white/5 hover:border-acid-400/40 rounded-2xl text-left transition-all"
           >
@@ -1228,9 +1473,6 @@ export function ProcessUploadPanel({
               <span className="text-sm font-semibold text-white">
                 Datei zu bestehendem Vorgang nachreichen
               </span>
-              <p className="text-xs text-night-400 mt-0.5">
-                Vorgang über den Registrierungszeitpunkt suchen
-              </p>
             </div>
           </button>
         </>
@@ -1268,7 +1510,6 @@ export function ProcessUploadPanel({
                   Vorgang
                 </p>
                 <h3 className="text-base font-bold text-white">{activeType!.label}</h3>
-                <p className="text-xs text-night-400 mt-1">{activeType!.description}</p>
               </>
             )}
           </div>
@@ -1291,6 +1532,20 @@ export function ProcessUploadPanel({
             />
           )}
 
+          {/* Noch keine ausgefuellte Pflichtdatei? Die Vorlage gibt es hier,
+              mit frischen Material-IDs -- die Demo-Dateien tragen IDs, die im
+              Datenraum bereits vergeben sind. */}
+          {!targetProcess && activeType?.leadDoc.templateId && !leadDoc && (
+            <button
+              onClick={() => setTemplateDownload(activeType.leadDoc.templateId ?? '')}
+              disabled={isUploading}
+              className="flex items-center gap-2 text-xs text-acid-300 hover:text-acid-200 transition-colors disabled:opacity-50 -mt-2"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Vorlage „{activeType.leadDoc.label}“ herunterladen
+            </button>
+          )}
+
           {/* Material-ID des geplanten Bauteils — nur bei der
               Ausfuehrungsplanung. Traegt das Bauteil den Ident bereits im
               Planungsmodell, wird er nur bestaetigt; sonst eingetragen. */}
@@ -1309,11 +1564,6 @@ export function ProcessUploadPanel({
                   <code className="block text-xs text-night-100 mt-1.5 break-all">
                     {ifcFileEpc}
                   </code>
-                  <p className="text-xs text-night-300 mt-2 leading-relaxed">
-                    Das Bauteil trägt die Material-ID der verbauten Platte als
-                    Attribut „Identity“ – wie die PDF-Dokumente ihr verstecktes
-                    Ident-Feld. Es muss nichts eingegeben werden.
-                  </p>
                 </div>
               ) : (
                 <>
@@ -1519,11 +1769,9 @@ export function ProcessUploadPanel({
                 <p className="text-sm font-bold text-white">
                   Produktfoto <span className="text-night-400 font-normal">(optional)</span>
                 </p>
-                <p className="text-xs text-night-300 mt-0.5 truncate">
-                  {photo
-                    ? photo.name
-                    : 'Ohne eigenes Foto wird das Standardbild der Produktart gezeigt.'}
-                </p>
+                {photo && (
+                  <p className="text-xs text-night-300 mt-0.5 truncate">{photo.name}</p>
+                )}
               </div>
 
               {photo && (
@@ -1598,15 +1846,11 @@ export function ProcessUploadPanel({
             <div className="px-4 py-3 bg-night-700/40 border border-white/10 rounded-2xl">
               <label
                 htmlFor="process-title"
-                className="block text-sm font-bold text-white"
+                className="block text-sm font-bold text-white mb-2.5"
               >
                 Bezeichnung des Vorgangs{' '}
                 <span className="text-night-400 font-normal">(optional)</span>
               </label>
-              <p className="text-xs text-night-300 mt-0.5 mb-2.5">
-                Nur als Gedächtnisstütze. Ohne Eintrag wird der Vorgang
-                automatisch benannt.
-              </p>
               <input
                 id="process-title"
                 type="text"
@@ -1709,9 +1953,19 @@ export function ProcessUploadPanel({
             <div className="flex items-center gap-3 mb-3">
               <CheckCircle2 className="w-6 h-6 text-acid-300" />
               <h3 className="font-semibold text-white">
-                {isAppendMode ? 'Dateien hinzugefügt' : 'Vorgang registriert'}
+                {wasReplaced
+                  ? 'Daten ersetzt'
+                  : isAppendMode
+                    ? 'Dateien hinzugefügt'
+                    : 'Vorgang registriert'}
               </h3>
             </div>
+            {wasReplaced && (
+              <p className="text-xs text-night-300 mb-2 leading-relaxed">
+                Die Produktdaten in Ihrem Pod wurden durch die neuen Dateien
+                ersetzt. Die Ereignisse im Datenraum blieben unverändert.
+              </p>
+            )}
             <p className="text-sm text-night-200">{savedProcess.title}</p>
             <p className="text-xs text-night-400 mt-1">
               {getProcessType(savedProcess.type).label} · registriert{' '}
@@ -1770,6 +2024,18 @@ export function ProcessUploadPanel({
               <span className="text-sm">{originWarning}</span>
             </div>
           )}
+
+          {/* Hinweise der Ident-Pruefung, die nicht gesperrt haben: etwa
+              Vormaterial, das im Datenraum noch niemand registriert hat. */}
+          {identNotes.map((note) => (
+            <div
+              key={note}
+              className="flex items-start gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200"
+            >
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span className="text-sm">{note}</span>
+            </div>
+          ))}
 
           {/* PDFs des Vorgangs + KG-Status */}
           {pdfResults.length > 0 && (
@@ -1910,6 +2176,31 @@ export function ProcessUploadPanel({
           setReviewOpen(false);
           setReviewItems(null);
           resetDraft();
+        }}
+      />
+
+      <TemplateDownloadSheet
+        isOpen={templateDownload !== null}
+        templates={templates}
+        initialTemplateId={templateDownload || null}
+        suggestedTemplateIds={suggestedTemplateIds}
+        onClose={() => setTemplateDownload(null)}
+      />
+
+      {/* Vorschaltschritt 0: Sind die Material-IDs schon vergeben? Steht vor
+          allen anderen Schritten -- wer gesperrt ist, soll nicht erst eine
+          Flaeche zeichnen. "Frei" oeffnet dieses Sheet gar nicht. */}
+      <IdentCheckSheet
+        isOpen={identCheckOpen}
+        summary={identSummary}
+        busy={identBusy}
+        onReplace={() => void handleReplace()}
+        onClose={() => {
+          // Sperre wie Abbruch: nichts hochgeladen. Der Entwurf bleibt
+          // stehen, damit die Datei getauscht werden kann.
+          setIdentCheckOpen(false);
+          setIdentSummary(null);
+          replaceRef.current = null;
         }}
       />
 

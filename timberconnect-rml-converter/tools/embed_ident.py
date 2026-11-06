@@ -60,14 +60,14 @@ FF_READONLY = 1
 F_HIDDEN_PRINT = 6  # Hidden(2) | Print(4)
 
 
-def build_identity_field(page_ref, epc: str) -> DictionaryObject:
+def build_identity_field(page_ref, epc: str, name: str = FIELD_NAME) -> DictionaryObject:
     """Das versteckte, schreibgeschuetzte Textfeld als Widget-Annotation."""
     field = DictionaryObject()
     field.update({
         NameObject("/Type"): NameObject("/Annot"),
         NameObject("/Subtype"): NameObject("/Widget"),
         NameObject("/FT"): NameObject("/Tx"),
-        NameObject("/T"): TextStringObject(FIELD_NAME),
+        NameObject("/T"): TextStringObject(name),
         NameObject("/V"): TextStringObject(epc),
         NameObject("/DV"): TextStringObject(epc),
         NameObject("/Ff"): NumberObject(FF_READONLY),
@@ -85,8 +85,22 @@ def build_identity_field(page_ref, epc: str) -> DictionaryObject:
     return field
 
 
-def embed(pdf_path: Path, epc: str, out_path: Path) -> None:
-    reader = PdfReader(str(pdf_path))
+def embed_fields(pdf_bytes: bytes, fields: dict[str, str]) -> bytes:
+    """Mehrere versteckte Ident-Felder auf einmal einbetten.
+
+    ``fields`` bildet Feldname -> Wert ab, z.B. ``{"Identity": "urn:epc:..."}``
+    oder fuer einen Saegevorgang ``{"Identity_1": "<Lamellen;...>",
+    "IdentityInput_1": "<Staemme;...>"}``. Mehrere EPCs in einem Feld werden
+    per Semikolon getrennt -- dieselbe Konvention, die Viewer
+    (pdfIdentityService.ts) und Konverter beim Lesen erwarten.
+
+    Gleichnamige vorhandene Felder werden ersetzt, nicht dupliziert: zwei
+    Felder gleichen Namens waeren im AcroForm mehrdeutig, und welcher Wert
+    gewinnt, haengt vom Betrachter ab.
+    """
+    import io
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
     # Vollstaendig klonen, nicht nur die Seiten uebernehmen:
     # append_pages_from_reader kopiert das AcroForm-Woerterbuch NICHT. Der
     # Writer legt dann ein frisches AcroForm an, das nur noch das Identity-Feld
@@ -97,20 +111,21 @@ def embed(pdf_path: Path, epc: str, out_path: Path) -> None:
 
     page_ref = writer._pages["/Kids"][0]
     page = page_ref.get_object()
+    names = set(fields)
 
-    field = build_identity_field(page_ref, epc)
-    field_ref = writer._add_object(field)
+    new_refs = [
+        writer._add_object(build_identity_field(page_ref, value, name))
+        for name, value in fields.items()
+    ]
 
-    # Bestehende Identity-Felder entfernen: zwei Felder gleichen Namens waeren
-    # im AcroForm mehrdeutig, und welcher Wert gewinnt, haengt vom Betrachter ab.
     existing = page.get("/Annots")
     kept = ArrayObject()
     if existing:
         for ref in existing:
             annot = ref.get_object()
-            if str(annot.get("/T", "")) != FIELD_NAME:
+            if str(annot.get("/T", "")) not in names:
                 kept.append(ref)
-    kept.append(field_ref)
+    kept.extend(new_refs)
     page[NameObject("/Annots")] = kept
 
     root = writer._root_object
@@ -120,16 +135,14 @@ def embed(pdf_path: Path, epc: str, out_path: Path) -> None:
         root[NameObject("/AcroForm")] = writer._add_object(acro)
     acro = root["/AcroForm"].get_object() if hasattr(root["/AcroForm"], "get_object") else acro
 
-    fields = acro.get("/Fields")
-    if fields is None:
-        fields = ArrayObject()
-        acro[NameObject("/Fields")] = fields
-    # Auch aus der Feldliste die alten Identity-Eintraege entfernen.
+    existing_fields = acro.get("/Fields")
+    if existing_fields is None:
+        existing_fields = ArrayObject()
     remaining = ArrayObject(
-        ref for ref in fields
-        if str(ref.get_object().get("/T", "")) != FIELD_NAME
+        ref for ref in existing_fields
+        if str(ref.get_object().get("/T", "")) not in names
     )
-    remaining.append(field_ref)
+    remaining.extend(new_refs)
     acro[NameObject("/Fields")] = remaining
 
     if "/DA" not in acro:
@@ -139,8 +152,14 @@ def embed(pdf_path: Path, epc: str, out_path: Path) -> None:
     # lesen /V direkt) ist das unerheblich, fuer Acrobat aber sauberer.
     acro[NameObject("/NeedAppearances")] = BooleanObject(True)
 
-    with out_path.open("wb") as fh:
-        writer.write(fh)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def embed(pdf_path: Path, epc: str, out_path: Path) -> None:
+    """Ein einzelnes ``Identity``-Feld einbetten (Kommandozeile)."""
+    out_path.write_bytes(embed_fields(pdf_path.read_bytes(), {FIELD_NAME: epc}))
 
 
 def main() -> int:

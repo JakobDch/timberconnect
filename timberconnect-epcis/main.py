@@ -15,6 +15,7 @@ Endpoints (prefix /api/epcis):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any, Optional
@@ -27,12 +28,14 @@ from config import settings
 from services.epcat_client import EPCATClient, EPCATError
 from services.epcat_query import EPCATQueryClient, EPCATQueryError, epcs_of_event
 from services.epcis_builder import build_document
+from services.ident_check import ProposedDocument, assess_document
 from services.serial_import import SerialImportError, run_serial_import
 from services.solid_auth import SolidAuthError, verify_solid_token
 from services.solid_rdf import (
     ConsentDoc,
     get_consent_for_owner,
     get_role_for_webid,
+    normalise_webid,
     pod_base_from_webid,
 )
 
@@ -145,6 +148,33 @@ class EventQueryResponse(BaseModel):
     caller_web_id: Optional[str] = None
     caller_role: Optional[str] = None
     auth_enforced: bool
+
+
+class IdentCheckDocument(BaseModel):
+    """Ein Dokument, wie es der Upload erzeugen WUERDE (Sicht vor dem Capture)."""
+    label: str
+    # "ObjectEvent" | "TransformationEvent" -- wie epcis_builder sie baut.
+    event_type: str
+    output_epcs: list[str] = []
+    input_epcs: list[str] = []
+
+
+class IdentCheckRequest(BaseModel):
+    documents: list[IdentCheckDocument]
+
+
+class IdentCheckResponse(BaseModel):
+    documents: list[dict[str, Any]]
+    caller_pod: Optional[str] = None
+    auth_enforced: bool
+    # Wie viele Idente gegen das Repository gehalten wurden.
+    checked_epcs: int
+
+
+# Gleichzeitige EPCAT-Abfragen der Vorab-Pruefung. Eine Leistungserklaerung
+# nennt 168 Lamellen; nacheinander waeren das ~17 s, zu viele auf einmal
+# treffen das Repository wie eine Last-Spitze.
+_CHECK_CONCURRENCY = 6
 
 
 # --------------------------------------------------------------- helpers -----
@@ -371,6 +401,88 @@ async def query_events(
         caller_web_id=caller_web_id,
         caller_role=caller_role,
         auth_enforced=True,
+    )
+
+
+@app.post("/api/epcis/check-idents", response_model=IdentCheckResponse)
+async def check_idents(
+    request: IdentCheckRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """Vorab-Pruefung VOR dem Upload: Sind die Idente schon vergeben?
+
+    Bewusst OHNE den Consent-Filter von /events: Die Frage lautet "gibt es
+    das schon?", nicht "darf ich das sehen?". Liefe die Pruefung durch den
+    Filter, blieben fremde Events unsichtbar und ein vergebener Ident gaelte
+    faelschlich als frei. Nach aussen geht deshalb auch kein Event-Inhalt --
+    nur der Befund je Dokument und die Pods, die die Idente halten.
+
+    Der Aufrufer wird ueber sein Solid-Token bestimmt: nur so laesst sich
+    "eigener Vorgang" (bizTransaction zeigt in seinen Pod) von "fremd"
+    unterscheiden. Ohne Anmeldung gilt nichts als eigen.
+    """
+    caller_pod: Optional[str] = None
+    if settings.auth_required:
+        try:
+            caller = await verify_solid_token(authorization, settings.solid_read_timeout)
+        except SolidAuthError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        caller_pod = pod_base_from_webid(normalise_webid(caller.web_id))
+
+    epcs = sorted(
+        {e for d in request.documents for e in (d.output_epcs + d.input_epcs) if e}
+    )
+
+    client = _epcat_query_client()
+    semaphore = asyncio.Semaphore(_CHECK_CONCURRENCY)
+
+    async def fetch(epc: str) -> tuple[str, list[dict[str, Any]]]:
+        async with semaphore:
+            result = await client.query_events(epc=epc)
+            return epc, result.events
+
+    try:
+        pairs = await asyncio.gather(*(fetch(e) for e in epcs))
+    except EPCATQueryError as exc:
+        # Lieber abbrechen als "frei" raten: Ein ungeprueft durchgewinkter
+        # Upload waere genau die Dublette, die diese Pruefung verhindern soll.
+        #
+        # Die Rohantwort (bei einem Ausfall die HTML-Fehlerseite des
+        # Repositorys) gehoert ins Log, nicht vor den Nutzer. 503 statt 502:
+        # Das Repository ist voruebergehend weg, der Aufrufer darf es spaeter
+        # erneut versuchen.
+        logger.error("Ident-Pruefung: EPCAT-Abfrage fehlgeschlagen: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Das Verzeichnis der Material-IDs im Datenraum ist gerade nicht "
+                "erreichbar. Bitte versuchen Sie es in einigen Minuten erneut."
+            ),
+        ) from exc
+    events_by_epc = dict(pairs)
+
+    assessments = []
+    for doc in request.documents:
+        relevant: list[dict[str, Any]] = []
+        for epc in doc.output_epcs + doc.input_epcs:
+            relevant.extend(events_by_epc.get(epc, []))
+        proposed = ProposedDocument(
+            label=doc.label,
+            event_type=doc.event_type,
+            output_epcs=doc.output_epcs,
+            input_epcs=doc.input_epcs,
+        )
+        assessments.append(assess_document(proposed, relevant, caller_pod).to_dict())
+
+    logger.info(
+        "Ident-Pruefung: %d Dokument(e), %d Ident(e), Befund %s",
+        len(request.documents), len(epcs), [a["status"] for a in assessments],
+    )
+    return IdentCheckResponse(
+        documents=assessments,
+        caller_pod=caller_pod,
+        auth_enforced=settings.auth_required,
+        checked_epcs=len(epcs),
     )
 
 

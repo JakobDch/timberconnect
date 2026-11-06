@@ -252,10 +252,6 @@ export function FileBrowserSheet({ isOpen, onClose }: FileBrowserSheetProps) {
                   <div className="py-12 text-center space-y-3">
                     <Loader2 className="w-8 h-8 text-acid-300 mx-auto animate-spin" />
                     <p className="text-night-200">Berechtigungen werden geprüft …</p>
-                    <p className="text-xs text-night-400">
-                      Rolle: {role.label} – es wird ermittelt, welche Pods des Datenraums Ihnen
-                      Zugriff gewähren.
-                    </p>
                   </div>
                 ) : phase === 'loading' ? (
                   <div className="py-12 text-center space-y-3">
@@ -396,8 +392,7 @@ export function FileBrowserSheet({ isOpen, onClose }: FileBrowserSheetProps) {
                     )}
 
                     <p className="text-[11px] text-night-300">
-                      {filteredFiles.length} von {files.length} Dateien angezeigt. Die
-                      Zugriffskontrolle wird zusätzlich serverseitig per WAC durchgesetzt.
+                      {filteredFiles.length} von {files.length} Dateien angezeigt.
                     </p>
                   </div>
                 )}

@@ -211,10 +211,6 @@ export function LocationScanSheet({
                   <h2 className="text-lg sm:text-xl font-bold text-white truncate">
                     Baum finden
                   </h2>
-                  <p className="text-xs text-night-400 mt-0.5">
-                    Ein Baum trägt keinen Code — er ist über die Fläche seiner
-                    Pflanzung identifiziert.
-                  </p>
                 </div>
                 <button
                   onClick={onClose}

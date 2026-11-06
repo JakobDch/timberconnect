@@ -136,9 +136,6 @@ export function RoleSetup() {
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Registrierung abschließen</h2>
-              <p className="text-xs text-night-300 mt-0.5">
-                Rolle &amp; Company Prefix einmalig festlegen
-              </p>
             </div>
           </div>
 
@@ -174,9 +171,6 @@ export function RoleSetup() {
               )}
             </div>
 
-            {/* Einspaltig: die Rolle ist unveraenderlich, deshalb steht die
-                Beschreibung neben jeder Option — nebeneinander waeren die
-                Texte zu schmal, um gelesen zu werden. */}
             {visibleGroups.length === 0 ? (
               <p className="text-sm text-night-400 text-center py-6">
                 Keine Rolle gefunden. Andere Schreibweise versuchen?
@@ -202,7 +196,7 @@ export function RoleSetup() {
                               : "border-white/10 bg-night-700/50 hover:border-acid-400/30"
                           }`}
                         >
-                          <div className="flex items-start gap-3">
+                          <div className="flex items-center gap-3">
                             <div
                               className={`w-10 h-10 rounded-xl flex items-center justify-center border flex-shrink-0 ${
                                 isSelected
@@ -214,9 +208,6 @@ export function RoleSetup() {
                             </div>
                             <div className="min-w-0">
                               <div className="text-sm font-semibold text-white">{role.label}</div>
-                              <p className="text-xs text-night-300 mt-0.5 leading-relaxed">
-                                {role.description}
-                              </p>
                             </div>
                           </div>
                         </button>
@@ -260,8 +251,6 @@ export function RoleSetup() {
               <p className="flex items-start gap-1.5 text-xs text-night-300 leading-relaxed">
                 <Lock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
                 <span>
-                  Ihr GS1 Company Prefix identifiziert Ihr Unternehmen in allen
-                  GS1-Identen (SGTIN/LGTIN) und EPCIS-Events.{" "}
                   <span className="font-semibold text-night-200">
                     Er wird einmalig in Ihrem Pod gespeichert und kann nach der
                     Registrierung nicht mehr geändert werden.

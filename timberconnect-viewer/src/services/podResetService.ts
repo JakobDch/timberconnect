@@ -260,6 +260,8 @@ export interface ResetCatalogEntry {
   recordUrl: string;
   /** Container, auf den die Distribution zeigt — zur Zuordnung zum Vorgang. */
   targetContainer: string | null;
+  /** Die Datei selbst, auf die die Distribution zeigt (dokumentweises Loeschen). */
+  targetUrl?: string | null;
 }
 
 export interface ResetPlan {
@@ -549,6 +551,7 @@ async function collectCatalogEntries(
         datasetUrl: file.url,
         recordUrl: `${catalogUrl}records/${uuid}.ttl`,
         targetContainer: null,
+        targetUrl: null,
       };
       try {
         // Textuell gelesen: die Distribution-URL genuegt, ein voller Parse
@@ -560,6 +563,7 @@ async function collectCatalogEntries(
           const text = await response.text();
           const match = text.match(/<(https?:\/\/[^>]*\/data\/[^>]*)>/);
           if (match) {
+            entry.targetUrl = match[1];
             entry.targetContainer = match[1].slice(0, match[1].lastIndexOf('/') + 1);
           }
         }
@@ -747,4 +751,92 @@ export async function executePodReset(
     catalogCleaned,
     errors,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Ein einzelnes Dokument entfernen (Ersetzen bei der Vorab-Pruefung)
+// ---------------------------------------------------------------------------
+
+/** Verwaltungsdateien eines Vorgangs -- sie gehoeren zu keinem Dokument. */
+const CONTAINER_BOOKKEEPING = /^(process\.ttl|pricing\.ttl|\.acl|\.meta)$|\.acl$|\.meta$/i;
+
+/**
+ * Alle Dateien EINES Dokuments: Original, JSON und TTL tragen dasselbe
+ * Praefix "<Dokument-ID>_" (Konverter: <doc_hash>_<art>.<endung>).
+ */
+export function documentFilesOf(files: ResetFile[], documentUrl: string): {
+  documentFiles: ResetFile[];
+  otherFiles: ResetFile[];
+} {
+  const name = documentUrl.slice(documentUrl.lastIndexOf('/') + 1);
+  const prefix = name.includes('_') ? `${name.slice(0, name.indexOf('_'))}_` : name;
+  const documentFiles = files.filter((f) => f.name.startsWith(prefix));
+  const otherFiles = files.filter(
+    (f) => !f.name.startsWith(prefix) && !CONTAINER_BOOKKEEPING.test(f.name),
+  );
+  return { documentFiles, otherFiles };
+}
+
+/**
+ * Ein frueher hochgeladenes Dokument aus dem eigenen Pod entfernen.
+ *
+ * Liegt es allein in seinem Vorgang (z.B. eine Ausfuehrungsplanung), geht
+ * der ganze Vorgang -- sonst bliebe ein leerer Vorgang zurueck. Teilt es
+ * sich den Vorgang mit anderen Dokumenten (Transportauftrag neben dem
+ * Harvesterprotokoll), gehen NUR seine Dateien und sein Katalogeintrag: Der
+ * Rest des Vorgangs ist von der Dublette nicht betroffen.
+ *
+ * Dieselben Schutzregeln wie beim Loeschen im Verwaltungsbereich: nur eigene
+ * Container unter data/.
+ */
+export async function removeOwnDocument(
+  webId: string,
+  documentUrl: string,
+  /** Container, der in jedem Fall stehen bleibt (Nachreichen in genau diesen Vorgang). */
+  keepContainer?: string | null,
+): Promise<{ removedContainer: boolean; deletedFiles: number }> {
+  const plan = await planPodReset(webId);
+  const containerUrl = documentUrl.slice(0, documentUrl.lastIndexOf('/') + 1);
+  const container = plan.containers.find((c) => c.url === containerUrl);
+  if (!container) {
+    throw new Error(
+      'Das frühere Dokument wurde in Ihrem Pod nicht gefunden. Bitte löschen Sie es unter „Verwaltung → Vorgänge löschen“ und laden Sie danach erneut hoch.',
+    );
+  }
+
+  const { documentFiles, otherFiles } = documentFilesOf(container.files, documentUrl);
+  if (otherFiles.length === 0 && containerUrl !== keepContainer) {
+    const outcome = await executePodReset(selectPlanContainers(plan, [containerUrl]));
+    if (outcome.errors.length > 0) {
+      throw new Error(`Frühere Daten konnten nicht entfernt werden: ${outcome.errors.join('; ')}`);
+    }
+    return { removedContainer: true, deletedFiles: outcome.deletedFiles };
+  }
+
+  const errors: string[] = [];
+  const fileUrls = new Set(documentFiles.map((f) => f.url));
+  for (const file of documentFiles) {
+    try {
+      await deleteResource(file.url, plan.podBase);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  const entries = [...plan.catalogEntries, ...plan.keptCatalogEntries].filter(
+    (e) => e.targetUrl && fileUrls.has(e.targetUrl),
+  );
+  for (const entry of entries) {
+    for (const url of [entry.datasetUrl, entry.recordUrl]) {
+      try {
+        await deleteResource(url, plan.podBase);
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+  await cleanCatalogFile(plan.podBase, entries.map((e) => e.uuid));
+  if (errors.length > 0) {
+    throw new Error(`Frühere Daten konnten nicht entfernt werden: ${errors.join('; ')}`);
+  }
+  return { removedContainer: false, deletedFiles: documentFiles.length };
 }

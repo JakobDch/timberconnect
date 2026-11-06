@@ -165,11 +165,6 @@ export function DocumentAccessSheet({
                     <h2 className="text-lg sm:text-xl font-bold text-white">
                       Wer darf dieses Dokument sehen?
                     </h2>
-                    <p className="text-xs text-night-300 mt-1 leading-relaxed">
-                      Die Dateien liegen bereits in Ihrem Pod. Legen Sie jetzt je
-                      Dokument fest, welche Rollen die darin enthaltenen Daten
-                      abrufen dürfen.
-                    </p>
                   </div>
                 </div>
 
@@ -344,11 +339,11 @@ export function DocumentAccessSheet({
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-night-400 mt-2 text-center leading-relaxed">
-                  {index === 0
-                    ? 'Ohne Festlegung gilt Ihre allgemeine Freigabe. Änderbar bleibt das jederzeit unter „Zugriff verwalten".'
-                    : 'Änderbar bleibt das jederzeit unter „Zugriff verwalten".'}
-                </p>
+                {index === 0 && (
+                  <p className="text-[11px] text-night-400 mt-2 text-center leading-relaxed">
+                    Ohne Festlegung gilt Ihre allgemeine Freigabe.
+                  </p>
+                )}
               </div>
             </motion.div>
           </motion.div>

@@ -379,13 +379,10 @@ export function LiabilityView({
             transition={{ delay: 0.15 }}
             className="bg-night-800 border border-white/5 rounded-2xl p-4"
           >
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white mb-1">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white mb-3">
               <AlertTriangle className="w-4 h-4 text-amber-300 flex-shrink-0" />
               Verbleibende Informationslücken
             </h2>
-            <p className="text-xs text-night-300 leading-relaxed mb-3">
-              Was dieser Nachweis derzeit nicht leisten kann — und warum.
-            </p>
             <ul className="space-y-3">
               {liability.gaps.map((gap) => (
                 <li key={gap.title} className="border-l-2 border-amber-400/40 pl-3">
@@ -409,10 +406,6 @@ export function LiabilityView({
               <ShieldAlert className="w-4 h-4 text-acid-400 flex-shrink-0" />
               Schadensfall
             </h2>
-            <p className="text-xs text-night-300 leading-relaxed">
-              Im Schadensfall wird der IST-Zustand vor Ort erfasst und gegen die
-              oben dokumentierten Sollwerte gehalten.
-            </p>
 
             {damageReports.length > 0 && (
               <ul className="mt-3 space-y-2">

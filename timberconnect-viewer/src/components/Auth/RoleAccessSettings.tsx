@@ -241,11 +241,11 @@ export function RoleAccessSettings({ isOpen, onClose }: RoleAccessSettingsProps)
                   <h2 className="text-base font-bold text-white truncate">
                     {editing ? editing.label : "Zugriff verwalten"}
                   </h2>
-                  <p className="text-xs text-night-300 mt-0.5 truncate">
-                    {editing
-                      ? editing.containerName
-                      : "Rollenbasierte Freigabe Ihrer Daten"}
-                  </p>
+                  {editing && (
+                    <p className="text-xs text-night-300 mt-0.5 truncate">
+                      {editing.containerName}
+                    </p>
+                  )}
                 </div>
               </div>
               <button
@@ -281,7 +281,6 @@ export function RoleAccessSettings({ isOpen, onClose }: RoleAccessSettingsProps)
               {editing ? (
                 <>
                   <p className="text-sm text-night-300 leading-relaxed">
-                    Wählen Sie, welche Rollen dieses Dokument einsehen dürfen.
                     Mehr als Ihre allgemeine Freigabe ist nicht möglich.
                   </p>
 
@@ -397,12 +396,6 @@ export function RoleAccessSettings({ isOpen, onClose }: RoleAccessSettingsProps)
               ) : (
                 /* ---------- Liste der Dokumente ---------- */
                 <>
-                  <p className="text-sm text-night-300 leading-relaxed">
-                    Hier legen Sie je Dokument fest, wer es sehen darf.
-                    Dokumente ohne eigene Regel folgen Ihrer allgemeinen
-                    Freigabe.
-                  </p>
-
                   {podAllowlist.length === 0 && (
                     <EmptyPodPolicyHint onOpenSettings={() => setTab("general")} />
                   )}

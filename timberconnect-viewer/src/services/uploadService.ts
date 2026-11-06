@@ -273,6 +273,43 @@ export function isValidTraceId(traceId: string): boolean {
   return /^TC-\d{4}-\d{3,}$/.test(traceId);
 }
 
+/** Vorschau des Konverters: welche Idente eine Datei beim Upload vergeben wuerde. */
+export interface IdentPreviewFile {
+  filename: string;
+  data_type: string;
+  /** false: diese Datei erzeugt kein EPCIS-Event (IFC, PDF, unbekannt). */
+  creates_event: boolean;
+  event_type?: 'ObjectEvent' | 'TransformationEvent' | null;
+  output_epcs?: string[];
+  input_epcs?: string[];
+  error: string | null;
+}
+
+/**
+ * Welche Idente WUERDEN diese Dateien vergeben? Ohne RML, ohne Capture,
+ * ohne Pod -- die Grundlage der Vorab-Pruefung (uploadPreflightService).
+ * PDFs liest der Viewer selbst; hier geht es um StanForD, ELDAT und ERP-Excel.
+ */
+export async function previewIdents(
+  files: File[],
+  companyPrefix: string,
+): Promise<IdentPreviewFile[]> {
+  const formData = new FormData();
+  for (const file of files) formData.append('files', file);
+  formData.append('company_prefix', companyPrefix);
+
+  const response = await fetch(`${getConverterApiUrl()}/preview-idents`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unbekannter Fehler' }));
+    throw new Error(error.detail || `Ident-Vorschau fehlgeschlagen (${response.status})`);
+  }
+  const body = await response.json();
+  return (body.files ?? []) as IdentPreviewFile[];
+}
+
 /**
  * Detect file types and extract trace IDs from files.
  */
@@ -344,7 +381,8 @@ async function convertFilesOnly(
   traceIdOverride?: string,
   docBaseUrl?: string,
   companyPrefix?: string,
-  ifcEpc?: string
+  ifcEpc?: string,
+  skipCapture?: boolean
 ): Promise<ConvertOnlyResponse> {
   const formData = new FormData();
 
@@ -354,6 +392,12 @@ async function convertFilesOnly(
 
   if (traceIdOverride) {
     formData.append('trace_id_override', traceIdOverride);
+  }
+
+  if (skipCapture) {
+    // Ersetzen eines eigenen Vorgangs: Idente ins RDF, aber kein neues
+    // Event -- das inhaltsgleiche liegt bereits im EPCAT (Vorab-Pruefung).
+    formData.append('skip_capture', 'true');
   }
 
   if (ifcEpc) {
@@ -470,7 +514,14 @@ export async function convertAndUploadWithSession(
    * Ist er gesetzt, wird dorthin abgelegt statt in einen eigenen Ordner je
    * trace_id -- dieser Container traegt bereits die ACL des Vorgangs.
    */
-  processContainerUrl?: string | null
+  processContainerUrl?: string | null,
+  options?: {
+    /**
+     * Kein EPCAT-Capture: Der Vorgang ersetzt einen eigenen, dessen
+     * inhaltsgleiches Event bereits vorliegt (uploadPreflightService).
+     */
+    skipCapture?: boolean;
+  }
 ): Promise<AutoUploadResult> {
   // Data lands in the pod of the logged-in uploader (derived from their WebID),
   // not the shared epcisrepository pod — only the owner may write there and
@@ -488,7 +539,8 @@ export async function convertAndUploadWithSession(
     traceIdOverride,
     `${podBase}data`,
     companyPrefix ?? undefined,
-    ifcEpc ?? undefined
+    ifcEpc ?? undefined,
+    options?.skipCapture
   );
 
   const results: Record<string, FileResult> = {};

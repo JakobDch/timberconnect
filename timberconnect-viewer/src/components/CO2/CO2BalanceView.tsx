@@ -442,15 +442,6 @@ export function CO2BalanceView({
             productData={productData}
           />
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-xs text-night-300 leading-relaxed mb-4 px-1"
-          >
-            Berechnet aus den Live-Daten dieses Bauteils. Fehlende oder
-            abgeleitete Eingangsgrößen sind ausgewiesen.
-          </motion.p>
-
           <div className="space-y-4">
             {/*
               Berechnungshinweis -- Wortlaut vom Projektpartner vorgegeben

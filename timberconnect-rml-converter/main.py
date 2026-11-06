@@ -165,6 +165,50 @@ class ConvertOnlyResponse(BaseModel):
     message: Optional[str] = None
 
 
+def _is_true(value: Optional[str]) -> bool:
+    """Formularfeld-Wahrheitswert ("true", "1", "yes"); alles andere ist falsch."""
+    return (value or "").strip().lower() in ("true", "1", "yes")
+
+
+def _require_company_prefix(company_prefix: Optional[str]) -> str:
+    """GS1 Company Prefix des Uploaders -- Pflicht fuer jede Identvergabe.
+
+    Ohne den bei der Registrierung festgelegten Prefix duerfen keine
+    GS1-Idente erzeugt werden; jeder Teilnehmer identifiziert sich darueber.
+    Gilt fuer den Upload UND fuer die Vorab-Pruefung: Die synthetischen
+    Seriennummern (HPR ohne eingebettete Identity, ELDAT) tragen den Prefix,
+    und eine Pruefung mit dem falschen Prefix fragte nach fremden Identen.
+    """
+    cleaned = (company_prefix or "").strip()
+    if not re.fullmatch(r"\d{4,12}", cleaned):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Upload erfordert eine Anmeldung mit abgeschlossener Registrierung: "
+                "Es wurde kein gültiger GS1 Company Prefix (4-12 Ziffern) übermittelt."
+            ),
+        )
+    return cleaned
+
+
+class IdentPreviewFile(BaseModel):
+    """Welche Idente eine Datei beim Upload vergeben bzw. verbrauchen wuerde."""
+    filename: str
+    data_type: str
+    # False: diese Datei erzeugt kein EPCIS-Event (IFC, unbekannt, PDF --
+    # PDFs liest der Viewer selbst aus dem AcroForm).
+    creates_event: bool
+    # "ObjectEvent" | "TransformationEvent"
+    event_type: Optional[str] = None
+    output_epcs: list[str] = []
+    input_epcs: list[str] = []
+    error: Optional[str] = None
+
+
+class IdentPreviewResponse(BaseModel):
+    files: list[IdentPreviewFile]
+
+
 def count_triples(rdf_data: bytes) -> Optional[int]:
     """Count the RDF triples (= Datenpunkte) in a Turtle document.
 
@@ -384,6 +428,104 @@ async def detect_files(
     )
 
 
+@app.post("/api/converter/preview-idents", response_model=IdentPreviewResponse)
+async def preview_idents(
+    files: list[UploadFile] = File(..., description="Dateien des geplanten Vorgangs"),
+    company_prefix: Optional[str] = Form(None, description="GS1 Company Prefix des Uploaders"),
+):
+    """
+    Vorab-Pruefung, Teil 1: Welche Idente WUERDE dieser Upload vergeben?
+
+    Laeuft denselben Weg wie /convert-only bis zur Identgenerierung -- aber
+    ohne RML, ohne Capture, ohne Pod. Das Ergebnis haelt der Viewer gegen
+    das EPCAT (timberconnect-epcis, /check-idents), BEVOR irgendetwas
+    geschrieben wird. Die Idente der PDFs liest der Viewer selbst aus dem
+    AcroForm; hier geht es um die Formate, die nur das Backend auswerten
+    kann (StanForD, ELDAT, ERP-Excel).
+    """
+    cleaned_prefix = _require_company_prefix(company_prefix)
+    out: list[IdentPreviewFile] = []
+
+    for upload_file in files:
+        content = await upload_file.read()
+        filename = upload_file.filename or "unknown"
+        detection = detect_file_type(content, filename)
+
+        if detection.file_type == FileType.PDF:
+            out.append(IdentPreviewFile(
+                filename=filename, data_type="dokument", creates_event=False,
+            ))
+            continue
+
+        if not detection.is_recognized:
+            out.append(IdentPreviewFile(
+                filename=filename, data_type="unknown", creates_event=False,
+                error=detection.error or "Datei konnte nicht erkannt werden",
+            ))
+            continue
+
+        if detection.file_type == FileType.ERP_XLSX:
+            import hashlib
+            from services.erp_excel_service import parse_erp_excel, ERPExcelError
+
+            doc_hash = hashlib.sha256(content).hexdigest()[:16]
+            try:
+                document, _ = parse_erp_excel(content, doc_hash, filename)
+                ident = document.get("identification", {})
+                out.append(IdentPreviewFile(
+                    filename=filename, data_type="herstellung", creates_event=True,
+                    event_type="TransformationEvent",
+                    output_epcs=list(ident.get("identity") or []),
+                    input_epcs=list(ident.get("identityInput") or []),
+                ))
+            except ERPExcelError as e:
+                out.append(IdentPreviewFile(
+                    filename=filename, data_type="herstellung", creates_event=False,
+                    error=f"ERP-Excel ungültig: {str(e)}",
+                ))
+            continue
+
+        if detection.file_type == FileType.IFC:
+            # Die Planung beschreibt ein BESTEHENDES Bauteil und erzeugt
+            # kein Event -- es gibt nichts zu vergeben.
+            out.append(IdentPreviewFile(
+                filename=filename, data_type="planung", creates_event=False,
+            ))
+            continue
+
+        try:
+            result = await epcis_client.generate_and_capture(
+                content=content,
+                filename=filename,
+                data_type=detection.data_type,
+                gcp=cleaned_prefix,
+                capture=False,
+            )
+        except EPCISClientError as e:
+            out.append(IdentPreviewFile(
+                filename=filename, data_type=detection.data_type, creates_event=False,
+                error=f"EPCIS-Identgenerierung fehlgeschlagen: {str(e)}",
+            ))
+            continue
+
+        if result is None:  # EPCIS_ENABLED=false: es wird nichts vergeben
+            out.append(IdentPreviewFile(
+                filename=filename, data_type=detection.data_type, creates_event=False,
+            ))
+            continue
+
+        out.append(IdentPreviewFile(
+            filename=filename,
+            data_type=detection.data_type,
+            creates_event=True,
+            event_type="TransformationEvent" if result.is_transformation else "ObjectEvent",
+            output_epcs=list(result.output_epcs),
+            input_epcs=list(result.consumed_epcs),
+        ))
+
+    return IdentPreviewResponse(files=out)
+
+
 @app.post("/api/converter/convert-only", response_model=ConvertOnlyResponse)
 async def convert_files_only(
     files: list[UploadFile] = File(..., description="Files to convert"),
@@ -413,6 +555,14 @@ async def convert_files_only(
             "abgelehnt. Die erzeugten SGTINs/LGTINs tragen diesen Prefix."
         ),
     ),
+    skip_capture: Optional[str] = Form(
+        None,
+        description=(
+            "\"true\": Idente erzeugen und ins RDF schreiben, aber KEIN Event "
+            "ans EPCAT senden. Fuer das Ersetzen eines eigenen Vorgangs, dessen "
+            "inhaltsgleiches Event bereits im Repository liegt (Vorab-Pruefung)."
+        ),
+    ),
 ):
     """
     Convert files to RDF without uploading to Solid Pod.
@@ -430,15 +580,8 @@ async def convert_files_only(
     # Upload ohne Login/Registrierung ist nicht erlaubt: Ohne den bei der
     # Registrierung festgelegten Company Prefix duerfen keine GS1-Idente
     # erzeugt werden (jeder Teilnehmer identifiziert sich ueber seinen GCP).
-    cleaned_prefix = (company_prefix or "").strip()
-    if not re.fullmatch(r"\d{4,12}", cleaned_prefix):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Upload erfordert eine Anmeldung mit abgeschlossener Registrierung: "
-                "Es wurde kein gültiger GS1 Company Prefix (4-12 Ziffern) übermittelt."
-            ),
-        )
+    cleaned_prefix = _require_company_prefix(company_prefix)
+    capture = not _is_true(skip_capture)
 
     detection_warnings: list[str] = []
     converted_files: list[ConvertedFileData] = []
@@ -521,23 +664,27 @@ async def convert_files_only(
                 # des EECC liest identification.identity/-Input und kann mit
                 # der Excel-Binaerdatei nichts anfangen — sie fuehrt zu
                 # "affords input EPCs or EPC class quantities" (exit 1).
-                try:
-                    await epcis_client.generate_and_capture(
-                        content=json_bytes,
-                        filename=f"{doc_hash}_herstellung.json",
-                        data_type="herstellung",
-                        doc_base_url=(doc_base_url or RAW_UPLOADS_BASE).rstrip("/"),
-                        doc_id=doc_hash,
-                        gcp=cleaned_prefix,
-                    )
-                except EPCISClientError as e:
-                    # Nicht blockierend: RDF und Original sind gueltig und
-                    # gehoeren in den Pod. Fehlt nur das Event, bleibt das
-                    # Produkt auffindbar — lediglich ohne Vorkette.
-                    detection_warnings.append(
-                        f"{filename}: EPCIS-Capture fehlgeschlagen — die "
-                        f"Verknuepfung zu den Lamellen fehlt: {str(e)}"
-                    )
+                #
+                # Beim Ersetzen (skip_capture) entfaellt der Schritt ganz: Die
+                # Idente stehen in der Datei, das Event liegt schon im EPCAT.
+                if capture:
+                    try:
+                        await epcis_client.generate_and_capture(
+                            content=json_bytes,
+                            filename=f"{doc_hash}_herstellung.json",
+                            data_type="herstellung",
+                            doc_base_url=(doc_base_url or RAW_UPLOADS_BASE).rstrip("/"),
+                            doc_id=doc_hash,
+                            gcp=cleaned_prefix,
+                        )
+                    except EPCISClientError as e:
+                        # Nicht blockierend: RDF und Original sind gueltig und
+                        # gehoeren in den Pod. Fehlt nur das Event, bleibt das
+                        # Produkt auffindbar — lediglich ohne Vorkette.
+                        detection_warnings.append(
+                            f"{filename}: EPCIS-Capture fehlgeschlagen — die "
+                            f"Verknuepfung zu den Lamellen fehlt: {str(e)}"
+                        )
 
                 doc_hashes.append(doc_hash)
                 converted_files.append(ConvertedFileData(
@@ -654,6 +801,7 @@ async def convert_files_only(
                 data_type=detection.data_type,
                 doc_base_url=effective_doc_base_url,
                 gcp=cleaned_prefix,
+                capture=capture,
             )
             if epcis_result:  # None only when EPCIS_ENABLED=false (operator switch)
                 # Das Originaldokument mitgeben: aus ihm liest der Injector
@@ -665,7 +813,11 @@ async def convert_files_only(
                 doc_hashes.append(doc_hash)
                 raw_filename = f"{doc_hash}_{detection.data_type}.{source_ext}"
                 rdf_filename = f"{doc_hash}_{detection.data_type}.ttl"
-                if not epcis_result.captured and epcis_result.capture_message:
+                if (
+                    not epcis_result.captured
+                    and not epcis_result.capture_skipped
+                    and epcis_result.capture_message
+                ):
                     detection_warnings.append(
                         f"{filename}: EPCIS-Idente erzeugt, EPCAT-Capture: "
                         f"{epcis_result.capture_message}"
@@ -1212,6 +1364,10 @@ class PdfFormConvertRequest(BaseModel):
     # spaeter die Quelldaten zum Ident zurueck. Fehlt sie, faellt der Aufruf
     # auf RAW_UPLOADS_BASE zurueck.
     doc_base_url: Optional[str] = None
+    # True: Idente ins RDF schreiben, aber KEIN Event ans EPCAT senden --
+    # beim Ersetzen eines eigenen Vorgangs, dessen inhaltsgleiches Event
+    # bereits im Repository liegt (Ergebnis der Vorab-Pruefung).
+    skip_capture: Optional[bool] = None
 
 
 class PdfFormConvertResponse(BaseModel):
@@ -1231,6 +1387,8 @@ class PdfFormConvertResponse(BaseModel):
     epcis_captured: Optional[bool] = None
     epcis_message: Optional[str] = None
     epcis_event_count: Optional[int] = None
+    # True, wenn das Capture auf Wunsch des Aufrufers unterblieb (Ersetzen).
+    epcis_skipped: Optional[bool] = None
 
 
 @app.get("/api/converter/pdf-templates", response_model=PdfTemplatesResponse)
@@ -1263,6 +1421,65 @@ async def get_pdf_template_file(template_id: str):
         path,
         media_type="application/pdf",
         filename=f"{template_id}.pdf",
+    )
+
+
+class PrefilledTemplateRequest(BaseModel):
+    """Versteckte Ident-Felder, die in die Vorlage eingebettet werden.
+
+    Feldname -> Liste von EPCs. Erlaubt sind dieselben Namen, die Viewer und
+    Konverter beim Upload lesen: ``Identity`` / ``IdentityInput`` und die
+    nummerierten Saegevorgangs-Paare ``Identity_<n>`` / ``IdentityInput_<n>``.
+    """
+    fields: dict[str, list[str]]
+
+
+_PREFILL_FIELD_RE = re.compile(r"^Identity(Input)?(_[1-9][0-9]{0,2})?$")
+
+
+@app.post("/api/converter/pdf-templates/{template_id}/prefilled")
+async def get_prefilled_template(template_id: str, request: PrefilledTemplateRequest):
+    """
+    Ausfuellbare Vorlage MIT eingebetteten Material-IDs ausliefern.
+
+    Die leeren Vorlagen tragen keine Ident-Felder. Wer sie herunterlaedt,
+    ausfuellt und hochlaedt, haette ein Dokument ohne Materialbezug -- und
+    wer die Demo-Dateien nimmt, traegt deren IDs, die im Datenraum bereits
+    vergeben sind (Vorab-Pruefung sperrt). Deshalb vergibt der Viewer beim
+    Herunterladen frische IDs bzw. waehlt vorhandene, und dieser Endpunkt
+    bettet sie als versteckte, schreibgeschuetzte Felder ein -- genau wie es
+    eine ausstellende Stelle in Acrobat taete (tools/embed_ident.py).
+    """
+    from fastapi.responses import Response
+    from tools.embed_ident import EPC_URN_RE, embed_fields
+
+    try:
+        path = get_template_pdf_path(template_id)
+    except PDFTemplateError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    fields: dict[str, str] = {}
+    for name, epcs in request.fields.items():
+        if not _PREFILL_FIELD_RE.match(name):
+            raise HTTPException(status_code=400, detail=f"Unzulässiges Ident-Feld: {name}")
+        cleaned = [e.strip() for e in epcs if e and e.strip()]
+        bad = [e for e in cleaned if not EPC_URN_RE.match(e)]
+        if bad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Keine gültige Material-ID: {bad[0]} (erwartet urn:epc:id:sgtin:… oder urn:epc:class:lgtin:…)",
+            )
+        if cleaned:
+            fields[name] = ";".join(cleaned)
+
+    content = path.read_bytes()
+    if fields:
+        content = embed_fields(content, fields)
+
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{template_id}.pdf"'},
     )
 
 
@@ -1363,6 +1580,7 @@ async def convert_pdf_form(request: PdfFormConvertRequest):
     epcis_captured: Optional[bool] = None
     epcis_message: Optional[str] = None
     epcis_event_count: Optional[int] = None
+    epcis_skipped = bool(request.skip_capture)
 
     epcis_data_type = EPCIS_PDF_DATA_TYPES.get(template["data_type"])
     if epcis_data_type:
@@ -1375,6 +1593,7 @@ async def convert_pdf_form(request: PdfFormConvertRequest):
                 # dorthin zeigen, sonst findet der Viewer die Quelldaten nicht.
                 doc_base_url=request.doc_base_url or RAW_UPLOADS_BASE,
                 doc_id=request.doc_id,
+                capture=not epcis_skipped,
             )
         except EPCISClientError as e:
             # Nicht abbrechen: TTL und JSON sind gueltig und gehoeren in den
@@ -1417,6 +1636,7 @@ async def convert_pdf_form(request: PdfFormConvertRequest):
         epcis_captured=epcis_captured,
         epcis_message=epcis_message,
         epcis_event_count=epcis_event_count,
+        epcis_skipped=epcis_skipped if epcis_data_type else None,
     )
 
 

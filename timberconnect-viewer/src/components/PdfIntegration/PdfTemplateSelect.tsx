@@ -88,10 +88,6 @@ export function PdfTemplateSelect({
           </optgroup>
         )}
       </select>
-      <p className="text-[11px] text-night-400 mt-1.5">
-        Die im PDF eingetragenen Werte werden beim Registrieren automatisch
-        übernommen.
-      </p>
     </div>
   );
 }

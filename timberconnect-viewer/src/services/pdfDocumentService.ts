@@ -199,6 +199,8 @@ export interface PdfFormConvertResponse {
   epcis_captured?: boolean | null;
   epcis_message?: string | null;
   epcis_event_count?: number | null;
+  /** true: Capture auf Wunsch unterblieben (Ersetzen eines eigenen Vorgangs). */
+  epcis_skipped?: boolean | null;
 }
 
 /** Ergebnis des Original-Uploads eines PDFs. */
@@ -378,6 +380,8 @@ export async function convertPdfForm(
   epcSource?: EpcSource,
   /** Pod-Container des Original-PDFs -- wird zur EPCIS-bizTransaction. */
   docBaseUrl?: string,
+  /** Kein EPCAT-Capture (Ersetzen eines eigenen Vorgangs, s. uploadPreflightService). */
+  skipCapture?: boolean,
 ): Promise<PdfFormConvertResponse> {
   const response = await fetch(`${getConverterApiUrl()}/convert-pdf-form`, {
     method: 'POST',
@@ -389,6 +393,7 @@ export async function convertPdfForm(
       extra_fields: extraFields,
       epc_source: epcSource,
       doc_base_url: docBaseUrl,
+      skip_capture: skipCapture ? true : undefined,
     }),
   });
   if (!response.ok) {
@@ -411,6 +416,7 @@ export async function publishPdfForm(
   userName?: string | null,
   extraFields?: PdfExtraFields,
   epcSource?: EpcSource,
+  skipCapture?: boolean,
 ): Promise<PdfPublishResult> {
   // doc_base_url wird zur bizTransaction: timber-event bildet
   // `${doc_base_url}/${TransaktionsId}`. Die Transaktions-Id waehlt der
@@ -435,6 +441,7 @@ export async function publishPdfForm(
     extraFields,
     epcSource,
     docBaseUrl,
+    skipCapture,
   );
 
   const jsonUrl = await putToPod(
@@ -549,6 +556,13 @@ export async function uploadPdfDocument(
    * Vorgang und wird dort abgelegt, statt einen eigenen Container zu bekommen.
    */
   processContainerUrl?: string | null,
+  options?: {
+    /**
+     * Kein EPCAT-Capture: Das Dokument ersetzt ein eigenes, dessen
+     * inhaltsgleiches Event bereits vorliegt (uploadPreflightService).
+     */
+    skipCapture?: boolean;
+  },
 ): Promise<PdfDocumentResult> {
   const outcome = await uploadPdfOriginal(
     file,
@@ -594,6 +608,7 @@ export async function uploadPdfDocument(
       userName,
       extraFields,
       epcSource,
+      options?.skipCapture,
     );
     return { outcome, published, warning: null };
   } catch (err) {

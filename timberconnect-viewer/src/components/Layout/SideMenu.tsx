@@ -11,6 +11,7 @@ import {
   Info,
   ExternalLink,
   BookOpen,
+  FileDown,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { BrandWordmark } from '../Brand/TreeRingLogo';
@@ -29,6 +30,7 @@ import { FundingLogos } from '../Brand/FundingLogos';
  *
  *   NAVIGATION   Anwendungsfälle (aufklappbar)
  *                Holzbauteil identifizieren
+ *                Vorlagen (PDF-Vorlagen mit frischen Material-IDs, 06.11.2026)
  *                Anleitung (aufklappbar: Registrierung, Rechtemanagement,
  *                           Daten teilen, Daten abrufen)
  *                Mehr erfahren  -> DEUTSCHE Projektseite (vorher englisch)
@@ -45,6 +47,8 @@ interface SideMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onScanClick: () => void;
+  /** Oeffnet den Download der PDF-Vorlagen (mit frischen Material-IDs). */
+  onTemplatesClick: () => void;
   onPartnersClick: () => void;
   onFilesClick: () => void;
   /** Oeffnet das Zuruecksetzen der eigenen Uploads. Nur bei Anmeldung sichtbar. */
@@ -59,17 +63,15 @@ interface SideMenuProps {
   onGuideClick: (topicId: GuideTopicId) => void;
 }
 
-/** Ein Hauptpunkt: Icon-Kachel, Titel, Untertitel, optional Zubehoer rechts. */
+/** Ein Hauptpunkt: Icon-Kachel, Titel, optional Zubehoer rechts. */
 function MenuEntry({
   icon: Icon,
   title,
-  subtitle,
   trailing,
   tone = 'default',
 }: {
   icon: LucideIcon;
   title: string;
-  subtitle: string;
   trailing?: ReactNode;
   tone?: 'default' | 'danger';
 }) {
@@ -88,7 +90,6 @@ function MenuEntry({
       </span>
       <span className="flex-1 min-w-0">
         <span className="block font-semibold text-white text-sm">{title}</span>
-        <span className="block text-xs text-night-400">{subtitle}</span>
       </span>
       {trailing}
     </>
@@ -102,6 +103,7 @@ export function SideMenu({
   isOpen,
   onClose,
   onScanClick,
+  onTemplatesClick,
   onPartnersClick,
   onFilesClick,
   onResetClick,
@@ -175,7 +177,6 @@ export function SideMenu({
                 <MenuEntry
                   icon={Layers}
                   title="Anwendungsfälle"
-                  subtitle="Module & Funktionen"
                   trailing={
                     <ChevronDown
                       className={`w-4 h-4 text-night-400 transition-transform ${
@@ -235,8 +236,12 @@ export function SideMenu({
                 <MenuEntry
                   icon={ScanSearch}
                   title="Holzbauteil identifizieren"
-                  subtitle="Produkt scannen und zuordnen"
                 />
+              </button>
+
+              {/* Vorlagen -- PDF-Vorlagen mit frischen Material-IDs */}
+              <button onClick={() => navigate(onTemplatesClick)} className={ENTRY_CLASS}>
+                <MenuEntry icon={FileDown} title="Vorlagen" />
               </button>
 
               {/* Anleitung (aufklappbar) -- Vorgabe Praxispartner, Folie 3 */}
@@ -248,7 +253,6 @@ export function SideMenu({
                 <MenuEntry
                   icon={BookOpen}
                   title="Anleitung"
-                  subtitle="Schritt für Schritt durch die Anwendung"
                   trailing={
                     <ChevronDown
                       className={`w-4 h-4 text-night-400 transition-transform ${
@@ -279,9 +283,6 @@ export function SideMenu({
                           </span>
                           <span className="flex-1 min-w-0">
                             <span className="block text-sm leading-snug">{topic.title}</span>
-                            <span className="block text-[11px] text-night-400 leading-snug">
-                              {topic.summary}
-                            </span>
                           </span>
                         </button>
                       </li>
@@ -306,7 +307,6 @@ export function SideMenu({
                 <MenuEntry
                   icon={Info}
                   title="Mehr erfahren"
-                  subtitle="Informationen zum Forschungsprojekt"
                   trailing={<ExternalLink className="w-4 h-4 text-night-400 flex-shrink-0" />}
                 />
               </a>
@@ -316,7 +316,6 @@ export function SideMenu({
                 <MenuEntry
                   icon={Handshake}
                   title="Praxispartner"
-                  subtitle="Netzwerk & Kooperationen"
                 />
               </button>
 
@@ -334,7 +333,6 @@ export function SideMenu({
                 <MenuEntry
                   icon={FolderSearch}
                   title="Dateien durchsuchen"
-                  subtitle="Originaldateien & Berechtigungen"
                 />
               </button>
               {isLoggedIn && (
@@ -345,7 +343,6 @@ export function SideMenu({
                   <MenuEntry
                     icon={RotateCcw}
                     title="Vorgänge löschen"
-                    subtitle="Einzeln wählbar oder alle"
                     tone="danger"
                   />
                 </button>

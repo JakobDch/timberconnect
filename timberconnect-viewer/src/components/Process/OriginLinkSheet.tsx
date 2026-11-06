@@ -6,7 +6,6 @@ import {
   Check,
   Link2,
   Loader2,
-  MapPin,
   Sprout,
   TreePine,
   X,
@@ -97,11 +96,6 @@ export function OriginLinkSheet({
                   <h2 className="text-lg sm:text-xl font-bold text-white">
                     Herkunft des Rundholzes
                   </h2>
-                  <p className="text-xs text-night-300 mt-1 leading-relaxed">
-                    Die Fällpositionen aus Ihrem Harvesterprotokoll liegen in
-                    einer registrierten Pflanzfläche. Bestätigen Sie die
-                    Zuordnung, wird die Herkunftskette geschlossen.
-                  </p>
                 </div>
                 <button
                   onClick={onSkip}
@@ -227,18 +221,6 @@ export function OriginLinkSheet({
                         </span>
                       </p>
                     )}
-                  </div>
-                )}
-
-                {/* Beleggrad. Der Nutzer soll wissen, worauf die Kante beruht. */}
-                {proposal && proposal.groups.length > 0 && (
-                  <div className="flex items-start gap-2.5 px-3 py-2.5 bg-night-900/60 border border-white/10 rounded-xl">
-                    <MapPin className="w-3.5 h-3.5 text-night-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-night-400 leading-relaxed">
-                      Diese Zuordnung beruht auf den GPS-Positionen der Fällung,
-                      nicht auf einem Dokument. Sie wird als solche im Event
-                      vermerkt (<span className="font-mono">linkBasis: geometric</span>).
-                    </p>
                   </div>
                 )}
 

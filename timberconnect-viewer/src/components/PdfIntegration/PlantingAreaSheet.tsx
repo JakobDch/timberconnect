@@ -100,8 +100,6 @@ function PlantingAreaSheetContent({
     };
   }, [isOpen]);
 
-  const section = template?.sections.find((s) => s.plantingArea) ?? null;
-
   /**
    * Laufende Konfliktprüfung: Sie hängt am gezeichneten Polygon, nicht am
    * Absende-Klick. So färbt sich die Überschneidung schon beim Setzen des
@@ -183,9 +181,6 @@ function PlantingAreaSheetContent({
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-5">
-                {section?.description && (
-                  <p className="text-sm text-night-300 mb-3">{section.description}</p>
-                )}
                 <PlantingAreaMap
                   value={area}
                   onChange={(polygon, ha) => {

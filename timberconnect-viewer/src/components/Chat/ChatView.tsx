@@ -97,10 +97,6 @@ export function ChatView({
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
             Sprich mit deinem <span className="text-acid-400">Bauteil</span>
           </h1>
-          <p className="text-sm text-night-300 mt-2 leading-relaxed">
-            Fragen Sie nach Herkunft, Daten und Nachweisen — beantwortet
-            ausschließlich aus den Daten dieses Bauteils.
-          </p>
           <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-night-800 border border-white/5 rounded-xl max-w-full">
             <Hash className="w-3.5 h-3.5 text-acid-300 flex-shrink-0" />
             <span className="text-xs text-night-300 flex-shrink-0">

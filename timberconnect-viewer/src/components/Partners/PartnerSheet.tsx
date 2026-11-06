@@ -84,9 +84,6 @@ export function PartnerSheet({ isOpen, onClose }: PartnerSheetProps) {
             <div className="flex items-start justify-between px-5 sm:px-6 pt-4 pb-3">
               <div>
                 <h2 className="text-xl font-bold text-white">Praxispartner</h2>
-                <p className="text-sm text-night-300 mt-0.5">
-                  Unsere Partner entlang der Lieferkette
-                </p>
               </div>
               <button
                 onClick={onClose}

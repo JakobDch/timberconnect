@@ -24,9 +24,6 @@ export function LoginReturnScreen() {
         <p className="text-sm font-medium text-white">
           Anmeldung wird abgeschlossen
         </p>
-        <p className="text-xs text-night-400 max-w-xs leading-relaxed">
-          Ihre Daten werden vorbereitet. Das dauert nur einen Moment.
-        </p>
       </div>
     </div>
   );

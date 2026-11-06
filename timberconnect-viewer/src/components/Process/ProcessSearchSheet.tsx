@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Clock, Info, Search, X } from 'lucide-react';
+import { ChevronRight, Clock, Search, X } from 'lucide-react';
 import { SheetPortal, useBodyScrollLock } from '../UI/SheetPortal';
 import {
   PROCESS_TYPES,
@@ -86,9 +86,6 @@ export function ProcessSearchSheet({ isOpen, onClose, onSelect }: ProcessSearchS
               <div className="flex items-center justify-between px-5 sm:px-6 pt-4 pb-3">
                 <div className="min-w-0">
                   <h2 className="text-xl font-bold text-white">Vorgang suchen</h2>
-                  <p className="text-xs text-night-400 mt-0.5">
-                    Auf welchen Vorgang beziehen sich die Dateien?
-                  </p>
                 </div>
                 <button
                   onClick={onClose}
@@ -111,14 +108,6 @@ export function ProcessSearchSheet({ isOpen, onClose, onSelect }: ProcessSearchS
                       placeholder="Bezeichnung, Vorgangs-ID oder Dateiname"
                       className="w-full pl-11 pr-4 py-3 bg-night-900 border border-white/10 rounded-xl text-white text-sm placeholder:text-night-300 focus:outline-none focus:border-acid-400/60 focus:ring-4 focus:ring-acid-400/10"
                     />
-                  </div>
-                  <div className="flex items-start gap-2 mt-2 px-1">
-                    <Info className="w-3.5 h-3.5 text-night-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-night-400">
-                      Die Suche über Event-IDs und Material-IDs ist vorbereitet,
-                      liefert aber noch keine Treffer — bis dahin läuft das
-                      Wiederfinden über den Registrierungszeitpunkt.
-                    </p>
                   </div>
                 </div>
 
@@ -175,9 +164,6 @@ export function ProcessSearchSheet({ isOpen, onClose, onSelect }: ProcessSearchS
                   {results.length === 0 && (
                     <div className="px-4 py-6 text-center bg-night-700/40 border border-white/10 rounded-2xl">
                       <p className="text-sm text-night-300">Kein Vorgang gefunden.</p>
-                      <p className="text-xs text-night-400 mt-1">
-                        Vorgänge erscheinen hier, sobald sie registriert wurden.
-                      </p>
                     </div>
                   )}
 

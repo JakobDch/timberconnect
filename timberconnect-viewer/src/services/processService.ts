@@ -713,12 +713,30 @@ export async function createProcess(
     type: ProcessTypeId;
     title: string;
     ownerWebId: string;
+    /**
+     * Vorhandenen Container-Pfad wiederverwenden -- beim Ersetzen eines
+     * frueheren Vorgangs (uploadPreflightService). Das Event im EPCAT zeigt
+     * per bizTransaction auf genau diesen Container; laege der neue Stand
+     * woanders, zeigte das Event ins Leere. Muss unter data/ des eigenen
+     * Pods liegen.
+     */
+    containerUrl?: string | null;
   },
   authenticatedFetch: typeof fetch,
 ): Promise<ProcessRecord> {
-  const id = generateProcessId();
   const podBase = podBaseFromWebId(params.ownerWebId);
-  const containerUrl = `${podBase}data/${id}/`;
+  let id = generateProcessId();
+  let containerUrl = `${podBase}data/${id}/`;
+  if (params.containerUrl) {
+    if (!params.containerUrl.startsWith(`${podBase}data/`) || !params.containerUrl.endsWith('/')) {
+      throw new Error(`Ungültiger Vorgangscontainer: ${params.containerUrl}`);
+    }
+    containerUrl = params.containerUrl;
+    // Hash-benannte Alt-Container (data/<hash>/) tragen keine VG-Id; dann
+    // bleibt das Segment selbst die Id, damit Index und process.ttl den
+    // Container eindeutig benennen.
+    id = containerUrl.split('/').filter(Boolean).pop() ?? id;
+  }
 
   const record: ProcessRecord = {
     id,

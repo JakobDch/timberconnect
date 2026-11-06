@@ -328,10 +328,6 @@ export function UseCaseGrid({
                   <code className="block text-sm font-mono text-night-100 bg-night-900 px-3 py-2 rounded-lg break-all">
                     {productId}
                   </code>
-
-                  <p className="text-xs text-night-400 mt-3">
-                    Details werden im jeweiligen Anwendungsfall angezeigt.
-                  </p>
                 </div>
               </div>
             </motion.div>
@@ -342,9 +338,6 @@ export function UseCaseGrid({
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-white">Anwendungsfälle</h2>
-                <p className="text-sm text-night-300 mt-1">
-                  Aktivieren oder deaktivieren Sie die gewünschten Module
-                </p>
               </div>
               <span className="px-3 py-1 bg-acid-400/15 border border-acid-400/30 text-acid-300 text-sm font-medium rounded-full">
                 {enabledCount} aktiv

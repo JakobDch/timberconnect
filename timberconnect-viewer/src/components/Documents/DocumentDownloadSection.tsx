@@ -205,10 +205,7 @@ function mergeUnassigned(groups: ProcessGroup[]): ProcessGroup[] {
     {
       containerUrl: 'unassigned',
       title: 'Ohne Vorgangszuordnung',
-      subtitle:
-        documents.length === 1
-          ? 'Dieses Dokument gehoert zu keinem registrierten Vorgang.'
-          : 'Diese Dokumente gehoeren zu keinem registrierten Vorgang.',
+      subtitle: null,
       timestamp: 0,
       unassigned: true,
       documents,

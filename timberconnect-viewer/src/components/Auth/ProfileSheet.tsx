@@ -47,14 +47,12 @@ function Field({
   id,
   label,
   icon: Icon,
-  hint,
   error,
   children,
 }: {
   id: string;
   label: string;
   icon: typeof User;
-  hint?: string;
   error?: string | null;
   children: React.ReactNode;
 }) {
@@ -65,11 +63,7 @@ function Field({
         {label}
       </label>
       {children}
-      {error ? (
-        <p className="text-xs text-red-400">{error}</p>
-      ) : hint ? (
-        <p className="text-xs text-night-400 leading-relaxed">{hint}</p>
-      ) : null}
+      {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
 }
@@ -186,9 +180,6 @@ export function ProfileSheet({ isOpen, onClose }: ProfileSheetProps) {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-white">Profil bearbeiten</h2>
-                    <p className="text-xs text-night-300 mt-0.5">
-                      Wird in Ihrem Solid Pod gespeichert
-                    </p>
                   </div>
                 </div>
                 <button
@@ -231,7 +222,6 @@ export function ProfileSheet({ isOpen, onClose }: ProfileSheetProps) {
                       id="profile-org"
                       label="Unternehmen"
                       icon={Building2}
-                      hint="Betrieb oder Organisation, in deren Namen Sie Daten einstellen."
                     >
                       <input
                         id="profile-org"
@@ -277,7 +267,6 @@ export function ProfileSheet({ isOpen, onClose }: ProfileSheetProps) {
                       label="Profilbild (URL)"
                       icon={ImageIcon}
                       error={photoError}
-                      hint="Öffentlich erreichbare Bild-URL, z. B. aus Ihrem Pod."
                     >
                       <input
                         id="profile-photo"
@@ -294,7 +283,6 @@ export function ProfileSheet({ isOpen, onClose }: ProfileSheetProps) {
                       id="profile-note"
                       label="Kurzbeschreibung"
                       icon={FileText}
-                      hint="Optionaler Freitext, z. B. Tätigkeitsschwerpunkt."
                     >
                       <textarea
                         id="profile-note"
@@ -345,11 +333,6 @@ export function ProfileSheet({ isOpen, onClose }: ProfileSheetProps) {
                             Technische Kennung anzeigen
                           </summary>
                           <div className="mt-2 space-y-2">
-                            <p className="text-xs text-night-400 leading-relaxed">
-                              Ihre WebID — die eindeutige Adresse Ihres Kontos im
-                              Datenraum. Partner können Ihnen darüber Zugriff auf
-                              ihre Daten geben.
-                            </p>
                             <div className="flex items-start gap-2">
                               <code className="flex-1 min-w-0 text-[11px] font-mono text-night-200 bg-night-900 border border-white/10 rounded-lg px-2.5 py-2 break-all">
                                 {webId}

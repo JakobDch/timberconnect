@@ -128,9 +128,6 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 <div className="flex items-center gap-3">
                   <div>
                     <h2 className="text-base font-bold text-white">Anmelden</h2>
-                    <p className="text-xs text-night-300 mt-0.5">
-                      Zugang zu Ihren Lieferkettendaten
-                    </p>
                   </div>
                 </div>
                 {!redirecting && (
@@ -146,12 +143,6 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
               {/* Content */}
               <div className="px-5 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto scroll-touch space-y-4">
-                <p className="text-sm text-night-300 leading-relaxed">
-                  Melden Sie sich mit Ihrem TimberConnect-Zugang an, um
-                  Dokumente hochzuladen und geschützte Daten Ihrer Partner zu
-                  sehen.
-                </p>
-
                 <button
                   onClick={() => startLogin(primaryIssuer)}
                   disabled={redirecting}

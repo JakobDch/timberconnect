@@ -52,6 +52,9 @@ class EPCISResult:
     epcis_document: dict[str, Any] = field(default_factory=dict)
     captured: bool = False
     capture_message: Optional[str] = None
+    # True, wenn der Aufrufer das Capture bewusst ausgelassen hat (Vorab-
+    # Pruefung oder Ersetzen). Dann ist "nicht erfasst" keine Warnung wert.
+    capture_skipped: bool = False
     # Format driver that ran, and the raw-material side of a TransformationEvent
     # (leistungserklaerung / herstellung). Empty for the ObjectEvent formats.
     format: str = ""
@@ -98,6 +101,7 @@ class EPCISClient:
         doc_base_url: Optional[str] = None,
         doc_id: Optional[str] = None,
         gcp: Optional[str] = None,
+        capture: bool = True,
     ) -> Optional[EPCISResult]:
         """Send a raw file to the EPCIS service and return its identifiers.
 
@@ -107,6 +111,13 @@ class EPCISClient:
 
         The single exception is the explicit ``EPCIS_ENABLED=false`` operator
         switch, which returns None to disable the whole step on purpose.
+
+        ``capture=False`` erzeugt die Idente, sendet aber KEIN Event ans
+        EPCAT. Zwei Verwendungen: die Vorab-Pruefung (welche Idente wuerde
+        der Upload vergeben?) und das Ersetzen eines eigenen Vorgangs, dessen
+        inhaltsgleiches Event bereits im Repository liegt -- dort wuerde ein
+        zweites Capture nur die Dublette erzeugen, die die Pruefung gerade
+        verhindert hat.
         """
         if not self.enabled:
             logger.info("EPCIS disabled via EPCIS_ENABLED=false; skipping")
@@ -116,7 +127,8 @@ class EPCISClient:
                 f"EPCIS-Identgenerierung für Datentyp '{data_type}' nicht unterstützt"
             )
 
-        url = f"{self.service_url}/api/epcis/generate-and-capture"
+        endpoint = "generate-and-capture" if capture else "generate"
+        url = f"{self.service_url}/api/epcis/{endpoint}"
         data = {"data_type": data_type}
         if doc_base_url:
             data["doc_base_url"] = doc_base_url
@@ -141,7 +153,11 @@ class EPCISClient:
 
         payload = resp.json()
         idents = payload.get("idents", {})
-        capture = payload.get("capture", {})
+        # /generate liefert keinen capture-Block: nichts gesendet, bewusst.
+        capture_info = payload.get("capture") or {
+            "submitted": False,
+            "message": "übersprungen" if not capture else None,
+        }
         result = EPCISResult(
             data_type=idents.get("data_type", data_type),
             gcp=idents.get("gcp", ""),
@@ -151,8 +167,9 @@ class EPCISClient:
             sgtins=idents.get("sgtins", []),
             quantities=idents.get("quantities", []),
             epcis_document=payload.get("epcis_document", {}),
-            captured=bool(capture.get("submitted")),
-            capture_message=capture.get("message"),
+            captured=bool(capture_info.get("submitted")),
+            capture_message=capture_info.get("message"),
+            capture_skipped=not capture,
             format=idents.get("format", ""),
             is_transformation=bool(idents.get("is_transformation")),
             input_epcs=idents.get("input_epcs", []),

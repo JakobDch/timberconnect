@@ -114,8 +114,7 @@ export function ProcessTypePicker({ selected, onSelect, disabled = false }: Proc
                   </span>
                 )}
               </div>
-              <p className="text-xs text-night-400 mt-0.5">{type.description}</p>
-              <p className="text-xs text-night-300 mt-1">
+              <p className="text-xs text-night-300 mt-0.5">
                 Pflichtdatei:{' '}
                 <span className="text-night-300">
                   {type.leadDoc.label} ({type.leadDoc.fileExt})

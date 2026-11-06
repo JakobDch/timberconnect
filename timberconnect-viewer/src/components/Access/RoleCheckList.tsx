@@ -117,9 +117,9 @@ function RoleRow({
         >
           {role.label}
         </span>
-        {!compact && (
+        {!compact && locked && (
           <span className="block text-xs text-night-300 mt-0.5 leading-relaxed">
-            {locked ? 'Nicht in Ihrer allgemeinen Freigabe' : role.description}
+            Nicht in Ihrer allgemeinen Freigabe
           </span>
         )}
       </span>

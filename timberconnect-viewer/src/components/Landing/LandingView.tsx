@@ -76,30 +76,18 @@ export function LandingView({
                 registrieren" halb so breit und dunkel.
                 Beschriftung seit 17.09.2026 (Rueckmeldung Praxispartner,
                 "Feedback App_Allgemein", Folie 1): "Daten abrufen" und
-                "Daten teilen" -- das WOZU steht oben, die Handlung
-                (scannen / Vorgang registrieren) als Zeile darunter, damit
-                der bisherige Wortlaut nicht verloren geht.
+                "Daten teilen".
                 "Mehr erfahren" ist von hier ins Seitenmenue gewandert -- es
                 fuehrt aus der Anwendung heraus auf die Projektwebseite und
                 gehoert damit nicht neben die beiden Haupthandlungen. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
               <button onClick={onScanClick} className="btn btn-acid btn-lg">
                 <Nfc className="w-5 h-5" />
-                <span className="text-left leading-tight">
-                  <span className="block">Daten abrufen</span>
-                  <span className="block text-xs font-medium opacity-75">
-                    Produkt scannen
-                  </span>
-                </span>
+                <span>Daten abrufen</span>
               </button>
               <button onClick={onUploadClick} className="btn btn-acid btn-lg">
                 <Upload className="w-5 h-5" />
-                <span className="text-left leading-tight">
-                  <span className="block">Daten teilen</span>
-                  <span className="block text-xs font-medium opacity-75">
-                    Vorgang registrieren
-                  </span>
-                </span>
+                <span>Daten teilen</span>
               </button>
             </div>
           </motion.div>
@@ -126,9 +114,6 @@ export function LandingView({
             <h2 className="text-xl sm:text-2xl font-bold text-white">
               Verfügbare Anwendungsfälle
             </h2>
-            <p className="text-sm text-night-300 mt-1">
-              Wählen Sie nach dem Scan den gewünschten Anwendungsfall
-            </p>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto">

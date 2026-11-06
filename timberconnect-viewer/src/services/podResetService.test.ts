@@ -5,6 +5,7 @@ import {
   selectPlanContainers,
   describeContainer,
   documentKindFromFiles,
+  documentFilesOf,
   type ResetPlan,
 } from './podResetService';
 
@@ -423,5 +424,15 @@ describe('documentKindFromFiles', () => {
     expect(
       documentKindFromFiles([file('pricing.ttl'), file('abc_pdf_pruefzertifikat.ttl')]),
     ).toBe('Prüfzertifikat');
+  });
+});
+
+describe('documentFilesOf', () => {
+  it('nimmt beim Entfernen nur die Dateien des einen Dokuments', async () => {
+        const f = (name: string) => ({ url: `https://solid-community-server.tmdt.info/jakob/data/VG-1/${name}`, name, modified: null });
+    const files = [f('process.ttl'), f('pricing.ttl'), f('aa_forst.hpr'), f('aa_forst.ttl'), f('bb_pdf_transportauftrag.ttl'), f('bb_pdf_transportauftrag.json'), f('bb_dokument.pdf')];
+    const { documentFiles, otherFiles } = documentFilesOf(files, `https://solid-community-server.tmdt.info/jakob/data/VG-1/bb_pdf_transportauftrag.ttl`);
+    expect(documentFiles.map((x) => x.name)).toEqual(['bb_pdf_transportauftrag.ttl', 'bb_pdf_transportauftrag.json', 'bb_dokument.pdf']);
+    expect(otherFiles.map((x) => x.name)).toEqual(['aa_forst.hpr', 'aa_forst.ttl']);
   });
 });

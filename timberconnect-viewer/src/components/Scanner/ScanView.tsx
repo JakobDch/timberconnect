@@ -280,13 +280,8 @@ export function ScanView({
                 <span className="w-9 h-9 rounded-xl bg-night-700 border border-white/5 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4.5 h-4.5 text-acid-300" />
                 </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-white">
-                    Baum finden
-                  </span>
-                  <span className="block text-xs text-night-400 mt-0.5">
-                    GPS-Koordinaten oder Fläche auf Karte
-                  </span>
+                <span className="text-sm font-semibold text-white">
+                  Baum finden
                 </span>
               </button>
             </motion.div>

@@ -77,6 +77,29 @@ zurückführbar macht — eine Aufteilung würde diese Verknüpfung zerreißen.
 | POST | `/generate` | Datei → Idente + EPCIS-Document (kein Capture) |
 | POST | `/capture` | EPCIS-Document → EPCAT |
 | POST | `/generate-and-capture` | beides in einem Schritt |
+| POST | `/check-idents` | Vorab-Prüfung: sind die Ausgangs-Idente eines Vorgangs schon vergeben? |
+
+### Vorab-Prüfung (`/check-idents`, seit 19.10.2026)
+
+Befund: Die Demo-Idente trugen im Live-Repository gestapelte Events aus
+mehreren Pods (Stamm 1: 31 Events), weil nichts vor dem Capture prüfte, ob ein
+Ident schon erzeugt wurde. Der Viewer hält deshalb jeden Vorgang **vor dem
+ersten Schreibzugriff** gegen das Repository (`services/ident_check.py`):
+
+- Nur die **erzeugende** Seite zählt (ObjectEvent ADD, Transformation-Output).
+  Ein Stamm, der im Sägewerks-Event als Input steht, ist verbraucht, nicht
+  vergeben.
+- Zeigt die bizTransaction der Treffer in den Pod des Aufrufers (Solid-Token)
+  und sagen sie exakt dasselbe aus (Typ, Eingangs- und Ausgangs-Idente), gilt
+  der Vorgang als **eigen und inhaltsgleich** → der Viewer bietet an, nur die
+  Pod-Daten zu ersetzen, ohne neues Capture (`skip_capture` am Konverter).
+- Fremder Pod, kein Pod-Bezug oder abweichende Ident-Listen → **gesperrt**.
+- Fehlende Eingangs-Idente werden gemeldet, sperren aber nicht.
+
+Die Prüfung läuft bewusst **ohne** den Consent-Filter von `/events`: Die Frage
+ist „gibt es das schon?“, nicht „darf ich das sehen?“. Nach außen gehen nur der
+Befund je Dokument und die Pod-Namen, keine Event-Inhalte. Request:
+`{"documents":[{"label","event_type","output_epcs","input_epcs"}]}`.
 
 `/generate` & `/generate-and-capture` erwarten multipart: `file`, `data_type`
 (`forst`|`saegewerk`|`bspwerk`|`stammzertifikat`|`leistungserklaerung`|

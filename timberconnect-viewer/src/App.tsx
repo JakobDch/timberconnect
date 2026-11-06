@@ -6,6 +6,7 @@ import { ScanView } from './components/Scanner';
 import { UploadSheet } from './components/Upload/UploadSheet';
 import { FileBrowserSheet } from './components/Files';
 import { PodResetSheet } from './components/Settings';
+import { TemplateDownloadSheet } from './components/Process';
 import { UseCaseGrid } from './components/UseCases';
 import { ProductPassView } from './components/ProductPass';
 import { CO2BalanceView } from './components/CO2';
@@ -130,6 +131,7 @@ function App() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [partnersOpen, setPartnersOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
@@ -677,6 +679,7 @@ function App() {
         isOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
         onScanClick={() => setCurrentView('scanner')}
+        onTemplatesClick={() => setTemplatesOpen(true)}
         onPartnersClick={() => setPartnersOpen(true)}
         onFilesClick={() => setFilesOpen(true)}
         onResetClick={() => setResetOpen(true)}
@@ -838,6 +841,9 @@ function App() {
         isOpen={filesOpen}
         onClose={() => setFilesOpen(false)}
       />
+
+      {/* Vorlagen herunterladen (Seitenmenue) -- derselbe Dialog wie im Upload */}
+      <TemplateDownloadSheet isOpen={templatesOpen} onClose={() => setTemplatesOpen(false)} />
 
       {/* Uploads zurücksetzen: löscht ausschließlich die eigenen Vorgänge unter
           data/ samt Katalog-Einträgen. Danach den Katalog neu laden, sonst

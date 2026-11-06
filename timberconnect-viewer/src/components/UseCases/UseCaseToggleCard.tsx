@@ -71,20 +71,12 @@ export function UseCaseToggleCard({
       />
 
       <h3
-        className={`font-bold mb-1.5 text-base pr-12 ${
+        className={`font-bold mb-5 text-base pr-12 ${
           isEnabled && available ? 'text-white' : 'text-night-400'
         }`}
       >
         {useCase.title}
       </h3>
-
-      <p
-        className={`text-sm leading-relaxed mb-5 line-clamp-2 ${
-          isEnabled && available ? 'text-night-300' : 'text-night-400/70'
-        }`}
-      >
-        {useCase.description}
-      </p>
 
       {isInteractive ? (
         <button

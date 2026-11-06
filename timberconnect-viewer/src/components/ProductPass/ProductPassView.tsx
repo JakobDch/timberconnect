@@ -454,12 +454,6 @@ export function ProductPassView({
                       className="overflow-hidden"
                     >
                       <div className="px-4 pb-4">
-                        <p className="text-xs text-night-300 leading-relaxed mb-3">
-                          Die belegten Stationen vom Wald bis zum Bauteil, wie
-                          im Herkunftsnachweis. Jede Station stammt aus einem
-                          eigenen Vorgang im Datenraum; fehlt eine, ist die
-                          Kette in den geladenen Quellen dort nicht belegt.
-                        </p>
                         <ActorStationList actors={stations} />
                       </div>
                     </motion.div>

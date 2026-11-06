@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Key } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { ChatSettings as ChatSettingsType } from './types';
 
 interface ChatSettingsProps {
@@ -47,14 +47,6 @@ export function ChatSettings({ settings, onSave, onClose }: ChatSettingsProps) {
 
         {/* Content */}
         <div className="p-5 space-y-4">
-          {/* Info */}
-          <div className="flex items-start gap-3 p-3 bg-acid-400/10 border border-acid-400/30 rounded-xl">
-            <Key className="w-5 h-5 text-acid-300 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-night-100">
-              Der Chat verwendet die DeepSeek API. Sie benötigen einen eigenen API-Key, um den Chat zu nutzen.
-            </p>
-          </div>
-
           {/* API Key Input */}
           <div>
             <label className="block text-sm font-medium text-white mb-2">
