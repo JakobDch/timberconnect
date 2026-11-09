@@ -42,6 +42,7 @@ import {
   getThing,
   getThingAll,
   setThing,
+  removeThing,
   buildThing,
   createThing,
   createSolidDataset,
@@ -449,7 +450,16 @@ export async function getDocumentPolicies(pod: string): Promise<DocumentPolicy[]
   } catch {
     return []; // noch keine dokumentbezogene Regel in diesem Pod
   }
+  return parseDocumentPolicies(ds);
+}
 
+/** HTTP-Status eines fehlgeschlagenen solid-client-Aufrufs, sonst null. */
+function httpStatusOf(err: unknown): number | null {
+  const status = (err as { statusCode?: unknown } | null)?.statusCode;
+  return typeof status === 'number' ? status : null;
+}
+
+function parseDocumentPolicies(ds: Parameters<typeof getThingAll>[0]): DocumentPolicy[] {
   const policies: DocumentPolicy[] = [];
   for (const thing of getThingAll(ds)) {
     const fileUrl = asUrl(thing);
@@ -850,6 +860,72 @@ export async function stampResourceAcl(
   await saveAclFor(withAcl, acl, { fetch: getAuthFetch() });
 }
 
+/**
+ * Regeln fuer Dateien entfernen, die es im Pod nicht mehr gibt, und danach den
+ * EPCIS-Consent neu ableiten. Rueckgabe: Anzahl entfernter Regeln.
+ *
+ * Warum das noetig ist: Loeschen und Neu-Hochladen eines Vorgangs liessen die
+ * Regeln der alten Dateien in doc-policy.ttl stehen. Die Verwaltung zeigt sie
+ * nicht mehr (sie listet nur vorhandene Dateien), der Consent rechnet sie aber
+ * weiter in die Schnittmenge je Ident ein -- eine einmal enger gesetzte,
+ * laengst geloeschte Datei sperrte so unsichtbar eine Rolle aus.
+ *
+ * Entfernt wird nur, was der Server ausdruecklich als fehlend meldet (404 auf
+ * Container oder Datei). Nicht lesbare Container bleiben unentschieden: eine
+ * zu Unrecht entfernte Regel wuerde das Dokument auf die meist weitere
+ * Pod-Freigabe zurueckfallen lassen.
+ */
+export async function pruneOrphanedDocumentPolicies(pod: string): Promise<number> {
+  let ds;
+  try {
+    ds = await getSolidDataset(DOC_POLICY_DOC(pod), { fetch: getAuthFetch() });
+  } catch {
+    return 0; // keine Regeln, nichts aufzuraeumen
+  }
+
+  const byContainer = new Map<string, string[]>();
+  for (const thing of getThingAll(ds)) {
+    const fileUrl = asUrl(thing);
+    if (!fileUrl.startsWith(`${pod}data/`)) continue;
+    const containerUrl = containerOf(fileUrl);
+    byContainer.set(containerUrl, [...(byContainer.get(containerUrl) ?? []), fileUrl]);
+  }
+
+  const fetchFn = getAuthFetch();
+  const orphans: string[] = [];
+  await Promise.all(
+    Array.from(byContainer, async ([containerUrl, fileUrls]) => {
+      let listed: Set<string>;
+      try {
+        const container = await getSolidDataset(containerUrl, { fetch: fetchFn });
+        const thing = getThing(container, containerUrl);
+        listed = new Set(thing ? getUrlAll(thing, LDP_CONTAINS) : []);
+      } catch (err) {
+        if (httpStatusOf(err) === 404) orphans.push(...fileUrls);
+        return;
+      }
+      for (const fileUrl of fileUrls) {
+        if (listed.has(fileUrl)) continue;
+        // Gegenprobe je Datei: eine anders kodierte URL im Listing ist noch
+        // kein Beweis, dass die Datei fehlt.
+        try {
+          const response = await fetchFn(fileUrl, { method: 'HEAD' });
+          if (response.status === 404) orphans.push(fileUrl);
+        } catch {
+          /* unentschieden -> Regel bleibt */
+        }
+      }
+    }),
+  );
+  if (orphans.length === 0) return 0;
+
+  for (const fileUrl of orphans) ds = removeThing(ds, fileUrl);
+  await saveSolidDatasetAt(DOC_POLICY_DOC(pod), ds, { fetch: fetchFn });
+  await syncEpcisConsentForPod(pod);
+  console.log(`[access] ${orphans.length} Regel(n) geloeschter Dateien entfernt.`);
+  return orphans.length;
+}
+
 // ---------------------------------------------------------------------------
 // EPCIS consent  (access/epcis-consent.ttl) — which roles may receive events
 // ---------------------------------------------------------------------------
@@ -897,9 +973,24 @@ export async function writeEpcisConsent(
  * Ereignisses doch noch gelesen werden.
  */
 export async function syncEpcisConsentFromDocuments(webId: string): Promise<void> {
-  const pod = podBaseFromWebId(webId);
+  await syncEpcisConsentForPod(podBaseFromWebId(webId));
+}
+
+async function syncEpcisConsentForPod(pod: string): Promise<void> {
   const podAllowlist = await getAllowedRoles(pod);
-  const policies = await getDocumentPolicies(pod);
+
+  // Die Regeln hier streng lesen: unten werden Ident-Eintraege ohne Dokument
+  // entfernt. Waere die Policy-Datei nur gerade nicht lesbar und galte als
+  // leer, fielen ALLE Idente auf die Pod-Freigabe zurueck.
+  let policies: DocumentPolicy[];
+  try {
+    policies = parseDocumentPolicies(
+      await getSolidDataset(DOC_POLICY_DOC(pod), { fetch: getAuthFetch() }),
+    );
+  } catch (err) {
+    if (httpStatusOf(err) !== 404) throw err;
+    policies = [];
+  }
 
   // EPC -> Schnittmenge der Rollen aller Dokumente mit diesem Ident.
   const perEpc = new Map<string, Set<string>>();
@@ -927,6 +1018,17 @@ export async function syncEpcisConsentFromDocuments(webId: string): Promise<void
   const fallback = buildThing(createThing({ url: CONSENT_DEFAULT_SUBJECT }));
   for (const iri of podAllowlist) fallback.addUrl(TC_ALLOWS_ROLE, iri);
   ds = setThing(ds, fallback.build());
+
+  // Ident-Eintraege, die kein Dokument mehr traegt, verwerfen. setThing
+  // ersetzt nur, was es neu schreibt -- ein Ident aus einem geloeschten
+  // Dokument behielte sonst dessen Rollen fuer immer, auch wenn das aktuelle
+  // Dokument zu demselben Ident weiter freigibt.
+  for (const thing of getThingAll(ds)) {
+    const subject = asUrl(thing);
+    if (subject !== CONSENT_DEFAULT_SUBJECT && !perEpc.has(subject)) {
+      ds = removeThing(ds, thing);
+    }
+  }
 
   for (const [epc, roles] of perEpc) {
     // EPCs sind urn:-URIs; als Subjekt einer Thing-URL ist das zulaessig.

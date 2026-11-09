@@ -28,6 +28,8 @@ import {
   getOwnSetup,
   setOwnRole,
   ensureRoleAllowed,
+  podBaseFromWebId,
+  pruneOrphanedDocumentPolicies,
 } from "../services/accessControlService";
 import { invalidateCompanyPrefixes } from "../services/companyPrefixService";
 import {
@@ -155,6 +157,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           .catch((err) => {
             console.warn("Federation registration/refresh failed:", err);
           });
+
+        // Dokumentregeln für längst gelöschte Dateien aufräumen. Sie sind in
+        // der Verwaltung unsichtbar, sperren über den EPCIS-Consent aber
+        // weiter Rollen aus — nur der Inhaber kann sie entfernen.
+        pruneOrphanedDocumentPolicies(podBaseFromWebId(webId)).catch((err) => {
+          console.warn("Document policy cleanup failed:", err);
+        });
 
         // Resolve role + company prefix; flag users with incomplete
         // registration (no role OR no prefix) for the one-time setup.

@@ -17,6 +17,8 @@
  * GESCHUETZT (Infrastruktur — niemals anfassen):
  *   profile/       WebID, role.ttl (Rolle + Company Prefix)
  *   access/        role-policy.ttl, groups/ — die WAC-Grundlage
+ *                  (Ausnahme: doc-policy.ttl verliert die Regeln der hier
+ *                  geloeschten Dateien, epcis-consent.ttl wird neu abgeleitet)
  *   wallet/        Guthaben und Kaufhistorie (bewusste Entscheidung)
  *   public/        Demo-Fundament (TC-2025-001) und Fremdbestand
  *   Settings/, inbox/, connections/, registry/, statistics/, token/
@@ -42,7 +44,7 @@ import {
 } from '@inrupt/solid-client';
 import { DCTERMS } from '@inrupt/vocab-common-rdf';
 import { getAuthFetch } from './authFetch';
-import { podBaseFromWebId } from './accessControlService';
+import { podBaseFromWebId, pruneOrphanedDocumentPolicies } from './accessControlService';
 import { NAMESPACES } from '../config/solidPods';
 
 // ---------------------------------------------------------------------------
@@ -621,6 +623,18 @@ async function deleteResource(url: string, podBase: string): Promise<void> {
 }
 
 /**
+ * Dokumentregeln geloeschter Dateien aufraeumen. Ein Fehlschlag bricht das
+ * Loeschen nicht ab: der Inhaber-Login holt es nach.
+ */
+async function pruneDocumentPolicies(podBase: string): Promise<void> {
+  try {
+    await pruneOrphanedDocumentPolicies(podBase);
+  } catch (e) {
+    console.warn('[reset] Dokumentregeln konnten nicht bereinigt werden:', e);
+  }
+}
+
+/**
  * Verweise auf geloeschte Eintraege aus cat.ttl entfernen.
  *
  * Textuell wie mergeCatalog() in catalogWriteService: cat.ttl wird auch von
@@ -744,6 +758,11 @@ export async function executePodReset(
     plan.catalogEntries.map((e) => e.uuid),
   );
 
+  // 5. Dokumentregeln der geloeschten Dateien entfernen -- sonst sperren sie
+  //    ueber den EPCIS-Consent weiter Rollen fuer Idente, die ein neu
+  //    hochgeladenes Dokument laengst freigibt.
+  await pruneDocumentPolicies(podBase);
+
   return {
     deletedFiles,
     deletedContainers,
@@ -835,6 +854,7 @@ export async function removeOwnDocument(
     }
   }
   await cleanCatalogFile(plan.podBase, entries.map((e) => e.uuid));
+  await pruneDocumentPolicies(plan.podBase);
   if (errors.length > 0) {
     throw new Error(`Frühere Daten konnten nicht entfernt werden: ${errors.join('; ')}`);
   }
